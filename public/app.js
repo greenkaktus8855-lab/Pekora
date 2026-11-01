@@ -341,7 +341,7 @@ async function owner(){
  renderSidebar("owner");
  if(!me||me.role!=="OWNER"){app.innerHTML='<div class="empty">Owner access required.</div>';return}
  app.innerHTML='<h1 class="page-title">Owner Panel</h1><div id="ownerStats" class="item-grid">Loading...</div>'+
- '<section class="owner-section"><h2>Catalog Management</h2><form id="newItemForm" class="owner-item-form">'+
+ '<section class="owner-section"><h2>Catalog Management</h2><p class="muted">Remove every item from the public catalog. Existing owners keep their inventory.</p><button class="button secondary" id="clearPublicCatalog" type="button">Remove all items from catalog</button><form id="newItemForm" class="owner-item-form">'+
  '<label>Item name<input name="name" maxlength="80" required></label>'+
  '<label>Category<select name="category">'+AVATAR_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
  '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
@@ -353,6 +353,17 @@ async function owner(){
   const [stats,data]=await Promise.all([api("/api/owner/stats"),api("/api/owner/items")]);
   document.getElementById("ownerStats").innerHTML='<div class="info-panel"><h3>Users</h3><b>'+stats.users+'</b></div><div class="info-panel"><h3>Catalog Items</h3><b>'+stats.items+'</b></div><div class="info-panel"><h3>Purchases</h3><b>'+stats.purchases+'</b></div>';
   let ownerItems=data.items||[];
+  document.getElementById("clearPublicCatalog").addEventListener("click",async()=>{
+   if(!confirm("Remove ALL items from the public catalog? Existing user inventories and balances will not be changed."))return;
+   const button=document.getElementById("clearPublicCatalog");button.disabled=true;button.textContent="Removing...";
+   try{
+    const result=await api("/api/owner/items",{method:"DELETE"});
+    const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();
+    document.getElementById("ownerStats").querySelectorAll(".info-panel")[1].querySelector("b").textContent=ownerItems.length;
+    toast(result.hidden+" items removed from the public catalog");
+   }catch(e){toast(e.message)}
+   finally{button.disabled=false;button.textContent="Remove all items from catalog"}
+  });
   function drawOwnerItems(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
     '<div class="owner-item-thumb">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="">':'◇')+'</div>'+
