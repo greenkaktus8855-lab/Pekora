@@ -4,32 +4,33 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0074bd">
-  <meta name="description" content="Pekora is a community-made Roblox Revival project. Games are currently unavailable.">
+  <meta name="description" content="Pekora is a Roblox Revival project. Games are currently unavailable.">
   <title>Pekora</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/openpekora-globals.css">
+  <link rel="stylesheet" href="/openpekora-text.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <a class="brand" href="#home" data-page="home">pekora</a>
-      <nav class="top-links" aria-label="Main navigation">
-        <a href="#games" data-page="games">Games</a>
-        <a href="#catalog" data-page="catalog">Catalog</a>
-      </nav>
-      <form class="global-search" id="globalSearchForm">
-        <input id="globalSearch" type="search" placeholder="Search" aria-label="Search Pekora users">
-        <button type="submit" aria-label="Search"><span class="search-glass"></span></button>
-      </form>
-      <div class="account-area" id="accountArea"></div>
-    </div>
-  </header>
-  <div class="subbar">
-    <div class="subbar-inner">
-      <a href="#catalog" data-page="catalog">Catalog</a>
-      <a href="#users" data-page="users">People</a>
-      <a href="#games" data-page="games">Games <span class="coming-tag">Coming Soon</span></a>
-      <span class="currency" id="currency"></span>
-    </div>
+  <div class="navbar-wrapper-main">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <button class="mobile-menu" id="mobileMenu" type="button" aria-label="Toggle navigation">☰</button>
+        <a class="brand" href="#home" data-page="home">pekora</a>
+        <nav class="top-links" aria-label="Main navigation">
+          <a href="#games" data-page="games">Games</a>
+          <a href="#catalog" data-page="catalog">Catalog</a>
+        </nav>
+        <form class="global-search" id="globalSearchForm">
+          <input id="globalSearch" type="search" placeholder="Search" aria-label="Search Pekora">
+          <button type="submit" aria-label="Search"><span class="search-glass"></span></button>
+        </form>
+        <div class="account-area" id="accountArea"></div>
+        <span class="currency" id="currency"></span>
+      </div>
+    </header>
   </div>
   <div class="site-layout">
     <aside id="sidebar" class="sidebar" aria-label="Account navigation"></aside>
