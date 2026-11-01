@@ -54,6 +54,7 @@ async function route(request, env) {
     if (!data || typeof data.username !== "string" || typeof data.password !== "string") return fail("Enter a username and password.");
     const username = data.username.trim();
     if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Username must be 3–20 characters and use only letters, numbers or _.");
+    if (username.toLowerCase() === "pekoraadmin") return fail("That username is reserved.");
     if (data.password.length < 8 || data.password.length > 128) return fail("Password must be at least 8 characters.");
     const exists = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first();
     if (exists) return fail("That username is already taken.", 409);
