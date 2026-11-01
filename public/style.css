@@ -341,3 +341,25 @@ button,input,textarea,select{font:inherit}
  .catalog-results{padding-left:6px;padding-right:4px}
  .catalog-results .item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* OpenPekora-style public profile */
+.op-profile{width:100%;max-width:970px;margin:8px auto 24px}
+.op-profile-header{display:flex;align-items:flex-start;gap:20px;padding:12px 0 18px}
+.op-profile-avatar{width:150px;height:150px;flex:0 0 150px;background:#fff;box-shadow:0 1px 4px rgba(25,25,25,.3);overflow:hidden}
+.op-profile-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+.op-profile-info{min-width:0}
+.op-profile-info h1{font-size:32px;font-weight:700;line-height:1.2;margin:0 0 4px;color:#191919}
+.op-profile-meta{font-size:13px;color:#757575}
+.op-profile-info p{font-size:14px;margin:12px 0;color:#191919;white-space:pre-wrap}
+.op-profile-stats{display:flex;gap:20px;font-size:13px;color:#757575}
+.op-profile-stats b{color:#191919;font-size:15px}
+.op-profile-tabs{display:flex;gap:0;border-bottom:1px solid #c3c3c3;margin:0 0 16px}
+.op-profile-tabs a{display:block;padding:8px 18px;color:#191919;font-size:16px;text-decoration:none}
+.op-profile-tabs a.active{color:#00a2ff;border-bottom:2px solid #00a2ff;font-weight:600}
+.op-profile-section{margin:0 0 20px}
+.op-profile-section h2{font-size:22px;font-weight:700;margin:0 0 8px;padding-bottom:5px;border-bottom:1px solid #c3c3c3}
+.op-profile-items{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.op-profile-items .item-card{padding:4px}
+.op-profile-items .item-image{max-width:132px;border:0}
+.op-profile-empty{padding:18px;background:#b8b8b8;color:#757575;text-align:center;font-size:15px}
+@media(max-width:767px){.op-profile-header{gap:12px}.op-profile-avatar{width:104px;height:104px;flex-basis:104px}.op-profile-info h1{font-size:24px}.op-profile-items{grid-template-columns:repeat(2,minmax(0,1fr))}}
