@@ -7,44 +7,137 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 async function api(path,options={}){const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||"Something went wrong");return data}
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
 function avatar(){return '<div class="avatar-person" aria-hidden="true"></div>'}
+
 function renderSidebar(active="home"){
- if(!me){sidebar.classList.remove("visible");sidebar.innerHTML="";return}
+ if(!me){sidebar.classList.remove("visible","mobile-open");sidebar.innerHTML="";return}
  sidebar.classList.add("visible");
- const links=[["home","Home"],["profile","Profile"],["friends","Friends"],["avatar","Avatar"],["inventory","Inventory"],["trades","Trades"],["settings","Settings"]];
+ const links=[["home","Home"],["profile","Profile"],["friends","Friends"],["avatar","Avatar"],["inventory","Inventory"],["trades","Trade"],["settings","Settings"]];
  if(me.role==="OWNER")links.push(["owner","Owner Panel"]);
- sidebar.innerHTML='<div class="side-user"><div class="side-avatar">'+avatar()+'</div><div><a class="side-username" href="#profile" data-page="profile">'+esc(me.username)+'</a><div class="side-role">'+esc(me.role)+'</div></div></div><nav class="side-nav">'+links.map(([id,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'">'+label+'</a>').join("")+'<div class="side-separator"></div><a href="#users" data-page="users">Find People</a></nav>';
+ sidebar.innerHTML='<div class="sidebar-card">'+
+  '<div class="side-user"><div class="side-avatar">'+avatar()+'</div><div><a class="side-username" href="#profile" data-page="profile">'+esc(me.username)+'</a><div class="side-role">'+esc(me.role)+'</div></div></div>'+
+  '<nav class="side-nav">'+
+   links.map(([id,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'">'+label+'</a>').join("")+
+   '<div class="side-separator"></div><a href="#users" data-page="users" class="'+(active==="users"?"active":"")+'">Find People</a>'+
+  '</nav>'+
+ '</div>';
 }
-function setUser(user){me=user;accountArea.innerHTML=user?'<a href="#profile" data-page="profile">'+esc(user.username)+'</a><span class="balance">'+Number(user.balance||0).toLocaleString()+' P$</span><button id="logoutBtn" type="button">Log out</button>':'<button id="loginBtn" type="button">Log in</button><button id="registerBtn" type="button">Sign up</button>';currency.textContent=user?Number(user.balance||0).toLocaleString()+" P$":"";document.getElementById("logoutBtn")?.addEventListener("click",logout);document.getElementById("loginBtn")?.addEventListener("click",()=>page("login"));document.getElementById("registerBtn")?.addEventListener("click",()=>page("register"));renderSidebar(location.hash.slice(1)||"home")}
+
+function setUser(user){
+ me=user;
+ accountArea.innerHTML=user
+  ? '<a class="account-name" href="#profile" data-page="profile">'+esc(user.username)+'</a><button id="logoutBtn" type="button">Log out</button>'
+  : '<button id="loginBtn" type="button">Login</button><button id="registerBtn" type="button">Sign Up</button>';
+ currency.textContent=user?Number(user.balance||0).toLocaleString()+" P$":"";
+ document.getElementById("logoutBtn")?.addEventListener("click",logout);
+ document.getElementById("loginBtn")?.addEventListener("click",()=>page("login"));
+ document.getElementById("registerBtn")?.addEventListener("click",()=>page("register"));
+ renderSidebar(location.hash.slice(1)||"home");
+}
 async function refreshMe(){try{const d=await api("/api/me");setUser(d.user)}catch{setUser(null)}}
 function page(name){history.pushState({page:name},"","#"+name);render(name)}
 window.addEventListener("popstate",()=>render(location.hash.slice(1)||"home"));
 document.addEventListener("click",e=>{const a=e.target.closest("[data-page]");if(a){e.preventDefault();page(a.dataset.page)}const p=e.target.closest("[data-profile]");if(p){e.preventDefault();profile(p.dataset.profile)}});
-document.getElementById("globalSearchForm").addEventListener("submit",e=>{e.preventDefault();const q=document.getElementById("globalSearch").value.trim();page("users");setTimeout(()=>{const input=document.getElementById("userSearch");if(input){input.value=q;input.dispatchEvent(new Event("input"))}},0)});
+document.getElementById("globalSearchForm").addEventListener("submit",e=>{e.preventDefault();const q=document.getElementById("globalSearch").value.trim();page("users");setTimeout(()=>{const input=document.getElementById("userSearch");if(input){input.value=q;input.form?.dispatchEvent(new Event("submit",{cancelable:true,bubbles:true}))}},0)});
+
+document.getElementById("mobileMenu")?.addEventListener("click",()=>sidebar.classList.toggle("mobile-open"));
 function home(){
  renderSidebar("home");
  const name=me?esc(me.username):"Guest";
- app.innerHTML='<div class="home-header"><div class="home-avatar">'+avatar()+'</div><div><h1>'+(me?'Hello, '+name+'!':'Welcome to Pekora!')+'</h1><p>Pekora is a Roblox Revival project. Games are currently unavailable.</p>'+(me?'<p style="margin-top:7px"><b>'+Number(me.balance||0).toLocaleString()+' P$</b></p>':'')+'</div></div>'+
- '<div class="home-columns"><div>'+
- '<section class="content-section"><div class="section-heading"><h2>Friends ('+(me?'0':'—')+')</h2><a href="#friends" data-page="friends">See All</a></div><div class="section-box muted-box">'+(me?'Your friends list is empty. Friend features are being prepared.':'Log in to connect with other Pekora users.')+'</div></section>'+
- '<section class="content-section"><div class="section-heading"><h2>Recently Played</h2><a href="#games" data-page="games">Games</a></div><div class="section-box muted-box">Games are currently unavailable on Pekora.</div></section>'+
- '<section class="content-section"><div class="section-heading"><h2>My Inventory</h2><a href="#inventory" data-page="inventory">See All</a></div><div id="homeInventory" class="section-box muted-box">'+(me?'Loading your items...':'Sign in to see your inventory.')+'</div></section>'+
- '</div><aside>'+
- '<div class="info-panel"><h3>Explore Pekora</h3><div class="quick-actions"><a class="action-card" href="#catalog" data-page="catalog"><strong>Catalog</strong><span>Browse avatar items</span></a><a class="action-card" href="#avatar" data-page="avatar"><strong>Avatar</strong><span>Customize your character</span></a><a class="action-card" href="#inventory" data-page="inventory"><strong>Inventory</strong><span>Your owned items</span></a><a class="action-card" href="#users" data-page="users"><strong>People</strong><span>Find users</span></a></div></div>'+
- '<div class="info-panel"><h3>About Pekora</h3><p>Pekora is a community-made Roblox Revival project.</p><p>Games are currently unavailable.</p></div>'+
- '<div class="info-panel"><h3>Account</h3>'+(me?'<p>Signed in as <b>'+name+'</b>.</p><a href="#settings" data-page="settings">Account Settings</a>':'<p>Create an account to save your avatar and inventory.</p><button class="button" data-page="register">Sign up</button>')+'</div>'+
- '</aside></div>';
+ app.innerHTML=
+  '<div class="home-dashboard">'+
+   '<div class="home-header">'+
+    '<a class="home-avatar" href="#profile" data-page="profile">'+avatar()+'</a>'+
+    '<div class="home-header-text">'+
+     '<h1>'+(me?'<a href="#profile" data-page="profile" class="hello-message">Hello, '+name+'!</a>':'Welcome to Pekora!')+'</h1>'+
+     '<p>Pekora is a Roblox Revival project. Games are currently unavailable.</p>'+
+    '</div>'+
+   '</div>'+
+   '<section class="content-section">'+
+    '<div class="section-heading"><h2>Friends ('+(me?'0':'—')+')</h2><a href="#friends" data-page="friends">See All</a></div>'+
+    '<div class="section-content">'+(me?'<p class="empty-line">You have no friends yet.</p>':'<p class="empty-line">Log in to see your friends.</p>')+'</div>'+
+   '</section>'+
+   '<section class="content-section">'+
+    '<div class="section-heading"><h2>Recently Played</h2></div>'+
+    '<div class="section-content-off">Games are currently unavailable.</div>'+
+   '</section>'+
+   '<section class="content-section">'+
+    '<div class="section-heading"><h2>My Inventory</h2><a href="#inventory" data-page="inventory">See All</a></div>'+
+    '<div id="homeInventory" class="section-content">'+(me?'Loading your items...':'Log in to see your inventory.')+'</div>'+
+   '</section>'+
+  '</div>';
  if(me)loadHomeInventory();
 }
-async function loadHomeInventory(){const el=document.getElementById("homeInventory");try{const d=await api("/api/inventory");el.className="section-box";el.innerHTML=d.items.length?'<div class="item-grid">'+d.items.slice(0,4).map(itemCard).join("")+'</div>':'You have no items yet. <a href="#catalog" data-page="catalog">Visit the Catalog</a>.'}catch(e){el.textContent=e.message}}
+
+async function loadHomeInventory(){
+ const el=document.getElementById("homeInventory");
+ if(!el)return;
+ try{
+  const d=await api("/api/inventory");
+  el.className="section-content";
+  el.innerHTML=d.items.length
+   ? '<div class="item-grid">'+d.items.slice(0,4).map(itemCard).join("")+'</div>'
+   : '<p class="empty-line">You have no items yet. <a href="#catalog" data-page="catalog">Visit the Catalog</a>.</p>';
+ }catch(e){el.textContent=e.message}
+}
 function itemCard(x){return '<article class="item-card"><div class="item-image">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div></article>'}
+
 async function catalog(){
  renderSidebar("catalog");
- app.innerHTML='<div class="catalog-heading"><h1 class="page-title">Catalog</h1><form id="catalogSearchForm" class="catalog-search"><input class="search-input" id="itemSearch" placeholder="Search the catalog"><button class="button" type="submit">Search</button></form></div><div class="catalog-layout"><aside class="catalog-sidebar"><h2>Categories</h2><nav id="catalogCategories" class="catalog-categories"><a href="#" class="active" data-category="All">All Items</a><a href="#" data-category="Hats">Hats</a><a href="#" data-category="Hair">Hair</a><a href="#" data-category="Faces">Faces</a><a href="#" data-category="Shirts">Shirts</a><a href="#" data-category="Pants">Pants</a><a href="#" data-category="Accessories">Accessories</a></nav><div class="catalog-legend"><strong>About Pekora items</strong><p>Items purchased here belong to your Pekora account.</p></div></aside><section class="catalog-results"><div class="catalog-results-header"><h2 id="catalogCategoryTitle">All Items</h2><span id="catalogCount" class="muted"></span></div><div id="catalogGrid" class="item-grid">Loading catalog...</div></section></div>';
+ app.innerHTML=
+  '<div class="container mt-4 ssp catalog-page">'+
+   '<div class="catalog-container">'+
+    '<div class="row catalog-title-row">'+
+     '<div class="catalog-title-col"><h1 class="catalog-title">Catalog</h1></div>'+
+     '<div class="catalog-input-col">'+
+      '<form id="catalogSearchForm" class="catalog-input-form">'+
+       '<input class="catalog-input" id="itemSearch" type="text" placeholder="Search">'+
+       '<select class="catalog-select" id="itemCategorySelect">'+
+        '<option value="All">All Categories</option><option value="Hats">Hats</option><option value="Hair">Hair</option>'+
+        '<option value="Faces">Faces</option><option value="Shirts">Shirts</option><option value="Pants">Pants</option>'+
+        '<option value="Accessories">Accessories</option>'+
+       '</select>'+
+       '<button class="button catalog-search-button" type="submit">Search</button>'+
+      '</form>'+
+     '</div>'+
+    '</div>'+
+    '<div class="catalog-body">'+
+     '<aside class="catalog-navigation"><div class="divider-right">'+
+      '<div class="catalog-browse-title"><p>Browse by</p><h2>Category</h2></div>'+
+      '<nav id="catalogCategories" class="catalog-categories">'+
+       '<a href="#" class="active" data-category="All">All Items</a>'+
+       '<a href="#" data-category="Hats">Hats</a><a href="#" data-category="Hair">Hair</a>'+
+       '<a href="#" data-category="Faces">Faces</a><a href="#" data-category="Shirts">Shirts</a>'+
+       '<a href="#" data-category="Pants">Pants</a><a href="#" data-category="Accessories">Accessories</a>'+
+      '</nav>'+
+      '<div class="catalog-legend"><strong>About</strong><p>Items purchased here belong to your Pekora account.</p></div>'+
+     '</div></aside>'+
+     '<section class="catalog-results">'+
+      '<div class="catalog-results-header"><div><h2 id="catalogCategoryTitle">Featured Items on Pekora</h2><p id="catalogCount" class="muted"></p></div></div>'+
+      '<div id="catalogGrid" class="item-grid">Loading catalog...</div>'+
+     '</section>'+
+    '</div>'+
+   '</div>'+
+  '</div>';
  try{items=(await api("/api/catalog")).items;drawCatalog("All","")}catch(e){document.getElementById("catalogGrid").textContent=e.message}
  const search=document.getElementById("itemSearch");
- document.getElementById("catalogSearchForm").addEventListener("submit",e=>{e.preventDefault();drawCatalog(document.querySelector("[data-category].active")?.dataset.category||"All",search.value)});
- search.addEventListener("input",()=>drawCatalog(document.querySelector("[data-category].active")?.dataset.category||"All",search.value));
- document.querySelectorAll("[data-category]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();document.querySelectorAll("[data-category]").forEach(x=>x.classList.remove("active"));a.classList.add("active");document.getElementById("catalogCategoryTitle").textContent=a.textContent;drawCatalog(a.dataset.category,search.value)}));
+ const select=document.getElementById("itemCategorySelect");
+ const activeCategory=()=>document.querySelector("[data-category].active")?.dataset.category||"All";
+ function chooseCategory(category){
+  document.querySelectorAll("[data-category]").forEach(x=>x.classList.toggle("active",x.dataset.category===category));
+  select.value=category;
+  document.getElementById("catalogCategoryTitle").textContent=category==="All"?"Featured Items on Pekora":category;
+  drawCatalog(category,search.value);
+ }
+ document.getElementById("catalogSearchForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  chooseCategory(select.value||"All");
+ });
+ search.addEventListener("input",()=>drawCatalog(activeCategory(),search.value));
+ select.addEventListener("change",()=>chooseCategory(select.value));
+ document.querySelectorAll("[data-category]").forEach(a=>a.addEventListener("click",e=>{
+  e.preventDefault();
+  chooseCategory(a.dataset.category);
+ }));
 }
 function drawCatalog(category,q){
  const el=document.getElementById("catalogGrid");if(!el)return;
