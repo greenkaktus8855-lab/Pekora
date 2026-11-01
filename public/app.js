@@ -59,11 +59,32 @@ function home(){
  }
  const name=esc(me.username);
  app.innerHTML='<div class="op-dashboard">'+
-  '<div class="op-home-header"><a class="op-headshot" href="#profile" data-page="profile">'+avatar()+'</a><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1></div>'+
-  '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (0)</h3><a href="#friends" data-page="friends">See All</a></div><div class="op-section-content"><ul class="op-friends-list"></ul><div class="op-empty">You have no friends to display yet.</div></div></section>'+
-  '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Recently Played</h3></div><div class="op-section-content op-empty">No games found.</div></section>'+
-  '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Favorites</h3></div><div class="op-section-content op-empty">No games found.</div></section>'+
+  '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile">'+avatar()+'</a><div><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><p class="home-balance">'+Number(me.balance||0).toLocaleString()+' P$</p></div></div>'+
+  '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
+  '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Items</h3><a href="#inventory" data-page="inventory">See All</a></div><div id="homeItems" class="op-section-content"><div class="op-empty">Loading inventory...</div></div></section>'+
   '</div>';
+ loadHomeDashboard();
+}
+async function loadHomeDashboard(){
+ const friendsHost=document.getElementById("homeFriends"),itemsHost=document.getElementById("homeItems");
+ if(!friendsHost||!itemsHost||!me)return;
+ try{
+  const [profileData,inventoryData,friendsData]=await Promise.all([
+   api("/api/profile/"+encodeURIComponent(me.username)),
+   api("/api/inventory"),
+   api("/api/friends")
+  ]);
+  if(!document.getElementById("homeFriends"))return;
+  const owned=inventoryData.items||[],profile=profileData.profile;
+  document.getElementById("homeAvatar").innerHTML=avatarArtwork(me.username,profile.avatar,owned);
+  const friends=friendsData.friends||[];
+  document.getElementById("homeFriendCount").textContent=friends.length;
+  friendsHost.innerHTML=friends.length?'<div class="op-home-friends">'+friends.slice(0,12).map(u=>'<a href="#profile" class="op-home-friend" data-profile="'+esc(u.username)+'">'+avatar(u.username)+'<span>'+esc(u.username)+'</span></a>').join("")+'</div>':'<div class="op-empty">You have no friends to display yet.</div>';
+  itemsHost.innerHTML=owned.length?'<div class="op-home-items">'+owned.slice(0,6).map(itemCard).join("")+'</div>':'<div class="op-empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Visit the Catalog</a>.</div>';
+ }catch(e){
+  friendsHost.innerHTML='<div class="op-empty">Could not load friends.</div>';
+  itemsHost.innerHTML='<div class="op-empty">Could not load inventory.</div>';
+ }
 }
 
 async function loadHomeInventory(){
@@ -141,6 +162,7 @@ async function catalog(){
   chooseCategory(select.value||"All");
  });
  search.addEventListener("input",()=>drawCatalog(activeCategory(),search.value));
+ document.getElementById("catalogSort").value=catalogSort;
  document.getElementById("catalogSort").addEventListener("change",e=>{
   catalogSort=e.target.value;
   drawCatalog(activeCategory(),search.value);
