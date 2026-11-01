@@ -6,7 +6,7 @@ let me=null,items=[];
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function api(path,options={}){const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||"Something went wrong");return data}
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
-function avatar(){return '<div class="avatar-person" aria-hidden="true"></div>'}
+function avatar(){return '<img class="avatar-render" src="https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png" alt="Koqumo avatar" loading="lazy">'}
 
 function renderSidebar(active="home"){
  if(!me){sidebar.classList.remove("visible","mobile-open");sidebar.innerHTML="";return}
