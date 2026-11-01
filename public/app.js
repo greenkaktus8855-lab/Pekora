@@ -2,7 +2,7 @@ const app=document.getElementById("app");
 const accountArea=document.getElementById("accountArea");
 const currency=document.getElementById("currency");
 const sidebar=document.getElementById("sidebar");
-let me=null,items=[];
+let me=null,items=[],catalogSort="relevance";
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function api(path,options={}){const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||"Something went wrong");return data}
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
@@ -103,7 +103,7 @@ async function catalog(){
       '<div class="catalog-legend"><strong>About</strong><p>Items purchased here belong to your Pekora account.</p></div>'+
      '</div></aside>'+
      '<section class="catalog-results">'+
-      '<div class="catalog-results-header"><div><h2 id="catalogCategoryTitle">Featured Items on Pekora</h2><p id="catalogCount" class="muted"></p></div></div>'+
+      '<div class="catalog-results-header"><div><h2 id="catalogCategoryTitle">Featured Items on Pekora</h2><p id="catalogCount" class="muted"></p></div><label class="catalog-sort-label">Sort By: <select id="catalogSort" class="catalog-sort"><option value="relevance">Relevance</option><option value="newest">Recently updated</option><option value="price-low">Price (Low to High)</option><option value="price-high">Price (High to Low)</option></select></label></div>'+
       '<div id="catalogGrid" class="item-grid">Loading catalog...</div>'+
      '</section>'+
     '</div>'+
@@ -124,6 +124,10 @@ async function catalog(){
   chooseCategory(select.value||"All");
  });
  search.addEventListener("input",()=>drawCatalog(activeCategory(),search.value));
+ document.getElementById("catalogSort").addEventListener("change",e=>{
+  catalogSort=e.target.value;
+  drawCatalog(activeCategory(),search.value);
+ });
  select.addEventListener("change",()=>chooseCategory(select.value));
  document.querySelectorAll("[data-category]").forEach(a=>a.addEventListener("click",e=>{
   e.preventDefault();
@@ -132,7 +136,10 @@ async function catalog(){
 }
 function drawCatalog(category,q){
  const el=document.getElementById("catalogGrid");if(!el)return;
- const list=items.filter(x=>(category==="All"||x.category===category)&&((x.name||"")+" "+(x.description||"")).toLowerCase().includes(q.toLowerCase()));
+ let list=items.filter(x=>(category==="All"||x.category===category)&&((x.name||"")+" "+(x.description||"")).toLowerCase().includes(q.toLowerCase()));
+ if(catalogSort==="newest")list.sort((a,b)=>String(b.created_at||"").localeCompare(String(a.created_at||"")));
+ if(catalogSort==="price-low")list.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
+ if(catalogSort==="price-high")list.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
  document.getElementById("catalogCount").textContent=list.length+" items";
  el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" aria-label="'+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div><button class="button" data-buy="'+esc(x.id)+'">Buy</button></article>').join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
