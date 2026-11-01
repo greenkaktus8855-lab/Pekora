@@ -312,7 +312,7 @@ async function route(request, env) {
       await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,is_for_sale) VALUES (?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),data.is_for_sale===false?0:1).run();
       return json({ok:true,id:itemId},201);
     }
-    const match=path.match(/^\/api\/owner\/items\/([a-f0-9-]{36})$/i);
+    const match=path.match(/^\/api\/owner\/items\/([A-Za-z0-9_-]{1,80})$/i);
     if (match && request.method === "PATCH") {
       const current=await env.DB.prepare("SELECT * FROM items WHERE id=?").bind(match[1]).first();
       if (!current) return fail("Item not found.",404);
