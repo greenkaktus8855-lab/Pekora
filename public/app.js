@@ -224,6 +224,7 @@ async function render(name){
  else if(name==="donate")comingSoon("Donate");
  else if(name==="upgrade")comingSoon("Upgrade");
  else if(name==="community")comingSoon("Community");
+ else if(name==="develop"||name==="download")comingSoon(name==="develop"?"Create":"Download");
  else if(name==="trades")comingSoon("Trades");
  else if(name==="settings")await settings();
  else if(name==="owner")await owner();
