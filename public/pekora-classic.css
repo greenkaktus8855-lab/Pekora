@@ -102,3 +102,5 @@ html,body{background:var(--pekora-bg)!important;color:#191919;font-family:"Sourc
  .classic-ad-tall .classic-ad-placeholder{height:85px}
  .classic-large-avatar{width:64px;height:64px;flex-basis:64px}
 }
+
+.avatar-render{display:block;width:100%;height:100%;object-fit:cover}
