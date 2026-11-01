@@ -388,6 +388,16 @@ async function owner(){
  }catch(e){document.getElementById("ownerItems").textContent=e.message}
 }
 
+function infoPage(type){
+ renderSidebar("");
+ const pages={
+  about:{title:"About Pekora",body:'<p>Pekora is an independent community revival project. It is not affiliated with or endorsed by Roblox Corporation.</p><p>This build includes account profiles, a virtual catalog, inventory, avatar outfit settings and friend requests.</p><p>Pekora currency is an in-site balance only. It has no real-world monetary value.</p>'},
+  terms:{title:"Terms of Use",body:'<p>Use Pekora respectfully and do not impersonate other users, abuse the service or attempt to access accounts that are not yours.</p><p>Do not upload images or descriptions that violate the rights or safety of other people. The project owner may remove catalog entries or accounts that abuse the service.</p><p>Virtual currency and catalog items are for use inside this website only. They cannot be exchanged for real money.</p>'},
+  privacy:{title:"Privacy",body:'<p>Pekora stores your username, a password hash, session information, profile description, avatar selections, virtual balance, inventory and friend requests so the service can work.</p><p>Passwords are not stored as plain text. Sign-in uses a secure session cookie. This build does not ask for an email address.</p><p>Do not reuse an important password and do not share your account credentials with anyone.</p>'}
+ };
+ const pageData=pages[type]||pages.about;
+ app.innerHTML='<article class="info-page"><h1 class="page-title">'+pageData.title+'</h1>'+pageData.body+'<a class="button" href="#home" data-page="home">Back to Home</a></article>';
+}
 async function render(name){
  name=name||"home";
  if(name==="home")home();
@@ -404,7 +414,8 @@ async function render(name){
  else if(name==="forums")comingSoon("Forums");
  else if(name==="donate")comingSoon("Donate");
  else if(name==="upgrade")comingSoon("Upgrade");
- else if(name==="community")comingSoon("Community");
+ else if(name==="community")users();
+ else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
  else if(name==="develop"||name==="download")comingSoon(name==="develop"?"Create":"Download");
  else if(name==="trades")comingSoon("Trades");
  else if(name==="settings")await settings();
