@@ -12,17 +12,17 @@ function renderSidebar(active="home"){
  if(!me){sidebar.classList.remove("visible","mobile-open");sidebar.innerHTML="";return}
  sidebar.classList.add("visible");
  const links=[
-  ["home","⌂","Home"],["profile","▣","Profile"],["messages","✉","Messages"],
-  ["friends","♙","Friends"],["avatar","◉","Avatar"],["inventory","▤","Inventory"],
-  ["trades","⇄","Trade"],["groups","♧","Groups"],["forums","☷","Forums"]
+  ["home","icon-nav-home","Home"],["profile","icon-nav-profile","Profile"],["messages","icon-nav-message","Messages"],
+  ["friends","icon-nav-friends","Friends"],["avatar","icon-nav-charactercustomizer","Avatar"],["inventory","icon-nav-inventory","Inventory"],
+  ["trades","icon-nav-trade","Trade"],["groups","icon-nav-group","Groups"],["forums","icon-nav-forum","Forums"]
  ];
- if(me.role==="OWNER")links.push(["owner","⚙","Owner Panel"]);
+ if(me.role==="OWNER")links.push(["owner","icon-nav-settings","Panel"]);
  sidebar.innerHTML='<div class="sidebar-card">'+
-  '<div class="side-user"><div class="side-avatar">'+avatar()+'</div><div><a class="side-username" href="#profile" data-page="profile">'+esc(me.username)+'</a><div class="side-role">Account</div></div></div>'+
-  '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon">'+ico+'</span><strong>'+label+'</strong>'+(id==="messages"?'<span class="side-count">0</span>':'')+'</a>').join("")+
+  '<a class="side-user" href="#profile" data-page="profile"><span class="side-avatar">'+avatar()+'</span><span><span class="side-username">'+esc(me.username)+'</span><span class="side-role">Account</span></span></a>'+
+  '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span>'+(id==="messages"?'<span class="side-count">0</span>':'')+'</a>').join("")+
   '<div class="side-separator"></div>'+
-  '<a href="#donate" data-page="donate"><span class="side-icon">♡</span><strong>Donate</strong></a>'+
-  '<a href="#upgrade" data-page="upgrade"><span class="side-icon">★</span><strong>Upgrade Now</strong></a>'+
+  '<a href="#donate" data-page="donate"><span class="side-icon icon-nav-robux"></span><span>Donate</span></a>'+
+  '<a href="#upgrade" data-page="upgrade"><span class="side-icon icon-nav-settings"></span><span>Upgrade Now</span></a>'+
   '</nav></div>';
 }
 
@@ -46,24 +46,17 @@ document.getElementById("globalSearchForm").addEventListener("submit",e=>{e.prev
 document.getElementById("mobileMenu")?.addEventListener("click",()=>sidebar.classList.toggle("mobile-open"));
 function home(){
  renderSidebar("home");
- const name=me?esc(me.username):"Guest";
- app.innerHTML=
-  '<div class="classic-home">'+
-   '<div class="classic-announcement"><a href="#community" data-page="community">Welcome to Pekora: Reborn! <strong>Click here to join our community.</strong></a></div>'+
-   '<div class="classic-home-grid">'+
-    '<div class="classic-main-col">'+
-     '<div class="classic-profile-strip"><div class="classic-large-avatar">'+avatar()+'</div><div><a class="classic-profile-name" href="#profile" data-page="profile">'+name+'</a><div class="classic-profile-subtitle">Welcome to your Pekora home</div></div></div>'+
-     '<section class="classic-section"><div class="classic-section-title"><h2>Hello, '+name+'!</h2></div>'+
-      '<div class="classic-panel classic-friends-panel"><div class="classic-panel-heading"><strong>Friends (0)</strong><a href="#friends" data-page="friends">See All</a></div><div class="classic-empty-friends">You have no friends to display yet.</div></div></section>'+
-     '<section class="classic-section"><div class="classic-section-title"><h2>Recently Played</h2></div><div class="classic-panel classic-game-placeholder">Games are currently unavailable.</div></section>'+
-     '<section class="classic-section"><div class="classic-section-title"><h2>My Favorites</h2></div><div class="classic-panel classic-game-placeholder">You have no favorites yet.</div></section>'+
-     '<section class="classic-section"><div class="classic-section-title"><h2>My Feed</h2></div><div class="classic-panel classic-feed"><div class="classic-feed-tabs">My Feed <span>·</span> Friends</div><div class="classic-game-placeholder">Your feed will appear here.</div></div></section>'+
-     '<section class="classic-section"><div class="classic-section-title"><h2>Blog News</h2></div><div class="classic-panel classic-game-placeholder">No news found.</div></section>'+
-    '</div>'+
-    '<aside class="classic-right-rail"><div class="classic-ad-card"><div class="classic-ad-label">Advertisement</div><div class="classic-ad-placeholder">Pekora Community</div></div>'+
-     '<div class="classic-side-profile"><div class="classic-side-profile-head">Your Account</div><div class="classic-side-profile-body"><div class="classic-small-avatar">'+avatar()+'</div><div><strong>'+name+'</strong><div class="muted">Pekora member</div></div></div><a href="#profile" data-page="profile">View Profile</a></div>'+
-     '<div class="classic-ad-card classic-ad-tall"><div class="classic-ad-label">Advertisement</div><div class="classic-ad-placeholder">Pekora</div></div></aside>'+
-   '</div></div>';
+ if(!me){
+  app.innerHTML='<div class="op-guest"><h1>Welcome to Pekora</h1><p>Join the community and explore the catalog.</p><a class="button" href="#login" data-page="login">Login</a><a class="button" href="#register" data-page="register">Sign Up</a></div>';
+  return;
+ }
+ const name=esc(me.username);
+ app.innerHTML='<div class="op-dashboard">'+
+  '<div class="op-home-header"><a class="op-headshot" href="#profile" data-page="profile">'+avatar()+'</a><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1></div>'+
+  '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (0)</h3><a href="#friends" data-page="friends">See All</a></div><div class="op-section-content"><ul class="op-friends-list"></ul><div class="op-empty">You have no friends to display yet.</div></div></section>'+
+  '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Recently Played</h3></div><div class="op-section-content op-empty">No games found.</div></section>'+
+  '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Favorites</h3></div><div class="op-section-content op-empty">No games found.</div></section>'+
+  '</div>';
 }
 
 async function loadHomeInventory(){
