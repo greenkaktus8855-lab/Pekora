@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0067a5">
+  <meta name="theme-color" content="#0074bd">
   <meta name="description" content="Pekora community website">
   <title>Pekora</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,34 +12,36 @@
   <link rel="stylesheet" href="/openpekora-globals.css">
   <link rel="stylesheet" href="/openpekora-text.css">
   <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/pekora-classic.css">
+  <link rel="stylesheet" href="/openpekora-icons.css">
+  <link rel="stylesheet" href="/openpekora-layout.css">
 </head>
-<body>
+<body class="font-SourceSans">
   <div class="navbar-wrapper-main">
-    <header class="topbar">
-      <div class="topbar-inner">
-        <button class="mobile-menu" id="mobileMenu" type="button" aria-label="Toggle navigation">☰</button>
-        <a class="brand" href="#home" data-page="home">pekora</a>
-        <nav class="top-links" aria-label="Main navigation">
+    <header class="op-navbar">
+      <div class="op-navbar-inner">
+        <a class="op-logo" href="#home" data-page="home" aria-label="Pekora home">
+          <img src="https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/pekora-logo.png" alt="Pekora">
+        </a>
+        <nav class="op-navigation" aria-label="Main navigation">
           <a href="#games" data-page="games">Games</a>
           <a href="#catalog" data-page="catalog">Catalog</a>
           <a href="#develop" data-page="develop">Create</a>
           <a href="#download" data-page="download">Download</a>
         </nav>
-        <form class="global-search" id="globalSearchForm">
+        <form class="op-search" id="globalSearchForm">
           <input id="globalSearch" type="search" placeholder="Search" aria-label="Search Pekora">
-          <button type="submit" aria-label="Search"><span class="search-glass"></span></button>
+          <button type="submit" aria-label="Search"><span class="icon-nav-search"></span></button>
         </form>
-        <div class="account-area" id="accountArea"></div>
-        <span class="currency" id="currency"></span>
+        <div class="op-account" id="accountArea"></div>
+        <span class="op-currency" id="currency"></span>
       </div>
     </header>
   </div>
-  <div class="site-layout">
-    <aside id="sidebar" class="sidebar" aria-label="Account navigation"></aside>
-    <main id="app" class="main-content" tabindex="-1"></main>
+  <div class="site-layout op-site-layout">
+    <aside id="sidebar" class="sidebar op-sidebar" aria-label="Account navigation"></aside>
+    <main id="app" class="main-content op-main-content" tabindex="-1"></main>
   </div>
-  <footer class="site-footer">
+  <footer class="site-footer op-footer">
     <div class="footer-inner">
       <nav class="footer-links">
         <a href="#home" data-page="home">Home</a>
