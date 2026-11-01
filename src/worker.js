@@ -316,9 +316,9 @@ async function route(request, env) {
     if (match && request.method === "PATCH") {
       const current=await env.DB.prepare("SELECT * FROM items WHERE id=?").bind(match[1]).first();
       if (!current) return fail("Item not found.",404);
-      const data=await body(request), merged={name:data?.name??current.name,description:data?.description??current.description,category:data?.category??current.category,price:data?.price??current.price,image_url:data?.image_url??current.image_url};
+      const data=await body(request), merged={name:data?.name??current.name,description:data?.description??current.description,category:data?.category??current.category,price:data?.price??current.price,image_url:data?.image_url??current.image_url,is_for_sale:data?.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
       const error=validItem(merged); if(error)return fail(error);
-      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),match[1]).run();
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),merged.is_for_sale,match[1]).run();
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
