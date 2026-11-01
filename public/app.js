@@ -154,8 +154,29 @@ async function profile(username=me?.username){
  renderSidebar("profile");
  if(!username){app.innerHTML='<div class="empty">Choose a user profile.</div>';return}
  try{
-  const d=await api("/api/profile/"+encodeURIComponent(username));const p=d.profile;
-  app.innerHTML='<div class="profile-header"><div class="home-avatar">'+avatar()+'</div><div><h1>'+esc(p.username)+'</h1><div class="muted">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div><p>'+esc(p.description||"This user has not added a description.")+'</p><div class="profile-stats"><span>'+Number(p.itemCount||0)+' items</span><span>'+Number(p.balance||0).toLocaleString()+' P$</span></div></div></div><section class="content-section"><div class="section-heading"><h2>Inventory</h2></div><div class="section-box muted-box">Public inventory preview is being prepared.</div></section>';
+  const [d,inventoryData]=await Promise.all([
+   api("/api/profile/"+encodeURIComponent(username)),
+   api("/api/profile/"+encodeURIComponent(username)+"/inventory")
+  ]);
+  const p=d.profile,owned=inventoryData.items||[];
+  app.innerHTML='<div class="op-profile">'+
+   '<div class="op-profile-header"><div class="op-profile-avatar">'+avatar(p.username)+'</div><div class="op-profile-info">'+
+    '<h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
+    '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
+    '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+Number(p.balance||0).toLocaleString()+'</b> P$</span></div>'+
+   '</div></div>'+
+   '<nav class="op-profile-tabs"><a href="#" class="active" data-profile-tab="about">About</a><a href="#" data-profile-tab="creations">Creations</a></nav>'+
+   '<section id="profileTabContent" class="op-profile-content">'+
+    '<div class="op-profile-section"><h2>Inventory</h2>'+
+     (owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+
+    '</div></section></div>';
+  app.querySelectorAll("[data-profile-tab]").forEach(tab=>tab.addEventListener("click",e=>{
+   e.preventDefault();
+   app.querySelectorAll("[data-profile-tab]").forEach(x=>x.classList.toggle("active",x===tab));
+   document.getElementById("profileTabContent").innerHTML=tab.dataset.profileTab==="about"
+    ? '<div class="op-profile-section"><h2>Inventory</h2>'+(owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+'</div>'
+    : '<div class="op-profile-section"><h2>Creations</h2><div class="op-profile-empty">No creations to display.</div></div>';
+  }));
  }catch(e){app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
 async function settings(){
