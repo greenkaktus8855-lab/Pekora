@@ -10,8 +10,8 @@ function avatar(username=me?.username){const src=String(username||"").toLowerCas
 const AVATAR_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 function avatarArtwork(username,config={},owned=[]){
  const src=String(username||"").toLowerCase()==="koqumo"?"https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png":"https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/generic.svg";
- const worn=AVATAR_CATEGORIES.map(category=>{const item=owned.find(x=>x.id===config?.[category]);return item?{category,name:item.name}:null}).filter(Boolean);
- return '<div class="avatar-artwork"><div class="avatar-artwork-image"><img src="'+src+'" alt="'+esc(username)+' avatar" loading="lazy"></div><div class="avatar-artwork-items">'+(worn.length?worn.map(x=>'<span class="avatar-worn-chip"><b>'+esc(x.category)+'</b>'+esc(x.name)+'</span>').join(""):'<span class="avatar-worn-empty">Default avatar</span>')+'</div></div>';
+ const worn=AVATAR_CATEGORIES.map(category=>{const item=owned.find(x=>x.id===config?.[category]);return item?{category,name:item.name,image_url:item.image_url}:null}).filter(Boolean);
+ return '<div class="avatar-artwork"><div class="avatar-artwork-image"><img src="'+src+'" alt="'+esc(username)+' avatar" loading="lazy"></div><div class="avatar-artwork-items">'+(worn.length?worn.map(x=>'<span class="avatar-worn-chip">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="" loading="lazy">':'')+'<b>'+esc(x.category)+'</b>'+esc(x.name)+'</span>').join(""):'<span class="avatar-worn-empty">Default avatar</span>')+'</div></div>';
 }
 
 
@@ -337,13 +337,17 @@ async function owner(){
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
     '<div class="owner-item-subfields"><select name="category">'+AVATAR_CATEGORIES.map(c=>'<option '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" value="'+esc(x.image_url||"")+'" placeholder="Image URL"></div>'+
     '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?'For sale':'Removed from catalog')+'</span></div>'+
-    '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
+    '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
      await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description")})});
      const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();toast("Item saved");
     }catch(err){toast(err.message)}
+   }));
+   document.querySelectorAll("[data-restore-item]").forEach(button=>button.addEventListener("click",async()=>{
+    try{await api("/api/owner/items/"+encodeURIComponent(button.dataset.restoreItem),{method:"PATCH",body:JSON.stringify({is_for_sale:true})});const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();toast("Item restored")}
+    catch(e){toast(e.message)}
    }));
    document.querySelectorAll("[data-remove-item]").forEach(button=>button.addEventListener("click",async()=>{
     if(!confirm("Remove this item from the public catalog? Existing owners will keep it."))return;
