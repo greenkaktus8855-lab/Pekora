@@ -1,0 +1,68 @@
+/* OpenPekora frontend layout port.
+   Component dimensions and navigation styling are adapted from Blue7366/OpenPekora
+   frontend/components/navbar, navSidebar, myDashboard and footer (MIT). */
+:root{--op-blue:#0074bd;--op-primary:#00a2ff;--op-success:#02b757;--op-text:#191919;--op-muted:#757575;--op-white:#fff;--op-bg:#e3e3e3}
+html,body{margin:0;min-height:100%;background:#fff;color:var(--op-text);font-family:'Source Sans Pro',Arial,sans-serif;font-size:14px}
+body{padding-top:0}
+.navbar-wrapper-main{height:52px;margin-bottom:40px}
+.op-navbar{position:fixed;z-index:1000;top:0;left:0;width:100%;min-height:46px;background:var(--op-blue);padding:0;box-shadow:0 3px 3px -3px rgba(25,25,25,.3)}
+.op-navbar-inner{max-width:1338px;min-height:46px;margin:0 auto;padding:0 12px;display:flex;align-items:center;gap:16px}
+.op-logo{display:flex;align-items:center;justify-content:flex-start;flex:0 0 122px;width:122px;height:40px}
+.op-logo img{display:block;max-width:122px;max-height:40px;object-fit:contain}
+.op-navigation{display:flex;align-items:center;gap:0;white-space:nowrap}
+.op-navigation a,.op-account a,.op-account button{color:#fff!important;font-size:16px;font-weight:500;text-decoration:none!important;padding:6px 9px;line-height:1.4}
+.op-navigation a:hover,.op-account a:hover,.op-account button:hover{color:#fff!important;background:rgba(25,25,25,.1);border-radius:4px}
+.op-search{display:flex;align-items:center;margin-left:auto;width:230px;height:28px;background:#fff;border:1px solid rgba(0,0,0,.15);border-radius:3px;overflow:hidden}
+.op-search input{width:calc(100% - 30px);height:26px;border:0;outline:0;padding:2px 12px;background:#fff;color:#191919;font-size:16px;font-weight:300}
+.op-search input::placeholder{color:#b8b8b8}
+.op-search button{width:28px;height:26px;padding:0;border:0;background:#fff;display:grid;place-items:center;cursor:pointer}
+.op-search .icon-nav-search{transform:scale(.8)}
+.op-account{display:flex;align-items:center;justify-content:flex-end;gap:2px;white-space:nowrap;margin-left:6px}
+.op-account button{border:0;background:transparent;cursor:pointer}
+.op-account #registerBtn{background:#02b757;border-radius:3px}
+.op-account #registerBtn:hover{background:#3fc679}
+.op-account .account-name{font-size:14px}
+.op-currency{color:#fff;font-size:15px;font-weight:500;white-space:nowrap}
+.op-sidebar{display:none;position:fixed;z-index:999;top:0;left:0;width:175px;margin-top:12px}
+.op-sidebar.visible{display:block}
+.op-sidebar .sidebar-card{width:175px;height:100vh;overflow-y:auto;background:#fff;color:#191919;padding:40px 10px 16px;box-shadow:0 0 3px rgba(25,25,25,.3)}
+.op-sidebar .side-user{display:flex;align-items:center;gap:6px;margin:0 0 8px;padding:0 0 7px;border:0;border-bottom:1px solid #b8b8b8;background:transparent;box-shadow:none}
+.op-sidebar .side-avatar{width:22px;height:22px;flex:0 0 22px;overflow:hidden;border-radius:50%;background:#d1d1d1}
+.op-sidebar .side-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+.op-sidebar .side-username{display:block;max-width:128px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#191919;font-size:16px;font-weight:500}
+.op-sidebar .side-role{font-size:11px;color:#757575}
+.op-sidebar .side-nav{padding:0;background:transparent;box-shadow:none}
+.op-sidebar .side-nav a{display:block;margin:0;padding:5px 0;color:#191919;font-size:16px;font-weight:500;text-decoration:none}
+.op-sidebar .side-nav a:hover{color:#00a2ff;background:transparent}
+.op-sidebar .side-nav .side-icon{display:inline-block;width:28px;height:28px;margin-right:4px;vertical-align:middle}
+.op-sidebar .side-nav .side-count{float:right;margin-top:5px;padding:2px 7px;border-radius:10px;background:#01a2fd;color:#fff;font-size:11px}
+.op-sidebar .side-separator{height:1px;margin:8px 0;border:0;background:#c3c3c3}
+.op-sidebar .upgradeNowButton{margin-top:10px;padding:8px 4px;background:#00a2ff;color:#fff;text-align:center;font-size:15px;font-weight:500;border-radius:4px}
+.op-site-layout{max-width:1338px;min-height:calc(100vh - 150px);margin:0 auto;padding:0 12px 24px;display:flex;align-items:flex-start;gap:24px}
+.op-main-content{width:970px;max-width:970px;min-width:0;margin:0 auto;padding-top:0}
+.op-dashboard{width:100%;max-width:970px;margin:0 auto;padding-top:12px}
+.op-home-header{display:flex;align-items:center;margin:0 0 12px;min-height:150px}
+.op-headshot{width:150px;height:150px;flex:0 0 150px;margin-right:24px;overflow:hidden;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(25,25,25,.3)}
+.op-headshot img{width:100%;height:100%;object-fit:cover}
+.op-home-header h1{margin:0;font-size:36px;line-height:1;font-weight:800}
+.op-home-header h1 a{color:#191919;text-decoration:none}
+.op-dashboard-section{margin:0 0 12px}
+.op-section-heading{display:flex;align-items:center;justify-content:space-between;padding-bottom:5px}
+.op-section-heading h3{margin:0;font-size:24px;line-height:1.4;font-weight:700;color:#191919}
+.op-section-heading a{font-size:14px;color:#00a2ff}
+.op-section-content{background:#fff;box-shadow:0 1px 4px rgba(25,25,25,.3);padding:15px;margin:0 0 18px;min-height:72px}
+.op-friends-list{display:flex;flex-direction:row;align-items:center;max-height:120px;overflow:hidden;margin:0;padding:0;list-style:none}
+.op-empty{background:#b8b8b8;color:#757575;padding:15px;text-align:center;font-size:16px;line-height:1.4}
+.op-guest{max-width:970px;margin:0 auto;padding:24px 0}
+.op-guest h1{font-size:38px;font-weight:400;margin:0 0 12px}
+.op-guest p{font-size:16px;margin:0 0 18px}
+.op-guest .button{margin-right:8px}
+.op-footer{padding:12px;background:#fff;width:100%;margin-top:40px;box-shadow:0 0 3px rgba(25,25,25,.3)}
+.op-footer .footer-inner{max-width:970px;margin:0 auto;display:flex;flex-direction:column;text-align:center}
+.op-footer .footer-links{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;list-style:none;margin:20px 0;padding:0}
+.op-footer .footer-links a{font-size:16px;font-weight:500;color:#b8b8b8}
+.op-footer .footer-inner p{width:78%;margin:12px auto;font-size:10px;font-weight:500;color:#b8b8b8;line-height:1.5}
+.op-mobile-menu{display:none}
+@media(max-width:1324px){.op-sidebar{display:none}.op-sidebar.visible{display:block}.op-site-layout{max-width:1154px}.op-main-content{max-width:970px}}
+@media(max-width:991px){.navbar-wrapper-main{height:88px;margin-bottom:18px}.op-navbar-inner{flex-wrap:wrap;gap:4px;padding:5px 8px}.op-logo{flex-basis:80px;width:80px}.op-logo img{max-width:80px;max-height:34px}.op-navigation{gap:0}.op-navigation a{padding:4px 6px;font-size:14px}.op-search{width:42%;margin-left:6px}.op-account{margin-left:auto}.op-currency{font-size:12px}.op-site-layout{display:block;padding:0 10px 20px}.op-main-content{width:100%;max-width:970px}.op-dashboard{padding-top:8px}.op-headshot{width:90px;height:90px;flex-basis:90px;margin-left:10px;margin-right:14px}.op-home-header{min-height:100px}.op-home-header h1{font-size:28px}}
+@media(max-width:560px){.navbar-wrapper-main{height:116px}.op-navbar-inner{min-height:108px}.op-logo{height:30px}.op-navigation{order:3;width:100%;justify-content:space-around}.op-search{order:4;width:100%;margin:0 0 4px}.op-account{margin-left:auto}.op-site-layout{padding-left:8px;padding-right:8px}.op-footer .footer-links{justify-content:center;gap:14px}.op-footer .footer-links a{font-size:13px}.op-footer .footer-inner p{width:95%}.op-headshot{width:72px;height:72px;flex-basis:72px}.op-home-header h1{font-size:24px}}
