@@ -368,3 +368,69 @@ button,input,textarea,select{font:inherit}
 .catalog-sort-label{display:flex;align-items:center;gap:5px;white-space:nowrap;color:#191919;font-size:12px;font-weight:600}
 .catalog-sort{height:28px;max-width:180px;padding:2px 5px;border:1px solid #a7a7a7;background:#fff;color:#191919;font-size:12px}
 @media(max-width:767px){.catalog-results-header{align-items:flex-start;flex-direction:column}.catalog-sort-label{margin-bottom:8px}.catalog-sort{max-width:160px}}
+
+/* Functional avatar wardrobe and account panels */
+.avatar-render{display:block;width:100%;height:100%;object-fit:cover}
+.avatar-artwork{display:flex;align-items:center;gap:18px;min-width:0}
+.avatar-artwork-image{width:148px;height:148px;flex:0 0 148px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f3f3f3;border:1px solid #d5d5d5}
+.avatar-artwork-image img{width:100%;height:100%;object-fit:contain}
+.avatar-artwork-items{display:flex;flex-wrap:wrap;gap:7px;min-width:0}
+.avatar-worn-chip{display:flex;flex-direction:column;gap:2px;min-width:105px;max-width:190px;padding:7px 9px;background:#fff;border:1px solid #d5d5d5;font-size:12px;overflow-wrap:anywhere}
+.avatar-worn-chip b{font-size:11px;color:#757575}
+.avatar-worn-empty{font-size:13px;color:#757575}
+.op-profile-header>.avatar-artwork{align-items:flex-start}
+.op-profile-header .avatar-artwork-image{width:150px;height:150px;flex-basis:150px}
+.avatar-editor{width:100%;max-width:970px;margin:0 auto}
+.avatar-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.avatar-editor-heading .page-title{margin:0}
+.avatar-editor-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
+.avatar-preview-panel,.avatar-wardrobe{padding:14px;background:#fff;box-shadow:0 1px 4px rgba(25,25,25,.3)}
+.avatar-preview-panel h2,.avatar-wardrobe h2,.owner-section h2{font-size:21px;font-weight:700;margin:0 0 12px}
+.avatar-preview-panel .avatar-artwork{display:block}
+.avatar-preview-panel .avatar-artwork-image{width:100%;height:250px;background:#f0f0f0;border:0}
+.avatar-preview-panel .avatar-artwork-items{padding-top:10px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.avatar-preview-panel .avatar-worn-chip{max-width:none;min-width:0}
+.avatar-preview-panel>p{margin:12px 0}
+.avatar-category-tabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.avatar-category{padding:6px 10px;background:#eee;border:1px solid #ccc;color:#191919;cursor:pointer}
+.avatar-category.active{background:#0074bd;border-color:#0074bd;color:#fff}
+.avatar-wardrobe-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.avatar-wardrobe-item{min-width:0;padding:8px 6px;border:1px solid #e0e0e0;text-align:center}
+.avatar-wardrobe-image{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:1;background:#f5f5f5;color:#757575;font-size:12px;overflow:hidden}
+.avatar-wardrobe-image img{width:100%;height:100%;object-fit:contain}
+.avatar-wardrobe-name{min-height:34px;padding:5px 0;font-size:13px;overflow-wrap:anywhere}
+.avatar-wearing-label{display:inline-block;padding:4px 8px;background:#e4f5ea;color:#167a3c;font-size:12px;font-weight:700}
+.avatar-wardrobe-empty{grid-column:1/-1;padding:24px;background:#eee;color:#757575;text-align:center}
+.profile-friend-action{margin-top:12px}
+.friends-section{margin:18px 0}
+.friends-section h2{font-size:21px;font-weight:700;margin:0 0 8px;padding-bottom:5px;border-bottom:1px solid #c3c3c3}
+.friends-section .people-user{background:#fff}
+.owner-section{margin-top:24px;padding:16px;background:#fff;box-shadow:0 1px 4px rgba(25,25,25,.3)}
+.owner-item-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px;padding:12px;background:#f3f3f3}
+.owner-item-form label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+.owner-item-form input,.owner-item-form select,.owner-item-form textarea,.owner-item-fields input,.owner-item-fields select,.owner-item-fields textarea{width:100%;min-width:0;padding:6px;border:1px solid #bbb;background:#fff;color:#191919}
+.owner-item-form .owner-description{grid-column:span 2}
+.owner-item-form button{align-self:end}
+.owner-items{display:flex;flex-direction:column;gap:8px}
+.owner-item-row{display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:10px;padding:10px 0;border-bottom:1px solid #ddd}
+.owner-item-thumb{display:flex;align-items:center;justify-content:center;width:76px;height:76px;background:#f2f2f2;color:#888;overflow:hidden}
+.owner-item-thumb img{width:100%;height:100%;object-fit:contain}
+.owner-item-fields{display:flex;flex-direction:column;gap:5px;min-width:0}
+.owner-item-subfields{display:grid;grid-template-columns:110px 100px minmax(0,1fr);gap:5px}
+.owner-item-fields textarea{resize:vertical}
+.owner-item-actions{display:flex;flex-direction:column;gap:5px}
+@media(max-width:767px){
+ .avatar-artwork{flex-direction:column;align-items:flex-start}
+ .op-profile-header>.avatar-artwork{flex-direction:column}
+ .op-profile-header .avatar-artwork-image{width:104px;height:104px;flex-basis:104px}
+ .avatar-editor-layout{grid-template-columns:1fr}
+ .avatar-preview-panel .avatar-artwork-image{height:220px}
+ .avatar-wardrobe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .owner-item-form{grid-template-columns:1fr 1fr}
+ .owner-item-form .owner-description{grid-column:1/-1}
+ .owner-item-row{grid-template-columns:58px minmax(0,1fr)}
+ .owner-item-thumb{width:58px;height:58px}
+ .owner-item-actions{grid-column:2;flex-direction:row}
+ .owner-item-subfields{grid-template-columns:1fr 90px}
+ .owner-item-subfields input[type=url]{grid-column:1/-1}
+}
