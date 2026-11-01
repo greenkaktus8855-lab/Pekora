@@ -308,7 +308,7 @@ function users(){
    if(requestId!==latest)return;
    const found=Array.isArray(d.users)?d.users:[];
    hint.style.display="none";
-   results.innerHTML=found.length?found.map(u=>'<article class="people-user"><div class="people-avatar">'+avatar()+'</div><div class="people-user-info"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role||"USER")+'</span></div><button class="button" type="button" data-profile="'+esc(u.username)+'">View Profile</button></article>').join(""):'<div class="empty">No users found for “'+esc(q)+'”.</div>';
+   results.innerHTML=found.length?found.map(u=>'<article class="people-user"><div class="people-avatar">'+avatar(u.username)+'</div><div class="people-user-info"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role||"USER")+'</span></div><button class="button" type="button" data-profile="'+esc(u.username)+'">View Profile</button></article>').join(""):'<div class="empty">No users found for “'+esc(q)+'”.</div>';
   }catch(e){if(requestId!==latest)return;hint.textContent="Could not load users: "+e.message;hint.style.display="block";results.innerHTML=""}
  }
  form.addEventListener("submit",e=>{e.preventDefault();runSearch()});
