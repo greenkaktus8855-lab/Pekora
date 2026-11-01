@@ -7,13 +7,20 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 async function api(path,options={}){const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||"Something went wrong");return data}
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
 function avatar(username=me?.username){const src=String(username||"").toLowerCase()==="koqumo"?"https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png":"https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/generic.svg";return '<img class="avatar-render" src="'+src+'" alt="User avatar" loading="lazy">' }
+const AVATAR_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
+function avatarArtwork(username,config={},owned=[]){
+ const src=String(username||"").toLowerCase()==="koqumo"?"https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png":"https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/generic.svg";
+ const worn=AVATAR_CATEGORIES.map(category=>{const item=owned.find(x=>x.id===config?.[category]);return item?{category,name:item.name}:null}).filter(Boolean);
+ return '<div class="avatar-artwork"><div class="avatar-artwork-image"><img src="'+src+'" alt="'+esc(username)+' avatar" loading="lazy"></div><div class="avatar-artwork-items">'+(worn.length?worn.map(x=>'<span class="avatar-worn-chip"><b>'+esc(x.category)+'</b>'+esc(x.name)+'</span>').join(""):'<span class="avatar-worn-empty">Default avatar</span>')+'</div></div>';
+}
+
 
 function renderSidebar(active="home"){
  if(!me){sidebar.classList.remove("visible","mobile-open");sidebar.innerHTML="";return}
  sidebar.classList.add("visible");
  const links=[
   ["home","icon-nav-home","Home"],["profile","icon-nav-profile","Profile"],["messages","icon-nav-message","Messages"],
-  ["friends","icon-nav-friends","Friends"],["avatar","icon-nav-charactercustomizer","Avatar"],["inventory","icon-nav-inventory","Inventory"],
+  ["friends","icon-nav-friends","Friends"],["avatar","icon-nav-charactercustomizer","Avatar"],["inventory","icon-nav-inventory","Inventory"],["settings","icon-nav-settings","Settings"],
   ["trades","icon-nav-trade","Trade"],["groups","icon-nav-group","Groups"],["forums","icon-nav-forum","Forums"]
  ];
  if(me.role==="OWNER")links.push(["owner","icon-nav-settings","Panel"]);
@@ -165,12 +172,13 @@ async function profile(username=me?.username){
    api("/api/profile/"+encodeURIComponent(username)),
    api("/api/profile/"+encodeURIComponent(username)+"/inventory")
   ]);
-  const p=d.profile,owned=inventoryData.items||[];
+  const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header"><div class="op-profile-avatar">'+avatar(p.username)+'</div><div class="op-profile-info">'+
+   '<div class="op-profile-header">'+avatarArtwork(p.username,p.avatar,owned)+'<div class="op-profile-info">'+
     '<h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+Number(p.balance||0).toLocaleString()+'</b> P$</span></div>'+
+    (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
    '</div></div>'+
    '<nav class="op-profile-tabs"><a href="#" class="active" data-profile-tab="about">About</a><a href="#" data-profile-tab="creations">Creations</a></nav>'+
    '<section id="profileTabContent" class="op-profile-content">'+
@@ -184,8 +192,26 @@ async function profile(username=me?.username){
     ? '<div class="op-profile-section"><h2>Inventory</h2>'+(owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+'</div>'
     : '<div class="op-profile-section"><h2>Creations</h2><div class="op-profile-empty">No creations to display.</div></div>';
   }));
+  if(!isSelf&&me)loadProfileFriendAction(p.username);
  }catch(e){app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
+async function loadProfileFriendAction(username){
+ const host=document.getElementById("profileFriendAction");if(!host)return;
+ try{
+  const {status}=await api("/api/friends/status?username="+encodeURIComponent(username));
+  const labels={none:"Add Friend",outgoing:"Request Sent",incoming:"Accept Request",friends:"Remove Friend",self:"Your Profile"};
+  host.innerHTML='<button type="button" class="button '+(status==="friends"?"secondary":"")+'" id="profileFriendBtn" '+(status==="outgoing"||status==="self"?"disabled":"")+'>'+labels[status]+'</button>';
+  document.getElementById("profileFriendBtn").addEventListener("click",async()=>{
+   try{
+    if(status==="none")await api("/api/friends/request",{method:"POST",body:JSON.stringify({username})});
+    else if(status==="incoming")await api("/api/friends/accept",{method:"POST",body:JSON.stringify({username})});
+    else if(status==="friends")await api("/api/friends?username="+encodeURIComponent(username),{method:"DELETE"});
+    await profile(username);
+   }catch(e){toast(e.message)}
+  });
+ }catch(e){host.textContent=e.message}
+}
+
 async function settings(){
  renderSidebar("settings");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> first.</div>';return}
@@ -194,8 +220,65 @@ async function settings(){
  app.innerHTML='<h1 class="page-title">Account Settings</h1><div class="form" style="max-width:600px;margin:0"><h2>Profile</h2><form id="settingsForm"><label>Username</label><input value="'+esc(me.username)+'" disabled><label>Profile description</label><textarea name="description" rows="5" maxlength="500">'+esc(description)+'</textarea><button class="primary" type="submit">Save changes</button><div id="settingsMessage" class="muted"></div></form></div>';
  document.getElementById("settingsForm").addEventListener("submit",async e=>{e.preventDefault();const description=new FormData(e.target).get("description");try{await api("/api/profile",{method:"PUT",body:JSON.stringify({description})});document.getElementById("settingsMessage").textContent="Profile saved."}catch(err){document.getElementById("settingsMessage").textContent=err.message}});
 }
-function avatarPage(){renderSidebar("avatar");app.innerHTML='<h1 class="page-title">Avatar</h1><div class="section-box" style="text-align:center"><div class="home-avatar" style="margin:0 auto 14px">'+avatar()+'</div><h2>Avatar Editor</h2><p class="muted">R6 and R15 avatar editing is not connected yet.</p><a class="button" href="#inventory" data-page="inventory">Open Inventory</a></div>'}
+async function avatarPage(){
+ renderSidebar("avatar");
+ if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to edit your avatar.</div>';return}
+ app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar Editor</h1><a class="button" href="#catalog" data-page="catalog">Get More Items</a></div><div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Preview</h2><div id="avatarPreview"></div><p class="muted">Your avatar settings are saved to your Pekora account.</p><button class="button secondary" id="clearAvatar" type="button">Reset Avatar</button></section><section class="avatar-wardrobe"><h2>My Wardrobe</h2><div class="avatar-category-tabs" id="avatarCategories"></div><div id="avatarWardrobe" class="avatar-wardrobe-grid">Loading inventory...</div></section></div></div>';
+ let wardrobe=[],equipped={},activeCategory="Hats";
+ try{
+  const [a,i]=await Promise.all([api("/api/avatar"),api("/api/inventory")]);
+  equipped=a.avatar||{};wardrobe=i.items||[];
+ }catch(e){document.getElementById("avatarWardrobe").textContent=e.message;return}
+ function renderAvatar(){document.getElementById("avatarPreview").innerHTML=avatarArtwork(me.username,equipped,wardrobe)}
+ function renderWardrobe(){
+  document.getElementById("avatarCategories").innerHTML=AVATAR_CATEGORIES.map(c=>'<button type="button" class="avatar-category '+(c===activeCategory?"active":"")+'" data-avatar-category="'+c+'">'+c+'</button>').join("");
+  const own=wardrobe.filter(x=>x.category===activeCategory),selected=equipped[activeCategory];
+  document.getElementById("avatarWardrobe").innerHTML=own.length?own.map(x=>'<article class="avatar-wardrobe-item">'+
+   '<div class="avatar-wardrobe-image">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'" loading="lazy">':'<span>'+esc(x.category)+'</span>')+'</div>'+
+   '<div class="avatar-wardrobe-name">'+esc(x.name)+'</div>'+
+   (selected===x.id?'<span class="avatar-wearing-label">Wearing</span>':'<button type="button" class="button" data-wear-item="'+esc(x.id)+'">Wear</button>')+
+   '</article>').join(""):'<div class="avatar-wardrobe-empty">You do not own any '+esc(activeCategory.toLowerCase())+' yet. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+  document.querySelectorAll("[data-avatar-category]").forEach(b=>b.addEventListener("click",()=>{activeCategory=b.dataset.avatarCategory;renderWardrobe()}));
+  document.querySelectorAll("[data-wear-item]").forEach(b=>b.addEventListener("click",()=>wearAvatarItem(b.dataset.wearItem)));
+ }
+ async function wearAvatarItem(itemId){
+  try{const d=await api("/api/avatar",{method:"PUT",body:JSON.stringify({equipped:{[activeCategory]:itemId}})});equipped=d.avatar||equipped;renderAvatar();renderWardrobe();toast("Avatar updated")}
+  catch(e){toast(e.message)}
+ }
+ document.getElementById("clearAvatar").addEventListener("click",async()=>{
+  try{const cleared=Object.fromEntries(AVATAR_CATEGORIES.map(c=>[c,null]));const d=await api("/api/avatar",{method:"PUT",body:JSON.stringify({equipped:cleared})});equipped=d.avatar||{};renderAvatar();renderWardrobe();toast("Avatar reset")}
+  catch(e){toast(e.message)}
+ });
+ renderAvatar();renderWardrobe();
+}
 function comingSoon(name){renderSidebar(name.toLowerCase());app.innerHTML='<h1 class="page-title">'+esc(name)+'</h1><div class="section-box muted-box">'+esc(name)+' features are not available yet.</div>'}
+async function friends(){
+ renderSidebar("friends");
+ if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view friends.</div>';return}
+ app.innerHTML='<h1 class="page-title">Friends</h1><form id="addFriendForm" class="people-search"><input class="search-input" name="username" placeholder="Username" minlength="3" maxlength="20" required><button class="button" type="submit">Add Friend</button></form><div id="friendsMessage" class="muted"></div><div id="friendsContent">Loading...</div>';
+ document.getElementById("addFriendForm").addEventListener("submit",async e=>{
+  e.preventDefault();const username=new FormData(e.target).get("username").trim();
+  try{await api("/api/friends/request",{method:"POST",body:JSON.stringify({username})});document.getElementById("friendsMessage").textContent="Friend request sent.";e.target.reset();loadFriendsList()}
+  catch(err){document.getElementById("friendsMessage").textContent=err.message}
+ });
+ await loadFriendsList();
+}
+async function loadFriendsList(){
+ const host=document.getElementById("friendsContent");if(!host)return;
+ try{
+  const d=await api("/api/friends");
+  const section=(title,list,kind)=>'<section class="friends-section"><h2>'+title+' ('+list.length+')</h2>'+(list.length?list.map(u=>'<article class="people-user"><div class="people-user-info"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role||"USER")+'</span></div><button class="button" type="button" data-friend-action="'+kind+'" data-friend-name="'+esc(u.username)+'">'+(kind==="accept"?"Accept":kind==="remove"?"Remove":"Cancel")+'</button></article>').join(""):'<div class="op-profile-empty">Nothing here yet.</div>')+'</section>';
+  host.innerHTML=section("Friend Requests",d.incoming||[],"accept")+section("Friends",d.friends||[],"remove")+section("Sent Requests",d.outgoing||[],"remove");
+  host.querySelectorAll("[data-friend-action]").forEach(b=>b.addEventListener("click",async()=>{
+   const username=b.dataset.friendName;
+   try{
+    if(b.dataset.friendAction==="accept")await api("/api/friends/accept",{method:"POST",body:JSON.stringify({username})});
+    else await api("/api/friends?username="+encodeURIComponent(username),{method:"DELETE"});
+    await loadFriendsList();
+   }catch(e){toast(e.message)}
+  }));
+ }catch(e){host.textContent=e.message}
+}
 function users(){
  renderSidebar("users");
  app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Enter a username..." minlength="2" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type at least 2 characters to find users. Search results will appear below.</div><div id="userResults" class="people-results"></div>';
@@ -225,9 +308,50 @@ function users(){
 async function owner(){
  renderSidebar("owner");
  if(!me||me.role!=="OWNER"){app.innerHTML='<div class="empty">Owner access required.</div>';return}
- app.innerHTML='<h1 class="page-title">Owner Panel</h1><div id="ownerStats" class="item-grid">Loading...</div><div class="notice">PekoraAdmin is the project owner. Additional management tools are being developed.</div>';
- try{const d=await api("/api/owner/stats");document.getElementById("ownerStats").innerHTML='<div class="info-panel"><h3>Users</h3><b>'+d.users+'</b></div><div class="info-panel"><h3>Catalog Items</h3><b>'+d.items+'</b></div><div class="info-panel"><h3>Purchases</h3><b>'+d.purchases+'</b></div>'}catch(e){document.getElementById("ownerStats").textContent=e.message}
+ app.innerHTML='<h1 class="page-title">Owner Panel</h1><div id="ownerStats" class="item-grid">Loading...</div>'+
+ '<section class="owner-section"><h2>Catalog Management</h2><form id="newItemForm" class="owner-item-form">'+
+ '<label>Item name<input name="name" maxlength="80" required></label>'+
+ '<label>Category<select name="category">'+AVATAR_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
+ '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
+ '<label>Image URL<input name="image_url" type="url" placeholder="https://..."></label>'+
+ '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
+ '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
+ '<div id="ownerItems" class="owner-items">Loading items...</div></section>';
+ try{
+  const [stats,data]=await Promise.all([api("/api/owner/stats"),api("/api/owner/items")]);
+  document.getElementById("ownerStats").innerHTML='<div class="info-panel"><h3>Users</h3><b>'+stats.users+'</b></div><div class="info-panel"><h3>Catalog Items</h3><b>'+stats.items+'</b></div><div class="info-panel"><h3>Purchases</h3><b>'+stats.purchases+'</b></div>';
+  let ownerItems=data.items||[];
+  function drawOwnerItems(){
+   document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
+    '<div class="owner-item-thumb">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="">':'◇')+'</div>'+
+    '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
+    '<div class="owner-item-subfields"><select name="category">'+AVATAR_CATEGORIES.map(c=>'<option '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" value="'+esc(x.image_url||"")+'" placeholder="Image URL"></div>'+
+    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?'For sale':'Removed from catalog')+'</span></div>'+
+    '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
+   document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
+    e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
+    try{
+     await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description")})});
+     const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();toast("Item saved");
+    }catch(err){toast(err.message)}
+   }));
+   document.querySelectorAll("[data-remove-item]").forEach(button=>button.addEventListener("click",async()=>{
+    if(!confirm("Remove this item from the public catalog? Existing owners will keep it."))return;
+    try{await api("/api/owner/items/"+encodeURIComponent(button.dataset.removeItem),{method:"DELETE"});const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();toast("Item removed from catalog")}
+    catch(e){toast(e.message)}
+   }));
+  }
+  drawOwnerItems();
+  document.getElementById("newItemForm").addEventListener("submit",async e=>{
+   e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
+   try{
+    await api("/api/owner/items",{method:"POST",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description")})});
+    e.target.reset();e.target.elements.price.value=50;msg.textContent="Item added.";const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();
+   }catch(err){msg.textContent=err.message}
+  });
+ }catch(e){document.getElementById("ownerItems").textContent=e.message}
 }
+
 async function render(name){
  name=name||"home";
  if(name==="home")home();
@@ -238,7 +362,7 @@ async function render(name){
  else if(name==="avatar")avatarPage();
  else if(name==="users")users();
  else if(name==="games")comingSoon("Games");
- else if(name==="friends")comingSoon("Friends");
+ else if(name==="friends")await friends();
  else if(name==="messages")comingSoon("Messages");
  else if(name==="groups")comingSoon("Groups");
  else if(name==="forums")comingSoon("Forums");
