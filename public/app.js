@@ -79,10 +79,29 @@ function avatarPage(){renderSidebar("avatar");app.innerHTML='<h1 class="page-tit
 function comingSoon(name){renderSidebar(name.toLowerCase());app.innerHTML='<h1 class="page-title">'+esc(name)+'</h1><div class="section-box muted-box">'+esc(name)+' features are not available yet.</div>'}
 function users(){
  renderSidebar("users");
- app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Find other Pekora users.</p><input id="userSearch" class="search-input" placeholder="Search usernames"><div id="userResults" class="item-grid" style="margin-top:14px"></div>';
+ app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Enter a username..." minlength="2" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type at least 2 characters to find users. Search results will appear below.</div><div id="userResults" class="people-results"></div>';
+ const form=document.getElementById("peopleSearchForm");
  const input=document.getElementById("userSearch");
- input.addEventListener("input",async()=>{if(input.value.trim().length<2){document.getElementById("userResults").innerHTML="";return}try{const d=await api("/api/search-users?q="+encodeURIComponent(input.value));document.getElementById("userResults").innerHTML=d.users.map(u=>'<div class="info-panel"><b>'+esc(u.username)+'</b><p class="muted">'+esc(u.role)+'</p><button class="button" data-profile="'+esc(u.username)+'">View Profile</button></div>').join("")||'<div class="empty">No users found.</div>'}catch(e){document.getElementById("userResults").textContent=e.message}});
- if(location.hash.startsWith("#users?"))input.value=new URLSearchParams(location.hash.split("?")[1]).get("q")||"";
+ const results=document.getElementById("userResults");
+ const hint=document.getElementById("peopleHint");
+ let latest=0;
+ async function runSearch(){
+  const q=input.value.trim();
+  if(q.length<2){results.innerHTML="";hint.textContent="Type at least 2 characters to find users. Search results will appear below.";hint.style.display="block";return}
+  const requestId=++latest;
+  hint.textContent="Searching Pekora users...";
+  hint.style.display="block";
+  try{
+   const d=await api("/api/search-users?q="+encodeURIComponent(q));
+   if(requestId!==latest)return;
+   const found=Array.isArray(d.users)?d.users:[];
+   hint.style.display="none";
+   results.innerHTML=found.length?found.map(u=>'<article class="people-user"><div class="people-avatar">'+avatar()+'</div><div class="people-user-info"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role||"USER")+'</span></div><button class="button" type="button" data-profile="'+esc(u.username)+'">View Profile</button></article>').join(""):'<div class="empty">No users found for “'+esc(q)+'”.</div>';
+  }catch(e){if(requestId!==latest)return;hint.textContent="Could not load users: "+e.message;hint.style.display="block";results.innerHTML=""}
+ }
+ form.addEventListener("submit",e=>{e.preventDefault();runSearch()});
+ input.addEventListener("input",()=>{if(input.value.trim().length===0){latest++;results.innerHTML="";hint.textContent="Type at least 2 characters to find users. Search results will appear below.";hint.style.display="block"}});
+ if(location.hash.startsWith("#users?")){input.value=new URLSearchParams(location.hash.split("?")[1]).get("q")||"";if(input.value.length>=2)runSearch()}
 }
 async function owner(){
  renderSidebar("owner");
