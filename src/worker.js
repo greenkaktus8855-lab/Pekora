@@ -314,6 +314,10 @@ async function route(request, env) {
       const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,is_for_sale,created_at FROM items ORDER BY created_at DESC,name").all();
       return json({items:rows.results||[]});
     }
+    if (path === "/api/owner/items" && request.method === "DELETE") {
+      const result = await env.DB.prepare("UPDATE items SET is_for_sale=0 WHERE is_for_sale=1").run();
+      return json({ok:true,hidden:result?.meta?.changes||0});
+    }
     if (path === "/api/owner/items" && request.method === "POST") {
       const data = await body(request), error = validItem(data);
       if (error) return fail(error);
