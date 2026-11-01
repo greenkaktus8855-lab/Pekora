@@ -446,3 +446,5 @@ button,input,textarea,select{font:inherit}
 .item-detail-price{font-size:24px;font-weight:700;color:#02b757;margin:16px 0}
 .item-detail-info button{min-width:120px}
 @media(max-width:767px){.item-detail-card{grid-template-columns:1fr;gap:14px}.item-detail-image{min-height:190px}.item-detail-info h1{font-size:23px}}
+
+.avatar-worn-chip img{display:block;width:52px;height:52px;object-fit:contain;margin-bottom:4px}
