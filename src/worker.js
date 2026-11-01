@@ -67,7 +67,16 @@ function parseAvatar(raw) {
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
-  if (request.method === "GET" && path === "/api/health") return json({ ok:true, site:"Pekora" });
+  if (request.method === "GET" && path === "/api/health") {
+    if (!env.DB) return json({ ok:false, site:"Pekora", database:false, error:"D1 binding DB is missing." },503);
+    try {
+      await env.DB.prepare("SELECT 1 AS ok").first();
+      return json({ ok:true, site:"Pekora", database:true });
+    } catch (error) {
+      console.error("[Pekora health] D1 check failed:", error);
+      return json({ ok:false, site:"Pekora", database:false, error:"D1 database check failed. See Worker logs." },503);
+    }
+  }
 
   if (request.method === "POST" && path === "/api/register") {
     const data = await body(request);
@@ -354,7 +363,10 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) {
       try { return await route(request,env); }
-      catch (error) { return fail("Server error. Check the Worker logs.",500); }
+      catch (error) {
+        console.error("[Pekora API] Unhandled error:", request.method, url.pathname, error);
+        return fail("Server error. Check the Worker logs. Reference: " + crypto.randomUUID().slice(0,8),500);
+      }
     }
     return env.ASSETS.fetch(request);
   }
