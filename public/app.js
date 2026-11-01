@@ -11,15 +11,19 @@ function avatar(){return '<div class="avatar-person" aria-hidden="true"></div>'}
 function renderSidebar(active="home"){
  if(!me){sidebar.classList.remove("visible","mobile-open");sidebar.innerHTML="";return}
  sidebar.classList.add("visible");
- const links=[["home","Home"],["profile","Profile"],["friends","Friends"],["avatar","Avatar"],["inventory","Inventory"],["trades","Trade"],["settings","Settings"]];
- if(me.role==="OWNER")links.push(["owner","Owner Panel"]);
+ const links=[
+  ["home","⌂","Home"],["profile","▣","Profile"],["messages","✉","Messages"],
+  ["friends","♙","Friends"],["avatar","◉","Avatar"],["inventory","▤","Inventory"],
+  ["trades","⇄","Trade"],["groups","♧","Groups"],["forums","☷","Forums"]
+ ];
+ if(me.role==="OWNER")links.push(["owner","⚙","Owner Panel"]);
  sidebar.innerHTML='<div class="sidebar-card">'+
-  '<div class="side-user"><div class="side-avatar">'+avatar()+'</div><div><a class="side-username" href="#profile" data-page="profile">'+esc(me.username)+'</a><div class="side-role">'+esc(me.role)+'</div></div></div>'+
-  '<nav class="side-nav">'+
-   links.map(([id,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'">'+label+'</a>').join("")+
-   '<div class="side-separator"></div><a href="#users" data-page="users" class="'+(active==="users"?"active":"")+'">Find People</a>'+
-  '</nav>'+
- '</div>';
+  '<div class="side-user"><div class="side-avatar">'+avatar()+'</div><div><a class="side-username" href="#profile" data-page="profile">'+esc(me.username)+'</a><div class="side-role">Account</div></div></div>'+
+  '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon">'+ico+'</span><strong>'+label+'</strong>'+(id==="messages"?'<span class="side-count">0</span>':'')+'</a>').join("")+
+  '<div class="side-separator"></div>'+
+  '<a href="#donate" data-page="donate"><span class="side-icon">♡</span><strong>Donate</strong></a>'+
+  '<a href="#upgrade" data-page="upgrade"><span class="side-icon">★</span><strong>Upgrade Now</strong></a>'+
+  '</nav></div>';
 }
 
 function setUser(user){
@@ -44,28 +48,22 @@ function home(){
  renderSidebar("home");
  const name=me?esc(me.username):"Guest";
  app.innerHTML=
-  '<div class="home-dashboard">'+
-   '<div class="home-header">'+
-    '<a class="home-avatar" href="#profile" data-page="profile">'+avatar()+'</a>'+
-    '<div class="home-header-text">'+
-     '<h1>'+(me?'<a href="#profile" data-page="profile" class="hello-message">Hello, '+name+'!</a>':'Welcome to Pekora!')+'</h1>'+
-     '<p>Pekora is a Roblox Revival project. Games are currently unavailable.</p>'+
+  '<div class="classic-home">'+
+   '<div class="classic-announcement"><a href="#community" data-page="community">Welcome to Pekora: Reborn! <strong>Click here to join our community.</strong></a></div>'+
+   '<div class="classic-home-grid">'+
+    '<div class="classic-main-col">'+
+     '<div class="classic-profile-strip"><div class="classic-large-avatar">'+avatar()+'</div><div><a class="classic-profile-name" href="#profile" data-page="profile">'+name+'</a><div class="classic-profile-subtitle">Welcome to your Pekora home</div></div></div>'+
+     '<section class="classic-section"><div class="classic-section-title"><h2>Hello, '+name+'!</h2></div>'+
+      '<div class="classic-panel classic-friends-panel"><div class="classic-panel-heading"><strong>Friends (0)</strong><a href="#friends" data-page="friends">See All</a></div><div class="classic-empty-friends">You have no friends to display yet.</div></div></section>'+
+     '<section class="classic-section"><div class="classic-section-title"><h2>Recently Played</h2></div><div class="classic-panel classic-game-placeholder">Games are currently unavailable.</div></section>'+
+     '<section class="classic-section"><div class="classic-section-title"><h2>My Favorites</h2></div><div class="classic-panel classic-game-placeholder">You have no favorites yet.</div></section>'+
+     '<section class="classic-section"><div class="classic-section-title"><h2>My Feed</h2></div><div class="classic-panel classic-feed"><div class="classic-feed-tabs">My Feed <span>·</span> Friends</div><div class="classic-game-placeholder">Your feed will appear here.</div></div></section>'+
+     '<section class="classic-section"><div class="classic-section-title"><h2>Blog News</h2></div><div class="classic-panel classic-game-placeholder">No news found.</div></section>'+
     '</div>'+
-   '</div>'+
-   '<section class="content-section">'+
-    '<div class="section-heading"><h2>Friends ('+(me?'0':'—')+')</h2><a href="#friends" data-page="friends">See All</a></div>'+
-    '<div class="section-content">'+(me?'<p class="empty-line">You have no friends yet.</p>':'<p class="empty-line">Log in to see your friends.</p>')+'</div>'+
-   '</section>'+
-   '<section class="content-section">'+
-    '<div class="section-heading"><h2>Recently Played</h2></div>'+
-    '<div class="section-content-off">Games are currently unavailable.</div>'+
-   '</section>'+
-   '<section class="content-section">'+
-    '<div class="section-heading"><h2>My Inventory</h2><a href="#inventory" data-page="inventory">See All</a></div>'+
-    '<div id="homeInventory" class="section-content">'+(me?'Loading your items...':'Log in to see your inventory.')+'</div>'+
-   '</section>'+
-  '</div>';
- if(me)loadHomeInventory();
+    '<aside class="classic-right-rail"><div class="classic-ad-card"><div class="classic-ad-label">Advertisement</div><div class="classic-ad-placeholder">Pekora Community</div></div>'+
+     '<div class="classic-side-profile"><div class="classic-side-profile-head">Your Account</div><div class="classic-side-profile-body"><div class="classic-small-avatar">'+avatar()+'</div><div><strong>'+name+'</strong><div class="muted">Pekora member</div></div></div><a href="#profile" data-page="profile">View Profile</a></div>'+
+     '<div class="classic-ad-card classic-ad-tall"><div class="classic-ad-label">Advertisement</div><div class="classic-ad-placeholder">Pekora</div></div></aside>'+
+   '</div></div>';
 }
 
 async function loadHomeInventory(){
@@ -220,6 +218,12 @@ async function render(name){
  else if(name==="users")users();
  else if(name==="games")comingSoon("Games");
  else if(name==="friends")comingSoon("Friends");
+ else if(name==="messages")comingSoon("Messages");
+ else if(name==="groups")comingSoon("Groups");
+ else if(name==="forums")comingSoon("Forums");
+ else if(name==="donate")comingSoon("Donate");
+ else if(name==="upgrade")comingSoon("Upgrade");
+ else if(name==="community")comingSoon("Community");
  else if(name==="trades")comingSoon("Trades");
  else if(name==="settings")await settings();
  else if(name==="owner")await owner();
