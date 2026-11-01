@@ -10,7 +10,7 @@ run_worker_first = ["/api/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "pekora-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "46cf2725-2ea1-4da3-9e9e-ffe30f6674f0"
 migrations_dir = "migrations"
 
 [vars]
