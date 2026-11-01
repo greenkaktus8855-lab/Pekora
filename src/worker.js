@@ -146,6 +146,14 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
+  if (request.method === "GET" && path.startsWith("/api/profile/") && path.endsWith("/inventory")) {
+    const username = decodeURIComponent(path.slice("/api/profile/".length, -"/inventory".length));
+    const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
+    if (!profile) return fail("User not found.",404);
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    return json({ items:rows.results || [] });
+  }
+
   if (request.method === "GET" && path.startsWith("/api/profile/")) {
     const username = decodeURIComponent(path.slice("/api/profile/".length));
     const profile = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.created_at,p.description
