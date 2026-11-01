@@ -448,3 +448,18 @@ button,input,textarea,select{font:inherit}
 @media(max-width:767px){.item-detail-card{grid-template-columns:1fr;gap:14px}.item-detail-image{min-height:190px}.item-detail-info h1{font-size:23px}}
 
 .avatar-worn-chip img{display:block;width:52px;height:52px;object-fit:contain;margin-bottom:4px}
+
+/* Real account data on the dashboard */
+.op-home-header{gap:20px}
+.op-home-avatar{display:block;flex:0 0 auto;text-decoration:none}
+.op-home-avatar .avatar-artwork{display:flex;align-items:center;gap:14px}
+.op-home-avatar .avatar-artwork-image{width:112px;height:112px;flex-basis:112px;border-radius:50%;overflow:hidden}
+.op-home-avatar .avatar-artwork-items{max-width:240px}
+.op-home-friends{display:flex;flex-wrap:wrap;gap:14px}
+.op-home-friend{display:flex;flex-direction:column;align-items:center;width:74px;gap:4px;color:#0055b3;font-size:12px;overflow:hidden;text-decoration:none}
+.op-home-friend img{width:54px;height:54px;object-fit:cover;border-radius:50%;background:#eee}
+.op-home-friend span{width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+.op-home-items{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.op-home-items .item-card{min-width:0}
+.op-home-items .item-image{max-width:105px}
+@media(max-width:767px){.op-home-header{gap:12px}.op-home-avatar .avatar-artwork{flex-direction:column;align-items:flex-start}.op-home-avatar .avatar-artwork-image{width:84px;height:84px;flex-basis:84px}.op-home-avatar .avatar-artwork-items{display:none}.op-home-items{grid-template-columns:repeat(2,minmax(0,1fr))}}
