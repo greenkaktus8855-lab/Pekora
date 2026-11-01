@@ -114,7 +114,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited FROM items WHERE is_for_sale=1 ORDER BY category,name").all();
+    const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,created_at FROM items WHERE is_for_sale=1 ORDER BY category,name").all();
     return json({ items:rows.results || [] });
   }
 
