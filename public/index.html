@@ -3,33 +3,41 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0876c9">
+  <meta name="theme-color" content="#0074bd">
   <meta name="description" content="Pekora is a Roblox Revival project. Games are currently unavailable.">
   <title>Pekora</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="topbar">
-    <a class="brand" href="#" data-page="home">pekora</a>
-    <nav class="mainnav">
-      <a href="#" data-page="home">Home</a>
-      <a href="#" data-page="catalog">Catalog</a>
-      <a href="#" data-page="avatar">Avatar</a>
-      <a href="#" data-page="games">Games</a>
-    </nav>
-    <div class="account-area" id="accountArea"></div>
+  <header class="site-header">
+    <div class="nav-inner">
+      <a class="brand" href="#home" data-page="home" aria-label="Pekora home">pekora</a>
+      <nav class="mainnav" aria-label="Main navigation">
+        <a href="#home" data-page="home">Home</a>
+        <a href="#catalog" data-page="catalog">Catalog</a>
+        <a href="#games" data-page="games">Games</a>
+      </nav>
+      <div class="nav-search"><input id="globalSearch" type="search" placeholder="Search" aria-label="Search people"><button id="globalSearchBtn" type="button">Search</button></div>
+      <div class="account-area" id="accountArea"></div>
+    </div>
+  </header>
+  <div class="secondary-bar">
+    <div class="secondary-inner">
+      <a href="#catalog" data-page="catalog">Catalog</a>
+      <a href="#users" data-page="users">People</a>
+      <a href="#inventory" data-page="inventory">Inventory</a>
+      <a href="#avatar" data-page="avatar">Avatar</a>
+      <span class="currency" id="currency"></span>
+    </div>
   </div>
-  <div class="subnav">
-    <a href="#" data-page="catalog">Catalog</a>
-    <a href="#" data-page="users">People</a>
-    <a href="#" data-page="inventory">Inventory</a>
-    <span class="currency" id="currency"></span>
-  </div>
-  <main id="app" class="page"></main>
-  <footer>
-    <div><b>Pekora</b> · A community-made revival project</div>
-    <p>Pekora currency is a virtual site currency. It is not affiliated with Roblox and has no real-world monetary value.</p>
-    <p>Games are currently unavailable.</p>
+  <main id="app" class="page-container"></main>
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <strong>Pekora</strong>
+      <p>Pekora is a community-made Roblox revival project and is not affiliated with Roblox Corporation.</p>
+      <p>Pekora currency is a virtual site currency. It has no real-world monetary value.</p>
+      <p>Games are currently unavailable.</p>
+    </div>
   </footer>
   <div id="modalRoot"></div>
   <script src="/app.js"></script>
