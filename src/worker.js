@@ -71,7 +71,10 @@ let siteSettingsPromise;
 async function ensureSiteSettings(env) {
   if (!siteSettingsPromise) {
     siteSettingsPromise = (async () => {
-      await env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)").run();
+      await env.DB.batch([
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)")
+      ]);
       // One-time public catalog cleanout requested for the November 2026 reset.
       // Inventory, purchases, users and balances are deliberately untouched.
       const cleanout = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='catalog_cleanout_2026_11_02'").first();
@@ -88,6 +91,40 @@ async function ensureSiteSettings(env) {
     });
   }
   return siteSettingsPromise;
+}
+
+async function rateLimitKey(request, purpose) {
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  return digest(purpose + ":" + ip);
+}
+async function isRateLimited(env, key) {
+  const now = Math.floor(Date.now() / 1000);
+  const row = await env.DB.prepare("SELECT attempts,window_started_at,blocked_until FROM auth_rate_limits WHERE rate_key=?").bind(key).first();
+  if (!row) return false;
+  if (row.window_started_at <= now - 900) {
+    await env.DB.prepare("DELETE FROM auth_rate_limits WHERE rate_key=?").bind(key).run();
+    return false;
+  }
+  return Number(row.blocked_until) > now || Number(row.attempts) >= 10;
+}
+async function recordRateLimitFailure(env, key) {
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.prepare(`INSERT INTO auth_rate_limits (rate_key,attempts,window_started_at,blocked_until)
+    VALUES (?,1,?,0)
+    ON CONFLICT(rate_key) DO UPDATE SET
+      attempts=CASE WHEN auth_rate_limits.window_started_at<=? THEN 1 ELSE auth_rate_limits.attempts+1 END,
+      window_started_at=CASE WHEN auth_rate_limits.window_started_at<=? THEN excluded.window_started_at ELSE auth_rate_limits.window_started_at END,
+      blocked_until=CASE WHEN auth_rate_limits.window_started_at<=? THEN 0 ELSE auth_rate_limits.blocked_until END`)
+    .bind(key,now,now-900,now-900,now-900).run();
+  const row = await env.DB.prepare("SELECT attempts FROM auth_rate_limits WHERE rate_key=?").bind(key).first();
+  if (Number(row?.attempts || 0) >= 10) {
+    await env.DB.prepare("UPDATE auth_rate_limits SET blocked_until=? WHERE rate_key=?").bind(now+900,key).run();
+    return true;
+  }
+  return false;
+}
+async function clearRateLimit(env, key) {
+  await env.DB.prepare("DELETE FROM auth_rate_limits WHERE rate_key=?").bind(key).run();
 }
 
 async function route(request, env) {
@@ -152,8 +189,14 @@ async function route(request, env) {
   if (request.method === "POST" && path === "/api/login") {
     const data = await body(request);
     if (!data || typeof data.username !== "string" || !/^[A-Za-z0-9_]{3,20}$/.test(data.username.trim()) || typeof data.password !== "string" || data.password.length < 8 || data.password.length > 128) return fail("Enter a valid username and a password of 8–128 characters.");
+    const key = await rateLimitKey(request,"login");
+    if (await isRateLimited(env,key)) return fail("Too many sign-in attempts. Try again in 15 minutes.",429,{"retry-after":"900"});
     const user = await env.DB.prepare("SELECT * FROM users WHERE username=? COLLATE NOCASE").bind(data.username.trim()).first();
-    if (!user || user.is_banned || await passwordHash(data.password, user.password_salt) !== user.password_hash) return fail("Incorrect username or password.", 401);
+    if (!user || user.is_banned || await passwordHash(data.password, user.password_salt) !== user.password_hash) {
+      const blocked = await recordRateLimitFailure(env,key);
+      return fail(blocked?"Too many sign-in attempts. Try again in 15 minutes.":"Incorrect username or password.",blocked?429:401,blocked?{"retry-after":"900"}:{});
+    }
+    await clearRateLimit(env,key);
     const token = randomToken();
     await env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token), user.id).run();
     return json({ user:publicUser(user) }, 200, { "set-cookie":cookie("pekora_session",token,60*60*24*30) });
@@ -246,11 +289,11 @@ async function route(request, env) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
     catch { return fail("Invalid username.",400); }
-    const profile = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.created_at,p.description,p.avatar_json
+    const profile = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.created_at,p.description
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
-    return json({ profile:{...publicUser(profile),description:profile.description,itemCount:count.n} });
+    return json({ profile:{id:profile.id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n} });
   }
 
   if (path === "/api/avatar" && request.method === "GET") {
