@@ -259,7 +259,8 @@ async function route(request, env) {
     if (await isRateLimited(env,key)) return json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
     const user = await env.DB.prepare("SELECT * FROM users WHERE username=? COLLATE NOCASE").bind(data.username.trim()).first();
     const candidateHash = await passwordHash(data.password,user?.password_salt||DUMMY_PASSWORD_SALT);
-    if (!user || user.is_banned || !constantTimeEqual(candidateHash,user.password_hash)) {
+    const passwordMatches = constantTimeEqual(candidateHash,user?.password_hash||"");
+    if (!user || user.is_banned || !passwordMatches) {
       const blocked = await recordRateLimitFailure(env,key);
       return blocked?json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Incorrect username or password.",401);
     }
