@@ -189,6 +189,21 @@ async function route(request, env) {
       if ((schema?.total || 0) !== 7) {
         return json({ ok:false, site:"Pekora", database:true, schema:false, error:"D1 is reachable, but the Pekora migrations are missing or incomplete." },503);
       }
+      const requiredColumns = [
+        "SELECT id,username,password_hash,password_salt,role,balance,created_at,is_banned FROM users LIMIT 0",
+        "SELECT token_hash,user_id,expires_at FROM sessions LIMIT 0",
+        "SELECT user_id,description,avatar_json FROM profiles LIMIT 0",
+        "SELECT id,name,description,category,price,image_url,is_limited,is_for_sale,created_at FROM items LIMIT 0",
+        "SELECT id,user_id,item_id,purchased_at FROM inventory LIMIT 0",
+        "SELECT id,user_id,item_id,price,purchased_at FROM purchases LIMIT 0",
+        "SELECT user_id,friend_id,status,created_at FROM friends LIMIT 0"
+      ];
+      try {
+        await env.DB.batch(requiredColumns.map(sql => env.DB.prepare(sql)));
+      } catch (schemaError) {
+        console.error("[Pekora health] D1 schema validation failed:", schemaError);
+        return json({ ok:false, site:"Pekora", database:true, schema:false, error:"D1 tables exist, but required Pekora columns are missing. Check and apply the migrations." },503);
+      }
       return json({ ok:true, site:"Pekora", database:true, schema:true });
     } catch (error) {
       console.error("[Pekora health] D1 check failed:", error);
