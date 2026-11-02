@@ -81,7 +81,7 @@ function home(){
  }
  const name=esc(me.username);
  app.innerHTML='<div class="op-dashboard">'+
-  '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile">'+avatar()+'</a><div><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><p class="home-balance">'+Number(me.balance||0).toLocaleString()+' P$</p></div></div>'+
+  '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile"><div id="homeAvatar3d" class="op-home-avatar-view"></div></a><div><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><p class="home-balance">'+Number(me.balance||0).toLocaleString()+' P$</p></div></div>'+
   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Items</h3><a href="#inventory" data-page="inventory">See All</a></div><div id="homeItems" class="op-section-content"><div class="op-empty">Loading inventory...</div></div></section>'+
   '</div>';
@@ -98,7 +98,9 @@ async function loadHomeDashboard(){
   ]);
   if(!document.getElementById("homeFriends"))return;
   const owned=inventoryData.items||[],profile=profileData.profile;
-  document.getElementById("homeAvatar").innerHTML=avatarArtwork(me.username,profile.avatar,owned);
+  const homeAvatar=document.getElementById("homeAvatar3d");
+  const homeWorn=AVATAR_CATEGORIES.map(category=>owned.find(x=>x.id===profile.avatar?.[category])).filter(Boolean);
+  if(homeAvatar)await render3DAvatar(homeAvatar,homeWorn);
   const friends=friendsData.friends||[];
   document.getElementById("homeFriendCount").textContent=friends.length;
   friendsHost.innerHTML=friends.length?'<div class="op-home-friends">'+friends.slice(0,12).map(u=>'<a href="#profile" class="op-home-friend" data-profile="'+esc(u.username)+'">'+avatar(u.username)+'<span>'+esc(u.username)+'</span></a>').join("")+'</div>':'<div class="op-empty">You have no friends to display yet.</div>';
@@ -234,7 +236,7 @@ async function profile(username=me?.username){
   ]);
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header">'+avatarArtwork(p.username,p.avatar,owned)+'<div class="op-profile-info">'+
+   '<div class="op-profile-header"><div id="profileAvatar3d" class="op-profile-avatar"></div><div class="op-profile-info">'+
     '<h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+Number(p.balance||0).toLocaleString()+'</b> P$</span></div>'+
@@ -245,6 +247,8 @@ async function profile(username=me?.username){
     '<div class="op-profile-section"><h2>Inventory</h2>'+
      (owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+
     '</div></section></div>';
+  const profileWorn=AVATAR_CATEGORIES.map(category=>owned.find(x=>x.id===p.avatar?.[category])).filter(Boolean);
+  await render3DAvatar(document.getElementById("profileAvatar3d"),profileWorn);
   app.querySelectorAll("[data-profile-tab]").forEach(tab=>tab.addEventListener("click",e=>{
    e.preventDefault();
    app.querySelectorAll("[data-profile-tab]").forEach(x=>x.classList.toggle("active",x===tab));
