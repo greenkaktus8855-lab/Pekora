@@ -18,9 +18,18 @@ This repository currently deploys a lightweight Cloudflare Worker website with a
 - Persistent account inventory and purchase history
 - OWNER-only catalog management and password changes
 - Secret-protected OWNER account recovery
+- Per-IP rate limits for login, registration and OWNER recovery/bootstrap
+- 16 KB API JSON request-body limit
+- HTTPS-only preview image URLs for new catalog entries
 - API health endpoint that checks the database schema
 
 New accounts start with 100 P$. The initial OWNER account starts with 1,000 P$.
+
+## Security and database setup
+
+On the first API request, the Worker creates its small site-settings and rate-limit tables and supporting indexes in D1. It also runs the one-time public-catalog cleanout without deleting account inventories or balances.
+
+Failed sign-in, registration and OWNER setup/recovery attempts are rate-limited by a hashed network-address identifier. Ten attempts within the 15-minute window trigger a 15-minute cooldown. JSON API request bodies are limited to 16 KB. New catalog preview images must use HTTPS.
 
 ## Not connected in this deployment
 
