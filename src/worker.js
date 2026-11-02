@@ -980,7 +980,7 @@ export default {
         if (pageResponse.ok && (pageResponse.headers.get("content-type")||"").includes("text/html")) {
           const escapeHtml = value => String(value??"").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
           const title = String(sharedItem.name||"Pekora item").slice(0,100);
-          const description = (String(sharedItem.description||"").trim() || (sharedItem.category+" · "+Number(sharedItem.price||0).toLocaleString("en-US")+" P$")).slice(0,300);
+          const description = (sharedItem.category+" · "+Number(sharedItem.price||0).toLocaleString("en-US")+" P$"+(String(sharedItem.description||"").trim()?" · "+String(sharedItem.description).trim():"")).slice(0,300);
           const image = /^https:\/\//i.test(String(sharedItem.image_url||"")) ? String(sharedItem.image_url) : "https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/pekora-logo.png";
           const canonical = new URL("/item/"+encodeURIComponent(sharedItem.id),url.origin).href;
           const metadata = '<meta name="description" content="'+escapeHtml(description)+'">' +
@@ -997,6 +997,11 @@ export default {
           const headers = new Headers(pageResponse.headers);
           headers.set("content-type","text/html; charset=utf-8");
           headers.set("cache-control","public, max-age=60, s-maxage=300");
+          headers.set("X-Content-Type-Options","nosniff");
+          headers.set("X-Frame-Options","DENY");
+          headers.set("Referrer-Policy","strict-origin-when-cross-origin");
+          headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
+          headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
           return new Response(html,{status:200,headers});
         }
       }
