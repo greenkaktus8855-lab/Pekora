@@ -68,6 +68,7 @@ document.addEventListener("click",e=>{
  const p=e.target.closest("[data-profile]");
  if(p){
   e.preventDefault();
+  sidebar.classList.remove("mobile-open");
   const username=p.dataset.profile;
   history.pushState({page:"profile",username},"","#profile?username="+encodeURIComponent(username));
   profile(username);
@@ -455,7 +456,12 @@ function users(){
    results.innerHTML=found.length?found.map(u=>'<article class="people-user"><div class="people-avatar">'+avatar(u.username)+'</div><div class="people-user-info"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role||"USER")+'</span></div><button class="button" type="button" data-profile="'+esc(u.username)+'">View Profile</button></article>').join(""):'<div class="empty">No users found for “'+esc(q)+'”.</div>';
   }catch(e){if(requestId!==latest||!isActiveView(view))return;hint.textContent="Could not load users: "+e.message;hint.style.display="block";results.innerHTML=""}
  }
- form.addEventListener("submit",e=>{e.preventDefault();runSearch()});
+ form.addEventListener("submit",e=>{
+  e.preventDefault();
+  const q=input.value.trim().slice(0,20);
+  history.replaceState({page:"users",query:q},"","#users?q="+encodeURIComponent(q));
+  runSearch();
+ });
  input.addEventListener("input",()=>{
   latest++;
   results.innerHTML="";
