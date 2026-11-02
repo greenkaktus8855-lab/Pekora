@@ -623,6 +623,9 @@ export default {
         return fail("Server error. Check the Worker logs. Reference: " + crypto.randomUUID().slice(0,8),500);
       }
     }
+    if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
+      return new Response("Static asset binding ASSETS is missing.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+    }
     const response = await env.ASSETS.fetch(request);
     const headers = new Headers(response.headers);
     headers.set("X-Content-Type-Options","nosniff");
