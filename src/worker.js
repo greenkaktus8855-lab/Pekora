@@ -799,7 +799,7 @@ async function route(request, env) {
       const loadItems = async (ownerId,ids) => {
         if (!ids.length) return [];
         const marks=ids.map(()=>"?").join(",");
-        const found=await env.DB.prepare(`SELECT i.id,i.name,i.category,i.image_url,i.price FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id IN (${marks})`).bind(ownerId,...ids).all();
+        const found=await env.DB.prepare(`SELECT i.id,i.name,i.category,i.image_url,i.price FROM items i WHERE i.id IN (${marks})`).bind(...ids).all();
         return found.results||[];
       };
       trades.push({...row,offeredItems:await loadItems(row.sender_id,offeredIds),requestedItems:await loadItems(row.recipient_id,requestedIds)});
