@@ -75,6 +75,7 @@ db.execute("INSERT INTO users (id,username,password_hash,password_salt,balance,p
            ("test-third","TestThird","hash","salt",100,3))
 db.execute("INSERT INTO items (id,name,category,price,image_url,is_for_sale,is_limited,stock_limit,stock_sold) VALUES (?,?,?,?,?,?,?,?,?)",
            ("limited-hat","Limited Hat","Hats",10,"https://example.com/limited.png",1,1,2,0))
+db.commit()
 
 def limited_purchase(user_id):
     db.execute("BEGIN IMMEDIATE")
