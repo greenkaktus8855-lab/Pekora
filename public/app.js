@@ -589,7 +589,7 @@ async function owner(){
  '<label>Item name<input name="name" maxlength="80" required></label>'+
  '<label>Category<select name="category">'+ITEM_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
  '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
- ''<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
+ '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
  '<label>3D model file (.glb, max 1 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
  '<label>Or existing 3D model URL<input name="model_url" type="url" maxlength="1000" placeholder="https://...model.glb"></label>'+
  ''+
