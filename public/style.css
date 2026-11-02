@@ -649,3 +649,21 @@ pekora-avatar-viewer:active{cursor:grabbing}
 .sakura-brand-logo{display:block;width:122px;height:40px;max-width:100%;object-fit:contain;object-position:left center}
 @media(max-width:991px){.op-logo{flex-basis:80px;width:80px}.sakura-brand-logo{width:80px;height:34px}}
 @media(max-width:560px){.op-logo{flex-basis:80px;width:80px}.sakura-brand-logo{width:80px;height:30px}}
+
+
+/* Inventory item selling */
+.inventory-sell-intro{margin:0 0 14px;color:#68737d;font-size:14px}
+.inventory-sell-card{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;padding:10px;text-align:center;border:1px solid transparent;border-radius:5px}
+.inventory-sell-card.is-selected{border-color:#8e44d6;background:#faf6ff;box-shadow:0 0 0 1px rgba(142,68,214,.12)}
+.inventory-sell-card .item-image{width:100%;max-width:150px;margin:0 auto 4px}
+.inventory-sell-card h3{width:100%;overflow-wrap:anywhere}
+.inventory-item-price{margin:3px 0;color:#7b2cbf;font-weight:700}
+.inventory-select-button{width:100%;max-width:180px;min-height:32px;padding:6px 10px;cursor:pointer}
+.inventory-sell-panel{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:18px 0 8px;padding:16px;background:#f7f2fd;border:1px solid #decaf0;border-radius:5px}
+.inventory-sell-summary{min-width:0}
+.inventory-sell-summary strong{font-size:17px}
+.inventory-sell-summary p{margin:5px 0 0}
+.inventory-sell-summary b{color:#6a1bb1}
+.inventory-confirm-sell{flex:0 0 auto;min-width:130px;padding:10px 16px;cursor:pointer}
+.inventory-confirm-sell:disabled{opacity:.65;cursor:wait}
+@media(max-width:560px){.inventory-sell-panel{align-items:stretch;flex-direction:column}.inventory-confirm-sell{width:100%}}
