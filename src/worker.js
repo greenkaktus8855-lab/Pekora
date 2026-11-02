@@ -405,7 +405,7 @@ async function route(request, env) {
     const purchaseId=id(), inventoryId=id();
     try {
       const results = await env.DB.batch([
-        env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM items i WHERE i.id=? AND i.is_for_sale=1 AND (i.is_limited=0 OR i.stock_limit=0 OR (SELECT COUNT(*) FROM inventory v WHERE v.item_id=i.id)<i.stock_limit))").bind(item.price,user.id,item.price,user.id,item.id,item.id),
+        env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM items WHERE id=? AND is_for_sale=1) AND EXISTS (SELECT 1 FROM items i WHERE i.id=? AND i.is_for_sale=1 AND (i.is_limited=0 OR i.stock_limit=0 OR (SELECT COUNT(*) FROM inventory v WHERE v.item_id=i.id)<i.stock_limit))").bind(item.price,user.id,item.price,user.id,item.id,item.id,item.id),
         env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE changes()=1").bind(inventoryId,user.id,item.id),
         env.DB.prepare("INSERT INTO purchases (id,user_id,item_id,price) SELECT ?,?,?,? WHERE changes()=1").bind(purchaseId,user.id,item.id,item.price)
       ]);
