@@ -160,6 +160,7 @@ function limitedStockInfo(x){
  const left=Math.max(0,limit-sold);
  return '<div class="limited-stock-info"><span>'+left+' left</span><span>'+sold+' / '+limit+' sold</span></div>';
 }
+function isLimitedSoldOut(x){return Number(x?.is_limited)===1&&Number(x?.stock_limit||0)>0&&Number(x?.stock_sold||0)>=Number(x.stock_limit)}
 function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+limitedBadge(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+limitedStockInfo(x)+'</article>'}
 async function showItem(itemId,updateHistory=true){
  const view=beginView();
@@ -200,7 +201,7 @@ async function showItem(itemId,updateHistory=true){
  const isOwned=ownedItemIds.has(item.id);
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+limitedBadge(item)+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+limitedStockInfo(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+limitedStockInfo(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isLimitedSoldOut(item)?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
   '</div></div>';
  if(!isOwned&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
 }
@@ -307,7 +308,7 @@ function drawCatalog(category,q){
  if(catalogSort==="price-low")list.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
  if(catalogSort==="price-high")list.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
  count.textContent=list.length+" items";
- el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+limitedBadge(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+limitedStockInfo(x)+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
+ el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+limitedBadge(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+limitedStockInfo(x)+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(isLimitedSoldOut(x)?'<button class="button secondary" type="button" disabled>Sold Out</button>':ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
 
 }async function buy(itemId){
