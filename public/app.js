@@ -382,7 +382,7 @@ async function profile(identifier=me?.username,byId=false){
  app.innerHTML='<div class="empty">Loading profile...</div>';
  try{
   const profilePath=byId?"/api/profile/id/"+encodeURIComponent(identifier):"/api/profile/"+encodeURIComponent(identifier);
-  const inventoryPath=byId?profilePath+"/inventory":profilePath+"/inventory";
+  const inventoryPath=profilePath+"/inventory";
   const [d,inventoryData]=await Promise.all([
    api(profilePath),
    api(inventoryPath)
@@ -809,7 +809,7 @@ async function render(name){
  else if(name==="login"||name==="register")auth(name);
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
- else if(name==="profile")await profile(query.get("username")||me?.username);
+ else if(name==="profile")await (query.get("id")?profile(query.get("id"),true):profile(query.get("username")||me?.username));
  else if(name==="item")await showItem(query.get("id"),false);
  else if(name==="users"||name==="community")users();
  else if(name==="friends")await friends();
