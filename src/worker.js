@@ -535,6 +535,43 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
+  if (request.method === "POST" && path === "/api/inventory/sell") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const data = await body(request);
+    const itemId = String(data?.itemId || "");
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId)) return fail("Choose a valid inventory item.");
+
+    const item = await env.DB.prepare(
+      "SELECT i.id,i.name,i.price FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.item_id=?"
+    ).bind(user.id,itemId).first();
+    if (!item) return fail("This item is not in your inventory.",404);
+
+    const price = Number(item.price);
+    if (!Number.isSafeInteger(price) || price < 0) return fail("This item has an invalid sale price.",409);
+
+    try {
+      const results = await env.DB.batch([
+        env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=? AND EXISTS (SELECT 1 FROM items WHERE id=? AND price=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)").bind(user.id,itemId,itemId,price,user.id,itemId),
+        env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND changes()=1").bind(price,user.id),
+        env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=? AND changes()=1").bind(user.id,itemId)
+      ]);
+
+      if (!results?.[0]?.meta?.changes) {
+        const locked = await env.DB.prepare("SELECT 1 AS locked FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId).first();
+        if (locked) return fail("This item is reserved in a pending trade. Cancel the trade before selling it.",409);
+        return fail("The item or its price changed. Refresh your Inventory and try again.",409);
+      }
+      if (!results?.[1]?.meta?.changes) return fail("The sale could not be completed. Please refresh and try again.",409);
+    } catch (error) {
+      console.error("[Sakura inventory] Item sale failed:",error);
+      return fail("The sale could not be completed. Please try again.",500);
+    }
+
+    const updated = await env.DB.prepare("SELECT balance FROM users WHERE id=?").bind(user.id).first();
+    return json({ok:true,item:{id:item.id,name:item.name,price},balance:Number(updated?.balance||0)});
+  }
+
   const profileIdInventoryMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})\/inventory$/);
   if (request.method === "GET" && profileIdInventoryMatch) {
     const profile = await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND is_banned=0").bind(Number(profileIdInventoryMatch[1])).first();
