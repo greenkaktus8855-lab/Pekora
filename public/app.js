@@ -45,7 +45,19 @@ function setUser(user){
 async function refreshMe(){try{const d=await api("/api/me");setUser(d.user)}catch{setUser(null)}}
 function page(name){history.pushState({page:name},"","#"+name);render(name)}
 window.addEventListener("popstate",()=>render(location.hash.slice(1)||"home"));
-document.addEventListener("click",e=>{const a=e.target.closest("[data-page]");if(a){e.preventDefault();sidebar.classList.remove("mobile-open");page(a.dataset.page)}const p=e.target.closest("[data-profile]");if(p){e.preventDefault();profile(p.dataset.profile)}const item=e.target.closest("[data-item-view]");if(item){e.preventDefault();showItem(item.dataset.itemView)}});
+document.addEventListener("click",e=>{
+ const a=e.target.closest("[data-page]");
+ if(a){e.preventDefault();sidebar.classList.remove("mobile-open");page(a.dataset.page)}
+ const p=e.target.closest("[data-profile]");
+ if(p){
+  e.preventDefault();
+  const username=p.dataset.profile;
+  history.pushState({page:"profile",username},"","#profile?username="+encodeURIComponent(username));
+  profile(username);
+ }
+ const item=e.target.closest("[data-item-view]");
+ if(item){e.preventDefault();showItem(item.dataset.itemView)}
+});
 document.getElementById("globalSearchForm").addEventListener("submit",e=>{e.preventDefault();const q=document.getElementById("globalSearch").value.trim();page("users");setTimeout(()=>{const input=document.getElementById("userSearch");if(input){input.value=q;input.form?.dispatchEvent(new Event("submit",{cancelable:true,bubbles:true}))}},0)});
 
 document.getElementById("mobileMenu")?.addEventListener("click",()=>sidebar.classList.toggle("mobile-open"));
@@ -274,18 +286,9 @@ async function profile(username=me?.username){
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+Number(p.balance||0).toLocaleString()+'</b> P$</span></div>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
    '</div></div>'+
-   '<nav class="op-profile-tabs"><a href="#" class="active" data-profile-tab="about">About</a><a href="#" data-profile-tab="creations">Creations</a></nav>'+
-   '<section id="profileTabContent" class="op-profile-content">'+
-    '<div class="op-profile-section"><h2>Inventory</h2>'+
-     (owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+
-    '</div></section></div>';
-  app.querySelectorAll("[data-profile-tab]").forEach(tab=>tab.addEventListener("click",e=>{
-   e.preventDefault();
-   app.querySelectorAll("[data-profile-tab]").forEach(x=>x.classList.toggle("active",x===tab));
-   document.getElementById("profileTabContent").innerHTML=tab.dataset.profileTab==="about"
-    ? '<div class="op-profile-section"><h2>Inventory</h2>'+(owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+'</div>'
-    : '<div class="op-profile-section"><h2>Creations</h2><div class="op-profile-empty">No creations to display.</div></div>';
-  }));
+   '<section class="op-profile-section"><h2>Inventory</h2>'+
+    (owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+
+   '</section></div>';
   if(!isSelf&&me)loadProfileFriendAction(p.username);
  }catch(e){if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
@@ -500,12 +503,15 @@ function infoPage(type){
 }
 async function render(name){
  name=name||"home";
+ const parts=String(name).split("?",2);
+ name=parts[0];
+ const query=new URLSearchParams(parts[1]||"");
  if(name==="home")home();
  else if(name==="catalog")await catalog();
  else if(name==="login"||name==="register")auth(name);
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
- else if(name==="profile")await profile();
+ else if(name==="profile")await profile(query.get("username")||me?.username);
  else if(name==="avatar")await avatarPage();
  else if(name==="users"||name==="community")users();
  else if(name==="friends")await friends();
