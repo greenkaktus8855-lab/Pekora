@@ -697,7 +697,7 @@ async function route(request, env) {
 
     if (path === "/api/owner/users" && request.method === "GET") {
       const q = (url.searchParams.get("q") || "").trim().slice(0,32);
-      if (q.length < 2) return json({users:[]});
+      if (q.length < 1) return json({users:[]});
       const rows = await env.DB.prepare(`SELECT id,username,role,balance,created_at,is_banned FROM users
         WHERE instr(lower(username),lower(?))>0 OR id=? ORDER BY username LIMIT 30`).bind(q,q).all();
       return json({users:rows.results||[]});
@@ -946,7 +946,7 @@ async function route(request, env) {
 
   if (request.method === "GET" && path === "/api/search-users") {
     const q = (url.searchParams.get("q") || "").trim().slice(0,20);
-    if (q.length < 2) return json({users:[]});
+    if (q.length < 1) return json({users:[]});
     const rows = await env.DB.prepare("SELECT username,role FROM users WHERE instr(lower(username),lower(?))>0 AND is_banned=0 ORDER BY username LIMIT 20").bind(q).all();
     return json({users:rows.results || []});
   }
