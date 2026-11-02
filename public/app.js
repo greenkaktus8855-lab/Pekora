@@ -177,12 +177,15 @@ async function catalog(){
    '</div>'+
   '</div>';
  try{
-  const [catalogData,inventoryData]=await Promise.all([
-   api("/api/catalog"),
-   me?api("/api/inventory"):Promise.resolve({items:[]})
-  ]);
+  const catalogData=await api("/api/catalog");
   items=catalogData.items||[];
-  ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
+  ownedItemIds=new Set();
+  if(me){
+   try{
+    const inventoryData=await api("/api/inventory");
+    ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
+   }catch(error){console.warn("[Pekora catalog] Inventory state unavailable:",error)}
+  }
   drawCatalog("All","");
  }catch(e){document.getElementById("catalogGrid").textContent=e.message}
  const search=document.getElementById("itemSearch");
