@@ -40,10 +40,11 @@ async function requireUser(request, env) {
   const user = await currentUser(request, env);
   return user || null;
 }
+class RequestBodyTooLarge extends Error {}
 async function body(request) {
   const maxBytes = 16 * 1024;
   const length = Number(request.headers.get("content-length") || 0);
-  if (length > maxBytes) return null;
+  if (length > maxBytes) throw new RequestBodyTooLarge();
   const reader = request.body?.getReader();
   if (!reader) return null;
   const chunks = [];
@@ -55,7 +56,7 @@ async function body(request) {
       size += value.byteLength;
       if (size > maxBytes) {
         await reader.cancel();
-        return null;
+        throw new RequestBodyTooLarge();
       }
       chunks.push(value);
     }
@@ -66,7 +67,8 @@ async function body(request) {
       offset += chunk.byteLength;
     }
     return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestBodyTooLarge) throw error;
     return null;
   }
 }
@@ -558,6 +560,7 @@ export default {
     if (url.pathname.startsWith("/api/")) {
       try { return await route(request,env); }
       catch (error) {
+        if (error instanceof RequestBodyTooLarge) return fail("Request body must be 16 KB or smaller.",413);
         console.error("[Pekora API] Unhandled error:", request.method, url.pathname, error);
         return fail("Server error. Check the Worker logs. Reference: " + crypto.randomUUID().slice(0,8),500);
       }
