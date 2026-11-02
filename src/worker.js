@@ -44,19 +44,6 @@ async function body(request) {
 }
 const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:u.balance, createdAt:u.created_at });
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
-const ASSET_KINDS = ["IMAGE_ONLY","MODEL_3D","FACE_TEXTURE"];
-const ITEM_ATTACHMENTS = ["Root","Head","HeadTop","Torso","LeftArm","RightArm","LeftLeg","RightLeg"];
-
-function isSafeModelUrl(value) {
-  const url = String(value || "").trim();
-  if (!url || url.length > 1000 || !/\.glb(?:$|[?#])/i.test(url)) return false;
-  if (url.startsWith("/assets/catalog/")) return !url.includes("..") && !url.includes("\\");
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:";
-  } catch { return false; }
-}
-
 function validItem(data) {
   if (!data || typeof data.name !== "string" || !data.name.trim() || data.name.trim().length > 80) return "Item name must be 1–80 characters.";
   if (!ITEM_CATEGORIES.includes(data.category)) return "Choose a valid item category.";
@@ -71,22 +58,8 @@ function validItem(data) {
   }
 
   const assetKind = data.asset_kind || "IMAGE_ONLY";
-  if (!ASSET_KINDS.includes(assetKind)) return "Choose a valid asset type.";
-  const modelUrl = String(data.model_url || "").trim();
-  if (assetKind === "MODEL_3D" && !isSafeModelUrl(modelUrl)) return "A wearable 3D item needs a public .glb model URL. Upload it to /assets/catalog/ or use an HTTPS URL.";
-  if (assetKind === "FACE_TEXTURE" && (data.category !== "Faces" || !image)) return "A face texture needs the Faces category and a preview image URL.";
-
-  if (!ITEM_ATTACHMENTS.includes(data.attachment || "Head")) return "Choose a valid avatar attachment point.";
-  const scale = Number(data.model_scale ?? 1);
-  if (!Number.isFinite(scale) || scale <= 0 || scale > 10) return "Model scale must be greater than 0 and no more than 10.";
-  for (const field of ["offset_x","offset_y","offset_z"]) {
-    const value = Number(data[field] ?? 0);
-    if (!Number.isFinite(value) || Math.abs(value) > 10) return "Model offsets must be between -10 and 10.";
-  }
-  for (const field of ["rotation_x","rotation_y","rotation_z"]) {
-    const value = Number(data[field] ?? 0);
-    if (!Number.isFinite(value) || Math.abs(value) > 360) return "Model rotations must be between -360 and 360 degrees.";
-  }
+  if (assetKind !== "IMAGE_ONLY") return "Wearable assets require the original Pekora Asset and Avatar APIs, which are not connected to this deployment.";
+  
   return null;
 }
 
@@ -271,31 +244,13 @@ async function route(request, env) {
   }
 
   if (path === "/api/avatar" && request.method === "GET") {
-    const user = await requireUser(request,env);
-    if (!user) return fail("Please sign in.",401);
-    const row = await env.DB.prepare("SELECT avatar_json FROM profiles WHERE user_id=?").bind(user.id).first();
-    return json({ avatar:parseAvatar(row?.avatar_json) });
+    return json({ enabled:false, message:"Original Pekora Avatar API and RCC renderer are not connected." });
   }
 
   if (path === "/api/avatar" && request.method === "PUT") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const data = await body(request);
-    const equipped = data?.equipped;
-    if (!equipped || typeof equipped !== "object" || Array.isArray(equipped)) return fail("Invalid avatar selection.");
-    const clean = {};
-    for (const [category,itemId] of Object.entries(equipped)) {
-      if (!ITEM_CATEGORIES.includes(category)) return fail("Invalid avatar category.");
-      if (itemId === null || itemId === "") { clean[category] = null; continue; }
-      if (typeof itemId !== "string" || itemId.length > 80) return fail("Invalid avatar item.");
-      const owned = await env.DB.prepare("SELECT i.id,i.category,i.asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
-      if (!owned || owned.category !== category || !["MODEL_3D","FACE_TEXTURE"].includes(owned.asset_kind)) return fail("Only owned items with a real 3D model or face texture can be worn.",403);
-      clean[category] = itemId;
-    }
-    const current = await env.DB.prepare("SELECT avatar_json FROM profiles WHERE user_id=?").bind(user.id).first();
-    const next = { ...parseAvatar(current?.avatar_json), ...clean };
-    await env.DB.prepare("UPDATE profiles SET avatar_json=? WHERE user_id=?").bind(JSON.stringify(next),user.id).run();
-    return json({ ok:true,avatar:next });
+    return fail("Avatar editing is disabled until the original Pekora Avatar API and RCC renderer are connected.",501);
   }
 
   if (request.method === "PUT" && path === "/api/profile") {
