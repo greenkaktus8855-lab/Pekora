@@ -465,12 +465,6 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(user.id).all();
-    const profile = await env.DB.prepare("SELECT avatar_json FROM profiles WHERE user_id=?").bind(user.id).first();
-    let render = null;
-    try {
-      const parsed = profile?.avatar_json ? JSON.parse(profile.avatar_json) : null;
-      if (parsed && parsed.camera && parsed.aabb && typeof parsed.obj === "string" && typeof parsed.mtl === "string" && Array.isArray(parsed.textures)) render = parsed;
-    } catch {}
     return json({ enabled:true, equipped:rows.results||[] });
   }
 
@@ -865,7 +859,7 @@ async function route(request, env) {
         return (rows.results||[]).length===ids.length;
       };
       if(!(await owned(trade.sender_id,offered))||!(await owned(trade.recipient_id,requested)))return fail("Trade items changed. Cancel this trade and create a new one.",409);
-      if(await owned(trade.recipient_id,offered)||await owned(trade.sender_id,requested))return fail("One player already owns an incoming item. Trade cannot be completed.",409);
+      if((offered.length&&await owned(trade.recipient_id,offered))||(requested.length&&await owned(trade.sender_id,requested)))return fail("One player already owns an incoming item. Trade cannot be completed.",409);
       const changed=await env.DB.prepare("UPDATE trades SET status='ACCEPTED',responded_at=datetime('now') WHERE id=? AND status='PENDING' AND recipient_id=?").bind(trade.id,user.id).run();
       if(!changed?.meta?.changes)return fail("This trade was already answered.",409);
       const statements=[
