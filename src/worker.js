@@ -412,10 +412,15 @@ async function route(request, env) {
     try { username = decodeURIComponent(path.slice("/api/profile/".length, -"/avatar".length)); }
     catch { return fail("Invalid username.",400); }
     if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Invalid username.",400);
-    const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
+    const target = await env.DB.prepare("SELECT u.id,p.avatar_json FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0").bind(username).first();
     if (!target) return fail("User not found.",404);
     const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(target.id).all();
-    return json({equipped:rows.results||[]});
+    let render = null;
+    try {
+      const parsed = target.avatar_json ? JSON.parse(target.avatar_json) : null;
+      if (parsed && parsed.camera && parsed.aabb && typeof parsed.obj === "string" && typeof parsed.mtl === "string" && Array.isArray(parsed.textures)) render = parsed;
+    } catch {}
+    return json({equipped:rows.results||[],render});
   }
 
   if (request.method === "GET" && path.startsWith("/api/profile/")) {
@@ -433,7 +438,13 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(user.id).all();
-    return json({ enabled:true, rendering:false, equipped:rows.results||[], message:"Equipped items are saved. 3D avatar rendering still needs a separate RCC service." });
+    const profile = await env.DB.prepare("SELECT avatar_json FROM profiles WHERE user_id=?").bind(user.id).first();
+    let render = null;
+    try {
+      const parsed = profile?.avatar_json ? JSON.parse(profile.avatar_json) : null;
+      if (parsed && parsed.camera && parsed.aabb && typeof parsed.obj === "string" && typeof parsed.mtl === "string" && Array.isArray(parsed.textures)) render = parsed;
+    } catch {}
+    return json({ enabled:true, rendering:!!render, equipped:rows.results||[], render, message:render ? "OpenPekora 3D avatar data is ready." : "The original renderer is installed. A compatible OpenPekora thumbnail service must generate avatar data." });
   }
 
   if (path === "/api/avatar" && request.method === "PUT") {
