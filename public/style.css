@@ -466,3 +466,20 @@ button,input,textarea,select{font:inherit}
 .op-home-friend>.avatar-placeholder{width:54px;height:54px;border-radius:50%}
 .op-profile-avatar>.avatar-placeholder{width:100%;height:100%;border-radius:0}
 .avatar-original-thumbnail>.avatar-placeholder{width:100%;height:100%;border-radius:0}
+
+
+/* Currency and Games sections */
+.op-currency{color:#fff;font-size:16px;font-weight:600;white-space:nowrap;text-decoration:none}
+.op-currency:hover{color:#fff;text-decoration:underline}
+.currency-page,.games-page{width:100%;max-width:970px;margin:8px auto}
+.currency-balance-panel{max-width:520px}
+.currency-balance-panel h2{font-size:20px;font-weight:700;margin:0 0 8px}
+.currency-balance-value{display:block;margin:4px 0 10px;color:#02b757;font-size:34px;font-weight:700}
+.currency-history-list{display:flex;flex-direction:column}
+.currency-history-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid #ddd}
+.currency-history-row>div{display:flex;flex-direction:column;min-width:0}
+.currency-history-row strong{overflow-wrap:anywhere}
+.currency-history-row b{color:#02b757;white-space:nowrap}
+.games-coming-soon{max-width:650px}
+.games-coming-soon h2{font-size:23px;font-weight:700;margin:0 0 8px}
+@media(max-width:767px){.currency-history-row{align-items:flex-start}.currency-history-row b{font-size:13px}}
