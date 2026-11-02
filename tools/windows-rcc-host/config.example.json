@@ -1,0 +1,18 @@
+{
+  "BaseUrl": "https://YOUR-PEKORA-WORKER-URL/",
+  "RCCUrl": "http://127.0.0.1",
+  "Debug": true,
+  "Ports": {
+    "Process": 3001,
+    "RCC": {
+      "All": [64989],
+      "Player": [64989],
+      "Image": [64989],
+      "Place": [64989],
+      "Catalog": [64989]
+    }
+  },
+  "Paths": {
+    "RCCService": "../RCCService"
+  }
+}
