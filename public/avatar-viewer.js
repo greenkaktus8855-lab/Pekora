@@ -82,7 +82,8 @@ class PekoraAvatarViewer extends HTMLElement {
   async _loadItems() {
     if (!this._loader || !this._accessoryGroup) return;
     while (this._accessoryGroup.children.length) {
-      const child=this._accessoryGroup.children.pop();
+      const child=this._accessoryGroup.children[0];
+      this._accessoryGroup.remove(child);
       child.traverse?.(o=>{o.geometry?.dispose();if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());else o.material?.dispose();});
     }
     let items=[];try{items=JSON.parse(this.getAttribute("items")||"[]")}catch{}
