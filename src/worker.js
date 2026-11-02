@@ -105,9 +105,10 @@ function validItem(data, allowLegacyHttp = false) {
   }
   const assetId = data.asset_id === undefined || data.asset_id === null || data.asset_id === "" ? 0 : Number(data.asset_id);
   const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
-  const assetTypeId = data.asset_type_id === undefined || data.asset_type_id === null || data.asset_type_id === ""
-    ? (assetId ? (defaultAssetTypes[data.category] || 0) : 0)
-    : Number(data.asset_type_id);
+  const suppliedAssetTypeId = Number(data.asset_type_id || 0);
+  const assetTypeId = suppliedAssetTypeId > 0
+    ? suppliedAssetTypeId
+    : (assetId ? (defaultAssetTypes[data.category] || 0) : 0);
   if (!Number.isSafeInteger(assetId) || assetId < 0 || assetId > 2147483647) return "Roblox asset ID must be a positive whole number.";
   if (!Number.isSafeInteger(assetTypeId) || assetTypeId < 0 || assetTypeId > 2147483647) return "Roblox asset type ID must be a positive whole number.";
   if ((assetId > 0) !== (assetTypeId > 0)) return "Enter both a Roblox asset ID and its asset type ID.";
