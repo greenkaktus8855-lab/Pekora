@@ -55,7 +55,7 @@ async function body(request) {
       if (done) break;
       size += value.byteLength;
       if (size > maxBytes) {
-        await reader.cancel();
+        try { await reader.cancel(); } catch {}
         throw new RequestBodyTooLarge();
       }
       chunks.push(value);
