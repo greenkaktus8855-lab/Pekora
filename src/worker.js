@@ -103,6 +103,11 @@ function validItem(data, allowLegacyHttp = false) {
     }
     catch { return "Enter a valid image URL."; }
   }
+  const assetId = data.asset_id === undefined || data.asset_id === null || data.asset_id === "" ? 0 : Number(data.asset_id);
+  const assetTypeId = data.asset_type_id === undefined || data.asset_type_id === null || data.asset_type_id === "" ? 0 : Number(data.asset_type_id);
+  if (!Number.isSafeInteger(assetId) || assetId < 0 || assetId > 2147483647) return "Roblox asset ID must be a positive whole number.";
+  if (!Number.isSafeInteger(assetTypeId) || assetTypeId < 0 || assetTypeId > 2147483647) return "Roblox asset type ID must be a positive whole number.";
+  if ((assetId > 0) !== (assetTypeId > 0)) return "Enter both a Roblox asset ID and its asset type ID.";
   const model = String(data.model_url ?? "").trim();
   if (model.length > 1000) return "3D model URL is too long.";
   if (model) {
@@ -145,6 +150,12 @@ async function ensureSiteSettings(env) {
       const itemColumns = await env.DB.prepare("PRAGMA table_info(items)").all();
       if (!(itemColumns.results || []).some(column => column.name === "model_url")) {
         await env.DB.prepare("ALTER TABLE items ADD COLUMN model_url TEXT NOT NULL DEFAULT ''").run();
+      }
+      if (!(itemColumns.results || []).some(column => column.name === "asset_id")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN asset_id INTEGER NOT NULL DEFAULT 0").run();
+      }
+      if (!(itemColumns.results || []).some(column => column.name === "asset_type_id")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN asset_type_id INTEGER NOT NULL DEFAULT 0").run();
       }
       // One-time public catalog cleanout requested for the November 2026 reset.
       // Inventory, purchases, users and balances are deliberately untouched.
@@ -246,13 +257,15 @@ async function route(request, env) {
       headColorId:colorId,leftArmColorId:colorId,leftLegColorId:colorId,rightArmColorId:colorId,rightLegColorId:colorId,torsoColorId:colorId,
       HeadColor:colorId,LeftArmColor:colorId,LeftLegColor:colorId,RightArmColor:colorId,RightLegColor:colorId,TorsoColor:colorId
     };
+    const wornAssets = await env.DB.prepare("SELECT i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND i.asset_id>0 AND i.asset_type_id>0 ORDER BY e.equipped_at DESC").bind(target.id).all();
+    const assetAndAssetTypeIds = (wornAssets.results || []).map(item=>({assetId:Number(item.asset_id),assetTypeId:Number(item.asset_type_id)}));
     const scales = {height:1,Height:1,width:1,Width:1,head:1,Head:1,depth:1,Depth:1,proportion:0,Proportion:0,bodyType:0,BodyType:0};
     const bodyColorsUrl = new URL("/Asset/BodyColors.ashx?userId="+renderId,request.url).toString();
     return json({
       resolvedAvatarType:"R15",
       accessoryVersionIds:[],
       equippedGearVersionIds:[],
-      assetAndAssetTypeIds:[],
+      assetAndAssetTypeIds,
       backpackGearVersionIds:[],
       animationAssetIds:{},
       playerAvatarType:"R15",
@@ -908,7 +921,7 @@ async function route(request, env) {
     if (!user) return fail("Please sign in.",401);
     if (user.role !== "OWNER") return fail("Owner access required.",403);
     if (path === "/api/owner/items" && request.method === "GET") {
-      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,model_url,is_limited,is_for_sale,created_at,CASE WHEN category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items ORDER BY created_at DESC,name").all();
+      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_limited,is_for_sale,created_at,CASE WHEN category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items ORDER BY created_at DESC,name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
@@ -920,7 +933,11 @@ async function route(request, env) {
       if (error) return fail(error);
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
       const itemId=id();
-      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,is_for_sale) VALUES (?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),data.is_for_sale===false?0:1).run();
+      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+      const assetId = Number(data.asset_id || 0);
+      const assetTypeId = Number(data.asset_type_id || (assetId ? (defaultAssetTypes[data.category] || 0) : 0));
+      if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID (for example neck, back, front, shoulder or waist).");
+      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_for_sale) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,data.is_for_sale===false?0:1).run();
       return json({ok:true,id:itemId},201);
     }
     const match=path.match(/^\/api\/owner\/items\/([A-Za-z0-9_-]{1,80})$/i);
@@ -930,10 +947,14 @@ async function route(request, env) {
       const data=await body(request);
       if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid item update.");
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
-      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
+      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
       const keepLegacyImage = String(merged.image_url||"") === String(current.image_url||"");
       const error=validItem(merged,keepLegacyImage); if(error)return fail(error);
-      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),merged.is_for_sale,match[1]).run();
+      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+      const assetId = Number(merged.asset_id || 0);
+      const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
+      if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_for_sale,match[1]).run();
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
