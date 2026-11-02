@@ -234,6 +234,10 @@ async function catalog(){
  }catch(e){
   const grid=document.getElementById("catalogGrid");
   if(isActiveView(view)&&grid)grid.textContent=e.message;
+  items=[];
+  ownedItemIds=new Set();
+  ownershipLoaded=false;
+  return;
  }
  if(!isActiveView(view))return;
  const search=document.getElementById("itemSearch");
@@ -594,7 +598,12 @@ async function owner(){
     drawOwnerItems();updateOwnerItemCount();
    }catch(err){msg.textContent=err.message}
   });
- }catch(e){const host=document.getElementById("ownerItems");if(isActiveView(view)&&host)host.textContent=e.message}
+ }catch(e){
+  if(!isActiveView(view))return;
+  const statsHost=document.getElementById("ownerStats"),itemsHost=document.getElementById("ownerItems");
+  if(statsHost)statsHost.textContent=e.message;
+  if(itemsHost)itemsHost.textContent=e.message;
+ }
 }
 
 function infoPage(type){
