@@ -3,10 +3,10 @@
 }*/
 
 :root{
-    --primary-color: #00a2ff;
+    --primary-color: #a64dff;
     --primary-color-2: rgb(0, 162, 255);
-    --primary-color-hover: #3ab8ff;
-    --secondary-color: #0074bd;
+    --primary-color-hover: #c18aff;
+    --secondary-color: #6b2eb5;
     --success-color: #02b757;
     --success-color-hover: #3fc679;
     --robux-color: #02b757;
@@ -30,7 +30,7 @@
     --success-border: #007001;
     --continue-gradient: linear-gradient(0deg, rgba(8,79,192,1) 0%, rgba(5,103,234,1) 100%);
     --continue-gradient-hover: linear-gradient(0deg, rgba(2,73,198,1) 0%, rgba(7,147,253,1) 100%);
-    --continue-border: #0852b7;
+    --continue-border: #6a1bb1;
     --cancel-gradient: linear-gradient(0deg, rgba(69,69,69,1) 0%, rgba(140,140,140,1) 100%);
     --cancel-gradient-hover: grey;
     --cancel-border: #565656;
@@ -163,7 +163,7 @@ p > a,
 a,
     /*a:active,*/
 .fake-link {
-    color: #0055b3; /*Orignial: #0055b3;*/
+    color: #7b2cbf; /*Orignial: #7b2cbf;*/
     text-decoration: none !important;
     cursor: pointer;
 }
@@ -199,7 +199,7 @@ a.normal {
     color: #000;
 }
 a.normal:hover {
-    color: #0055b3;
+    color: #7b2cbf;
 }
 
 html {
@@ -335,7 +335,7 @@ html div.container.big {
     height: 24px;
     margin: 6px auto;
     border: 3px solid #d5d5d5;
-    border-top-color: var(--primary-color, #00a2ff);
+    border-top-color: var(--primary-color, #a64dff);
     border-radius: 50%;
     background: transparent;
     animation: pekora-spin .8s linear infinite;
@@ -376,7 +376,7 @@ html div.container.big {
     width: 17px;
     height: 17px;
     border: 2px solid #d5d5d5;
-    border-top-color: var(--primary-color, #00a2ff);
+    border-top-color: var(--primary-color, #a64dff);
     border-radius: 50%;
     background: transparent;
     vertical-align: middle;
@@ -399,8 +399,8 @@ html div.container.big {
 }
 
 .status-confirm {
-    background-color: #e5effa;
-    border: 1px solid #06C;
+    background-color: #f3eaff;
+    border: 1px solid #a64dff;
 }
 
 .status-error {
