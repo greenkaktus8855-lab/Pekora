@@ -2,7 +2,7 @@ const app=document.getElementById("app");
 const accountArea=document.getElementById("accountArea");
 const currency=document.getElementById("currency");
 const sidebar=document.getElementById("sidebar");
-let me=null,items=[],catalogSort="relevance";
+let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set();
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function api(path,options={}){const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||"Something went wrong");return data}
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
@@ -128,7 +128,7 @@ function showItem(itemId){
  if(!item){toast("Item not found");return}
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'">':'<span>No preview available</span>')+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div><p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div><button class="primary" id="detailBuy" type="button">Buy</button></div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div><p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(item.id)?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
   '</div></div>';
  document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
  if(item.asset_kind==="MODEL_3D"||item.asset_kind==="FACE_TEXTURE"){
@@ -176,7 +176,15 @@ async function catalog(){
     '</div>'+
    '</div>'+
   '</div>';
- try{items=(await api("/api/catalog")).items;drawCatalog("All","")}catch(e){document.getElementById("catalogGrid").textContent=e.message}
+ try{
+  const [catalogData,inventoryData]=await Promise.all([
+   api("/api/catalog"),
+   me?api("/api/inventory"):Promise.resolve({items:[]})
+  ]);
+  items=catalogData.items||[];
+  ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
+  drawCatalog("All","");
+ }catch(e){document.getElementById("catalogGrid").textContent=e.message}
  const search=document.getElementById("itemSearch");
  const select=document.getElementById("itemCategorySelect");
  const activeCategory=()=>document.querySelector("[data-category].active")?.dataset.category||"All";
@@ -209,7 +217,7 @@ function drawCatalog(category,q){
  if(catalogSort==="price-low")list.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
  if(catalogSort==="price-high")list.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
  document.getElementById("catalogCount").textContent=list.length+" items";
- el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="catalog-asset-kind">'+(x.asset_kind==="MODEL_3D"?"3D wearable":x.asset_kind==="FACE_TEXTURE"?"Face texture":"Image preview only")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div><button class="button" data-buy="'+esc(x.id)+'">Buy</button></article>').join(""):'<div class="empty">No items found.</div>';
+ el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="catalog-asset-kind">'+(x.asset_kind==="MODEL_3D"?"3D wearable":x.asset_kind==="FACE_TEXTURE"?"Face texture":"Image preview only")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
  el.querySelectorAll("[data-item-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();showItem(a.dataset.itemView)}));
 }async function buy(itemId){if(!me){page("login");return}try{const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});me.balance=d.balance;setUser(me);toast("Item purchased");catalog()}catch(e){toast(e.message)}}
@@ -305,7 +313,7 @@ async function avatarPage(){
   document.getElementById("avatarWardrobe").innerHTML=own.length?own.map(x=>'<article class="avatar-wardrobe-item">'+
    '<div class="avatar-wardrobe-image">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'" loading="lazy">':'<span>'+esc(x.category)+'</span>')+'</div>'+
    '<div class="avatar-wardrobe-name">'+esc(x.name)+'</div>'+
-   (selected===x.id?'<span class="avatar-wearing-label">Wearing</span>':(x.asset_kind==="MODEL_3D"||x.asset_kind==="FACE_TEXTURE")?'<button type="button" class="button" data-wear-item="'+esc(x.id)+'">Wear</button>':'<span class="avatar-preview-only-label">Preview only — not wearable</span>')+
+   (selected===x.id&&x.asset_kind!=="IMAGE_ONLY"?'<span class="avatar-wearing-label">Wearing</span>':(x.asset_kind==="MODEL_3D"||x.asset_kind==="FACE_TEXTURE")?'<button type="button" class="button" data-wear-item="'+esc(x.id)+'">Wear</button>':'<span class="avatar-preview-only-label">Preview only — not wearable</span>')+
    '</article>').join(""):'<div class="avatar-wardrobe-empty">You do not own any '+esc(activeCategory.toLowerCase())+' yet. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
   document.querySelectorAll("[data-avatar-category]").forEach(b=>b.addEventListener("click",()=>{activeCategory=b.dataset.avatarCategory;renderWardrobe()}));
   document.querySelectorAll("[data-wear-item]").forEach(b=>b.addEventListener("click",()=>wearAvatarItem(b.dataset.wearItem)));
