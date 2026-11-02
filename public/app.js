@@ -375,14 +375,16 @@ async function profile(username=me?.username){
  if(!username){app.innerHTML='<div class="empty">Choose a user profile.</div>';return}
  app.innerHTML='<div class="empty">Loading profile...</div>';
  try{
-  const [d,inventoryData]=await Promise.all([
+  const [d,inventoryData,avatarData]=await Promise.all([
    api("/api/profile/"+encodeURIComponent(username)),
-   api("/api/profile/"+encodeURIComponent(username)+"/inventory")
+   api("/api/profile/"+encodeURIComponent(username)+"/inventory"),
+   api("/api/profile/"+encodeURIComponent(username)+"/avatar")
   ]);
   if(!isActiveView(view))return;
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
+  const profileAvatar=avatarData.render?'<openpekora-avatar-renderer data-render=\\''+esc(JSON.stringify(avatarData.render))+'\\'></openpekora-avatar-renderer>':avatar(p.username);
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header"><div class="op-profile-avatar">'+avatar(p.username)+'</div><div class="op-profile-info">'+
+   '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(p.id)+'</strong></div><h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span></div>'+
@@ -455,7 +457,7 @@ async function avatarPage(){
  renderSidebar("avatar");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your avatar.</div>';return}
  app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1><a class="button" href="#catalog" data-page="catalog">Catalog</a></div>'+
-  '<div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Avatar</h2><div class="avatar-preview-placeholder">'+avatar(me.username)+'</div>'+
+  '<div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Avatar</h2><div class="avatar-preview-placeholder" id="avatarPreview">'+avatar(me.username)+'</div>'+
   '<p class="muted">Your equipped items are saved to your Pekora account.</p>'+
   '<p class="muted">The original OpenPekora 3D preview needs its avatar-rendering service.</p><div id="avatarEquipped" class="avatar-equipped-list">Loading outfit...</div></section>'+
   '<section class="avatar-wardrobe"><h2>Inventory</h2><div class="avatar-category-tabs" id="avatarCategories"></div><div id="avatarWardrobe" class="avatar-wardrobe-grid">Loading inventory...</div></section></div></div>';
@@ -465,6 +467,7 @@ async function avatarPage(){
   if(!isActiveView(view))return;
   wardrobe=inventoryData.items||[];
   equipped=new Set((avatarData.equipped||[]).map(x=>x.id));
+  if(avatarData.render){const preview=document.getElementById("avatarPreview");if(preview)preview.innerHTML='<openpekora-avatar-renderer data-render=\\''+esc(JSON.stringify(avatarData.render))+'\\'></openpekora-avatar-renderer>';}
  }catch(e){const host=document.getElementById("avatarWardrobe");if(isActiveView(view)&&host)host.textContent=e.message;return}
  function renderEquipped(){
   const host=document.getElementById("avatarEquipped");if(!host)return;
