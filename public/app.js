@@ -494,10 +494,13 @@ async function tradesPage(){
    const trades=data.trades||[];
    host.innerHTML=trades.length?trades.map(t=>{
     const incoming=t.recipient_id===me.id;
-    const items=(label,list)=>'<div class="trade-item-group"><strong>'+label+'</strong><div class="trade-item-list">'+(list.length?list.map(x=>'<span class="trade-item-chip">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="">':'')+esc(x.name)+'</span>').join(""):'<span class="muted">No items</span>')+'</div></div>';
+    const offeredItems=t.offeredItems||[],requestedItems=t.requestedItems||[];
+    const storedOffered=JSON.parse(t.offered_items||"[]"),storedRequested=JSON.parse(t.requested_items||"[]");
+    const validLimited=offeredItems.length===storedOffered.length&&requestedItems.length===storedRequested.length&&[...offeredItems,...requestedItems].every(x=>Number(x.is_limited)===1);
+    const items=(label,list)=>'<div class="trade-item-group"><strong>'+label+'</strong><div class="trade-item-list">'+(list.length?list.map(x=>'<span class="trade-item-chip">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="">':'')+esc(x.name)+' <small class="trade-limited-tag">LIMITED</small></span>').join(""):'<span class="muted">No items</span>')+'</div></div>';
     return '<article class="trade-card"><div class="trade-card-heading"><strong>'+(incoming?'From '+esc(t.sender_name):'To '+esc(t.recipient_name))+'</strong><span class="trade-status trade-status-'+esc(t.status.toLowerCase())+'">'+esc(t.status)+'</span></div>'+
-     items(incoming?'They offer':'You offered',t.offeredItems||[])+items(incoming?'You offer':'They requested',t.requestedItems||[])+
-     (t.status==="PENDING"?(incoming?'<div class="trade-actions"><button class="primary" type="button" data-trade-action="accept" data-trade-id="'+esc(t.id)+'">Accept</button><button class="button secondary" type="button" data-trade-action="decline" data-trade-id="'+esc(t.id)+'">Decline</button></div>':'<div class="trade-actions"><button class="button secondary" type="button" data-trade-action="cancel" data-trade-id="'+esc(t.id)+'">Cancel offer</button></div>'):'')+
+     items(incoming?'They offer':'You offered',offeredItems)+items(incoming?'You offer':'They requested',requestedItems)+
+     (t.status==="PENDING"?(incoming?(validLimited?'<div class="trade-actions"><button class="primary" type="button" data-trade-action="accept" data-trade-id="'+esc(t.id)+'">Accept</button><button class="button secondary" type="button" data-trade-action="decline" data-trade-id="'+esc(t.id)+'">Decline</button></div>':'<p class="muted trade-invalid-note">This old offer contains non-Limited items and cannot be accepted. Decline it.</p><div class="trade-actions"><button class="button secondary" type="button" data-trade-action="decline" data-trade-id="'+esc(t.id)+'">Decline</button></div>'):'<div class="trade-actions"><button class="button secondary" type="button" data-trade-action="cancel" data-trade-id="'+esc(t.id)+'">Cancel offer</button></div>'):'')+
      '</article>';
    }).join(""):'<div class="empty">You do not have any trades yet.</div>';
    host.querySelectorAll("[data-trade-action]").forEach(button=>button.addEventListener("click",async()=>{
@@ -518,8 +521,12 @@ async function tradesPage(){
    if(!isActiveView(view))return;
    const own=ownData.items||[],target=targetData.items||[];
    if(!target.length)message.textContent="That player has no items available to trade.";
-   const checks=(items,prefix)=>items.map(item=>'<label class="trade-select-item"><input type="checkbox" value="'+esc(item.id)+'" data-trade-side="'+prefix+'"><span>'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="">':'')+'<span>'+esc(item.name)+'</span></span></label>').join("");
-   builder.innerHTML='<div class="trade-pick-columns"><div><h3>Your items</h3><div class="trade-pick-list">'+(own.length?checks(own,"offered"):'<p class="muted">Your inventory is empty.</p>')+'</div></div><div><h3>'+esc(username)+' items</h3><div class="trade-pick-list">'+(target.length?checks(target,"requested"):'<p class="muted">No items available.</p>')+'</div></div></div><button id="sendTradeOffer" class="primary" type="button">Send trade offer</button>';
+   const ownLimited=own.filter(item=>Number(item.is_limited)===1),targetLimited=target.filter(item=>Number(item.is_limited)===1);
+   const checks=(items,prefix)=>items.map(item=>'<label class="trade-select-item"><input type="checkbox" value="'+esc(item.id)+'" data-trade-side="'+prefix+'"><span>'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="">':'')+'<span>'+esc(item.name)+' <small class="trade-limited-tag">LIMITED</small></span></span></label>').join("");
+   if(!ownLimited.length&&!targetLimited.length)message.textContent="Trading is limited to Limited items. Neither player has any Limited items available.";
+   else if(!ownLimited.length)message.textContent="You do not have any Limited items to offer.";
+   else if(!targetLimited.length)message.textContent="That player does not have any Limited items to request.";
+   builder.innerHTML='<div class="trade-pick-columns"><div><h3>Your Limited items</h3><div class="trade-pick-list">'+(ownLimited.length?checks(ownLimited,"offered"):'<p class="muted">No Limited items available.</p>')+'</div></div><div><h3>'+esc(username)+' Limited items</h3><div class="trade-pick-list">'+(targetLimited.length?checks(targetLimited,"requested"):'<p class="muted">No Limited items available.</p>')+'</div></div></div><button id="sendTradeOffer" class="primary" type="button" '+(!ownLimited.length&&!targetLimited.length?'disabled':'')+'>Send trade offer</button>';
    document.getElementById("sendTradeOffer").addEventListener("click",async()=>{
     const offeredIds=[...builder.querySelectorAll('[data-trade-side="offered"]:checked')].map(x=>x.value);
     const requestedIds=[...builder.querySelectorAll('[data-trade-side="requested"]:checked')].map(x=>x.value);
