@@ -35,7 +35,7 @@ const checks = [
   ["warnings are persisted", worker.includes("CREATE TABLE IF NOT EXISTS moderation_warnings")],
   ["bans revoke sessions", worker.includes('action==="ban"?[env.DB.prepare("DELETE FROM sessions WHERE user_id=?")')],
   ["owner moderation UI exists", app.includes("ownerUserSearch") && app.includes("ownerCreditForm") && app.includes("ownerWarnForm") && app.includes("ownerBanForm")],
-  ["purchase transaction checks current sale status", worker.includes("EXISTS (SELECT 1 FROM items WHERE id=? AND is_for_sale=1)")],
+  ["purchase transaction checks sale status and available stock", worker.includes("is_for_sale=1 AND (stock_limit=0 OR stock_sold<stock_limit)")],
   ["profile UPSERT", worker.includes("ON CONFLICT(user_id) DO UPDATE SET description=excluded.description")],
   ["item trade API", worker.includes('path === "/api/trades" && request.method === "POST"') && worker.includes("CREATE TABLE IF NOT EXISTS trade_locks")],
   ["owner game creation API", worker.includes('path === "/api/owner/games" && request.method === "POST"')],
@@ -49,9 +49,8 @@ const checks = [
   ["owner can edit player IDs", app.includes("ownerPublicIdForm") && app.includes("set_public_id")],
   ["Limited flags are preserved", !worker.includes("UPDATE items SET is_limited=0")],
   ["Limited items have OpenPekora overlay", app.includes("CatalogOverlays/Limited.png") && css.includes(".limited-overlay") && css.includes("width:70px;height:24px")],
-  ["stock is capped in the purchase transaction", worker.includes("stock_sold=stock_sold+1") && worker.includes("stock_sold<stock_limit") && worker.includes("stockLimit < Number(current.stock_sold")],
+  ["stock is capped in the purchase transaction", worker.includes("stock_sold=stock_sold+1") && worker.includes("stock_sold<stock_limit") && worker.includes("merged.stock_limit < Number(current.stock_sold")],
   ["Owner Panel can create and edit stock", app.includes("name=\"stock_limit\"") && app.includes("name=\"is_limited\"")]
- ];
 ];
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"} ${name}`);
