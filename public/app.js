@@ -375,7 +375,7 @@ async function profile(username=me?.username){
  if(!username){app.innerHTML='<div class="empty">Choose a user profile.</div>';return}
  app.innerHTML='<div class="empty">Loading profile...</div>';
  try{
-  const [d,inventoryData,avatarData]=await Promise.all([
+  const [d,inventoryData]=await Promise.all([
    api("/api/profile/"+encodeURIComponent(username)),
    api("/api/profile/"+encodeURIComponent(username)+"/inventory")
   ]);
