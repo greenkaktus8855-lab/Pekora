@@ -38,7 +38,7 @@ async function currentUser(request, env) {
   const token = getCookie(request, "pekora_session");
   if (!token) return null;
   const tokenHash = await digest(token);
-  const row = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.created_at,u.is_banned
+  const row = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.created_at,u.is_banned,u.public_id,u.is_verified
     FROM sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=? AND s.expires_at > datetime('now')`).bind(tokenHash).first();
   if (!row || row.is_banned) return null;
@@ -80,7 +80,7 @@ async function body(request) {
     return null;
   }
 }
-const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:u.balance, createdAt:u.created_at });
+const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:u.balance, createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified) });
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 function validItem(data, allowLegacyHttp = false) {
   if (!data || typeof data !== "object" || Array.isArray(data)) return "Invalid item details.";
@@ -157,6 +157,17 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("DELETE FROM auth_rate_limits WHERE window_started_at < CAST(strftime('%s','now') AS INTEGER)-86400"),
         env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')")
       ]);
+      const userColumns = await env.DB.prepare("PRAGMA table_info(users)").all();
+      if (!(userColumns.results || []).some(column => column.name === "public_id")) {
+        await env.DB.prepare("ALTER TABLE users ADD COLUMN public_id INTEGER").run();
+      }
+      if (!(userColumns.results || []).some(column => column.name === "is_verified")) {
+        await env.DB.prepare("ALTER TABLE users ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0").run();
+      }
+      // Use SQLite's stable rowid as the public numeric User ID for existing accounts.
+      await env.DB.prepare("UPDATE users SET public_id=rowid WHERE public_id IS NULL").run();
+      await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_public_id ON users(public_id)").run();
+
       const itemColumns = await env.DB.prepare("PRAGMA table_info(items)").all();
       if (!(itemColumns.results || []).some(column => column.name === "model_url")) {
         await env.DB.prepare("ALTER TABLE items ADD COLUMN model_url TEXT NOT NULL DEFAULT ''").run();
@@ -310,6 +321,7 @@ async function route(request, env) {
     try {
       await env.DB.batch([
         env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,balance) VALUES (?,?,?,?,100)").bind(userId, username, hash, salt),
+        env.DB.prepare("UPDATE users SET public_id=rowid WHERE id=? AND public_id IS NULL").bind(userId),
         env.DB.prepare("INSERT INTO profiles (user_id) VALUES (?)").bind(userId),
         env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token), userId)
       ]);
@@ -320,7 +332,7 @@ async function route(request, env) {
       return registrationFailure("Account creation failed. Please try again.",503);
     }
     await clearRateLimit(env,key);
-    const user = await env.DB.prepare("SELECT id,username,role,balance,created_at,is_banned FROM users WHERE id=?").bind(userId).first();
+    const user = await env.DB.prepare("SELECT id,username,role,balance,created_at,is_banned,public_id,is_verified FROM users WHERE id=?").bind(userId).first();
     return json({ user:publicUser(user) }, 201, { "set-cookie":cookie("pekora_session",token,60*60*24*30) });
   }
 
@@ -373,6 +385,7 @@ async function route(request, env) {
     try {
       await env.DB.batch([
         env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,role,balance) VALUES (?,?,?,?, 'OWNER',1000)").bind(userId,username,hash,salt),
+        env.DB.prepare("UPDATE users SET public_id=rowid WHERE id=? AND public_id IS NULL").bind(userId),
         env.DB.prepare("INSERT INTO profiles (user_id) VALUES (?)").bind(userId),
         env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token),userId)
       ]);
@@ -385,7 +398,7 @@ async function route(request, env) {
       return fail("Owner setup failed. Please check Worker logs.",503);
     }
     await clearRateLimit(env,key);
-    const user = await env.DB.prepare("SELECT id,username,role,balance,created_at FROM users WHERE id=?").bind(userId).first();
+    const user = await env.DB.prepare("SELECT id,username,role,balance,created_at,public_id,is_verified FROM users WHERE id=?").bind(userId).first();
     return json({ user:publicUser(user) },201,{"set-cookie":cookie("pekora_session",token,60*60*24*30)});
   }
 
@@ -430,6 +443,23 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
+  const profileIdInventoryMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})\/inventory$/);
+  if (request.method === "GET" && profileIdInventoryMatch) {
+    const profile = await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND is_banned=0").bind(Number(profileIdInventoryMatch[1])).first();
+    if (!profile) return fail("User not found.",404);
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    return json({ items:rows.results || [] });
+  }
+
+  const profileIdMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})$/);
+  if (request.method === "GET" && profileIdMatch) {
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
+      FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.public_id=? AND u.is_banned=0`).bind(Number(profileIdMatch[1])).first();
+    if (!profile) return fail("User not found.",404);
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,isVerified:Boolean(profile.is_verified)} });
+  }
+
   const profileInventoryMatch = path.match(/^\/api\/profile\/([A-Za-z0-9_]{1,20})\/inventory$/);
   if (request.method === "GET" && profileInventoryMatch) {
     const username = profileInventoryMatch[1];
@@ -459,11 +489,11 @@ async function route(request, env) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
     catch { return fail("Invalid username.",400); }
-    const profile = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.created_at,p.description
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
-    return json({ profile:{id:profile.id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,isVerified:Boolean(profile.is_verified)} });
   }
 
   if (path === "/api/avatar" && request.method === "GET") {
@@ -698,15 +728,16 @@ async function route(request, env) {
     if (path === "/api/owner/users" && request.method === "GET") {
       const q = (url.searchParams.get("q") || "").trim().slice(0,32);
       if (q.length < 1) return json({users:[]});
-      const rows = await env.DB.prepare(`SELECT id,username,role,balance,created_at,is_banned FROM users
-        WHERE instr(lower(username),lower(?))>0 OR id=? ORDER BY username LIMIT 30`).bind(q,q).all();
+      const numericId = /^\d+$/.test(q) && Number.isSafeInteger(Number(q)) ? Number(q) : -1;
+      const rows = await env.DB.prepare(`SELECT id,public_id,username,role,balance,created_at,is_banned,is_verified FROM users
+        WHERE instr(lower(username),lower(?))>0 OR id=? OR public_id=? ORDER BY username LIMIT 30`).bind(q,q,numericId).all();
       return json({users:rows.results||[]});
     }
 
     const userMatch = path.match(/^\/api\/owner\/users\/([A-Za-z0-9-]+)$/);
     if (!userMatch) return fail("User not found.",404);
     const targetId = userMatch[1];
-    const target = await env.DB.prepare("SELECT id,username,role,balance,created_at,is_banned FROM users WHERE id=?").bind(targetId).first();
+    const target = await env.DB.prepare("SELECT id,public_id,username,role,balance,created_at,is_banned,is_verified FROM users WHERE id=?").bind(targetId).first();
     if (!target) return fail("User not found.",404);
 
     if (request.method === "GET") {
@@ -728,6 +759,12 @@ async function route(request, env) {
       const result = await env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND balance<=1000000000-?").bind(amount,targetId,amount).run();
       if (!result?.meta?.changes) return fail("Could not add currency. The balance limit may have been reached.",409);
       await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"CURRENCY_CREDIT",amount+" P$"+(details?" — "+details:"")).run();
+    } else if (action === "verify" || action === "unverify") {
+      const verified = action === "verify" ? 1 : 0;
+      await env.DB.batch([
+        env.DB.prepare("UPDATE users SET is_verified=? WHERE id=?").bind(verified,targetId),
+        env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,action.toUpperCase(),verified ? "Verified badge granted" : "Verified badge removed")
+      ]);
     } else if (action === "warn") {
       if (details.length < 3) return fail("Enter a warning reason (at least 3 characters).");
       await env.DB.batch([
@@ -744,7 +781,7 @@ async function route(request, env) {
     } else {
       return fail("Unknown user management action.");
     }
-    const updated = await env.DB.prepare("SELECT id,username,role,balance,created_at,is_banned FROM users WHERE id=?").bind(targetId).first();
+    const updated = await env.DB.prepare("SELECT id,public_id,username,role,balance,created_at,is_banned,is_verified FROM users WHERE id=?").bind(targetId).first();
     return json({ok:true,user:updated});
   }
 
@@ -945,9 +982,10 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/search-users") {
-    const q = (url.searchParams.get("q") || "").trim().slice(0,20);
+    const q = (url.searchParams.get("q") || "").trim().slice(0,32);
     if (q.length < 1) return json({users:[]});
-    const rows = await env.DB.prepare("SELECT username,role FROM users WHERE instr(lower(username),lower(?))>0 AND is_banned=0 ORDER BY username LIMIT 20").bind(q).all();
+    const numericId = /^\d+$/.test(q) && Number.isSafeInteger(Number(q)) ? Number(q) : -1;
+    const rows = await env.DB.prepare("SELECT username,role,public_id,is_verified FROM users WHERE (instr(lower(username),lower(?))>0 OR public_id=?) AND is_banned=0 ORDER BY username LIMIT 20").bind(q,numericId).all();
     return json({users:rows.results || []});
   }
 
