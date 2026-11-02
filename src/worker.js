@@ -1,4 +1,5 @@
 const encoder = new TextEncoder();
+const DUMMY_PASSWORD_SALT = "pekora-login-timing-protection-v1";
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
   status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers }
 });
@@ -73,7 +74,8 @@ async function ensureSiteSettings(env) {
     siteSettingsPromise = (async () => {
       await env.DB.batch([
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)")
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
+        env.DB.prepare("DELETE FROM auth_rate_limits WHERE window_started_at < unixepoch()-86400")
       ]);
       // One-time public catalog cleanout requested for the November 2026 reset.
       // Inventory, purchases, users and balances are deliberately untouched.
@@ -192,7 +194,8 @@ async function route(request, env) {
     const key = await rateLimitKey(request,"login");
     if (await isRateLimited(env,key)) return json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
     const user = await env.DB.prepare("SELECT * FROM users WHERE username=? COLLATE NOCASE").bind(data.username.trim()).first();
-    if (!user || user.is_banned || await passwordHash(data.password, user.password_salt) !== user.password_hash) {
+    const candidateHash = await passwordHash(data.password,user?.password_salt||DUMMY_PASSWORD_SALT);
+    if (!user || user.is_banned || candidateHash !== user.password_hash) {
       const blocked = await recordRateLimitFailure(env,key);
       return blocked?json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Incorrect username or password.",401);
     }
@@ -214,10 +217,14 @@ async function route(request, env) {
   }
 
   if (request.method === "POST" && path === "/api/bootstrap-owner") {
-    const data = await body(request);
+    const data = await body(request), key = await rateLimitKey(request,"owner-bootstrap");
+    if (await isRateLimited(env,key)) return json({error:"Too many owner setup attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
     if (typeof env.OWNER_BOOTSTRAP_SECRET !== "string" || env.OWNER_BOOTSTRAP_SECRET.length < 20 ||
         typeof data?.secret !== "string" || data.secret.length < 20 || data.secret.length > 512 ||
-        await digest(data.secret) !== await digest(env.OWNER_BOOTSTRAP_SECRET)) return fail("Invalid owner setup key.",403);
+        await digest(data.secret) !== await digest(env.OWNER_BOOTSTRAP_SECRET)) {
+      const blocked = await recordRateLimitFailure(env,key);
+      return blocked?json({error:"Too many owner setup attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Invalid owner setup key.",403);
+    }
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE role='OWNER'").first();
     if (count.n > 0) return fail("An owner account has already been created.",409);
     if (typeof data.password !== "string" || data.password.length < 12 || data.password.length > 128) return fail("Owner password must be at least 12 characters.");
@@ -238,6 +245,7 @@ async function route(request, env) {
       console.error("[Pekora bootstrap] Owner creation failed:", error);
       return fail("Owner setup failed. Please check Worker logs.",503);
     }
+    await clearRateLimit(env,key);
     const user = await env.DB.prepare("SELECT id,username,role,balance,created_at FROM users WHERE id=?").bind(userId).first();
     return json({ user:publicUser(user) },201,{"set-cookie":cookie("pekora_session",token,60*60*24*30)});
   }
@@ -404,12 +412,14 @@ async function route(request, env) {
   }
 
   if (path === "/api/owner/recover" && request.method === "POST") {
-    const data = await body(request);
+    const data = await body(request), key = await rateLimitKey(request,"owner-recovery");
+    if (await isRateLimited(env,key)) return json({error:"Too many owner recovery attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
     const recoverySecret = env.OWNER_BOOTSTRAP_SECRET;
     if (typeof recoverySecret !== "string" || recoverySecret.length < 20 ||
         typeof data?.secret !== "string" || data.secret.length < 20 || data.secret.length > 512 ||
         await digest(data.secret) !== await digest(recoverySecret)) {
-      return fail("Invalid owner recovery secret.",403);
+      const blocked = await recordRateLimitFailure(env,key);
+      return blocked?json({error:"Too many owner recovery attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Invalid owner recovery secret.",403);
     }
     if (typeof data?.password !== "string" || data.password.length < 12 || data.password.length > 128) {
       return fail("New owner password must be 12–128 characters.");
@@ -422,6 +432,7 @@ async function route(request, env) {
       env.DB.prepare("UPDATE users SET password_hash=?,password_salt=? WHERE id=? AND role='OWNER'").bind(hash,salt,owner.id),
       env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(owner.id)
     ]);
+    await clearRateLimit(env,key);
     return json({ok:true,message:"PekoraAdmin password reset. All previous sessions were signed out."});
   }
 
