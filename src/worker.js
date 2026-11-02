@@ -515,6 +515,8 @@ async function route(request, env) {
     }
     const owner = await env.DB.prepare("SELECT id FROM users WHERE username='PekoraAdmin' COLLATE NOCASE AND role='OWNER'").first();
     if (!owner) return fail("PekoraAdmin OWNER account was not found.",404);
+    const activeUser = await currentUser(request,env);
+    const clearCurrentCookie = activeUser?.id === owner.id;
     const salt = randomToken();
     const hash = await passwordHash(data.password,salt);
     await env.DB.batch([
@@ -522,7 +524,11 @@ async function route(request, env) {
       env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(owner.id)
     ]);
     await clearRateLimit(env,key);
-    return json({ok:true,message:"PekoraAdmin password reset. All previous sessions were signed out."});
+    return json(
+      {ok:true,message:"PekoraAdmin password reset. All previous sessions were signed out."},
+      200,
+      clearCurrentCookie?{"set-cookie":cookie("pekora_session","",0)}:{}
+    );
   }
 
   if (path === "/api/owner/password" && request.method === "POST") {
