@@ -8,6 +8,27 @@ async function api(path,options={}){const res=await fetch(path,{credentials:"sam
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
 function avatar(username=me?.username){const src=String(username||"").toLowerCase()==="koqumo"?"https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png":"https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/generic.svg";return '<img class="avatar-render" src="'+src+'" alt="User avatar" loading="lazy">' }
 const AVATAR_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
+const AVATAR_ATTACHMENTS=["Root","Head","HeadTop","Torso","LeftArm","RightArm","LeftLeg","RightLeg"];
+function waitForAvatarRenderer(){
+ if(window.PekoraAvatar3D)return Promise.resolve(window.PekoraAvatar3D);
+ return new Promise(resolve=>{
+  let finished=false;
+  const done=()=>{if(finished)return;finished=true;resolve(window.PekoraAvatar3D||null)};
+  window.addEventListener("pekora-avatar3d-ready",done,{once:true});
+  setTimeout(done,10000);
+ });
+}
+async function render3DAvatar(container,ownedItems){
+ container.innerHTML='<div class="avatar-3d-loading">Loading 3D avatar...</div>';
+ const renderer=await waitForAvatarRenderer();
+ if(!container.isConnected)return;
+ if(!renderer){
+  container.innerHTML='<div class="avatar-3d-error">3D renderer did not load. Check the browser connection and refresh the page.</div>';
+  return;
+ }
+ try{await renderer.render(container,ownedItems||[])}
+ catch(error){console.error("[Pekora avatar]",error);container.innerHTML='<div class="avatar-3d-error">Could not render this avatar. Check the 3D model files.</div>'}
+}
 function avatarArtwork(username,config={},owned=[]){
  const src=String(username||"").toLowerCase()==="koqumo"?"https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png":"https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/generic.svg";
  const worn=AVATAR_CATEGORIES.map(category=>{const item=owned.find(x=>x.id===config?.[category]);return item?{category,name:item.name,image_url:item.image_url}:null}).filter(Boolean);
@@ -103,10 +124,15 @@ function showItem(itemId){
  const item=items.find(x=>x.id===itemId);
  if(!item){toast("Item not found");return}
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
-  '<div class="item-detail-image">'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'">':'<span>No preview available</span>')+'</div>'+
+  '<div class="item-detail-image" id="itemDetailPreview">'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'">':'<span>No preview available</span>')+'</div>'+
   '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div><p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div><button class="primary" id="detailBuy" type="button">Buy</button></div>'+
   '</div></div>';
  document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
+ if(item.asset_kind==="MODEL_3D"||item.asset_kind==="FACE_TEXTURE"){
+  const preview=document.getElementById("itemDetailPreview");
+  const worn=[item];
+  render3DAvatar(preview,worn);
+ }
 }
 
 
@@ -180,8 +206,9 @@ function drawCatalog(category,q){
  if(catalogSort==="price-low")list.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
  if(catalogSort==="price-high")list.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
  document.getElementById("catalogCount").textContent=list.length+" items";
- el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div><button class="button" data-buy="'+esc(x.id)+'">Buy</button></article>').join(""):'<div class="empty">No items found.</div>';
+ el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="catalog-asset-kind">'+(x.asset_kind==="MODEL_3D"?"3D wearable":x.asset_kind==="FACE_TEXTURE"?"Face texture":"Image preview only")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div><button class="button" data-buy="'+esc(x.id)+'">Buy</button></article>').join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
+ el.querySelectorAll("[data-item-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();showItem(a.dataset.itemView)}));
 }async function buy(itemId){if(!me){page("login");return}try{const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});me.balance=d.balance;setUser(me);toast("Item purchased");catalog()}catch(e){toast(e.message)}}
 function auth(kind){
  renderSidebar("");
@@ -261,27 +288,32 @@ async function avatarPage(){
   const [a,i]=await Promise.all([api("/api/avatar"),api("/api/inventory")]);
   equipped=a.avatar||{};wardrobe=i.items||[];
  }catch(e){document.getElementById("avatarWardrobe").textContent=e.message;return}
- function renderAvatar(){document.getElementById("avatarPreview").innerHTML=avatarArtwork(me.username,equipped,wardrobe)}
+ async function renderAvatar(){
+  const container=document.getElementById("avatarPreview");
+  if(!container)return;
+  const worn=AVATAR_CATEGORIES.map(category=>wardrobe.find(x=>x.id===equipped[category])).filter(Boolean);
+  await render3DAvatar(container,worn);
+ }
  function renderWardrobe(){
   document.getElementById("avatarCategories").innerHTML=AVATAR_CATEGORIES.map(c=>'<button type="button" class="avatar-category '+(c===activeCategory?"active":"")+'" data-avatar-category="'+c+'">'+c+'</button>').join("");
   const own=wardrobe.filter(x=>x.category===activeCategory),selected=equipped[activeCategory];
   document.getElementById("avatarWardrobe").innerHTML=own.length?own.map(x=>'<article class="avatar-wardrobe-item">'+
    '<div class="avatar-wardrobe-image">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'" loading="lazy">':'<span>'+esc(x.category)+'</span>')+'</div>'+
    '<div class="avatar-wardrobe-name">'+esc(x.name)+'</div>'+
-   (selected===x.id?'<span class="avatar-wearing-label">Wearing</span>':'<button type="button" class="button" data-wear-item="'+esc(x.id)+'">Wear</button>')+
+   (selected===x.id?'<span class="avatar-wearing-label">Wearing</span>':(x.asset_kind==="MODEL_3D"||x.asset_kind==="FACE_TEXTURE")?'<button type="button" class="button" data-wear-item="'+esc(x.id)+'">Wear</button>':'<span class="avatar-preview-only-label">Preview only — not wearable</span>')+
    '</article>').join(""):'<div class="avatar-wardrobe-empty">You do not own any '+esc(activeCategory.toLowerCase())+' yet. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
   document.querySelectorAll("[data-avatar-category]").forEach(b=>b.addEventListener("click",()=>{activeCategory=b.dataset.avatarCategory;renderWardrobe()}));
   document.querySelectorAll("[data-wear-item]").forEach(b=>b.addEventListener("click",()=>wearAvatarItem(b.dataset.wearItem)));
  }
  async function wearAvatarItem(itemId){
-  try{const d=await api("/api/avatar",{method:"PUT",body:JSON.stringify({equipped:{[activeCategory]:itemId}})});equipped=d.avatar||equipped;renderAvatar();renderWardrobe();toast("Avatar updated")}
+  try{const d=await api("/api/avatar",{method:"PUT",body:JSON.stringify({equipped:{[activeCategory]:itemId}})});equipped=d.avatar||equipped;await renderAvatar();renderWardrobe();toast("Avatar updated")}
   catch(e){toast(e.message)}
  }
  document.getElementById("clearAvatar").addEventListener("click",async()=>{
-  try{const cleared=Object.fromEntries(AVATAR_CATEGORIES.map(c=>[c,null]));const d=await api("/api/avatar",{method:"PUT",body:JSON.stringify({equipped:cleared})});equipped=d.avatar||{};renderAvatar();renderWardrobe();toast("Avatar reset")}
+  try{const cleared=Object.fromEntries(AVATAR_CATEGORIES.map(c=>[c,null]));const d=await api("/api/avatar",{method:"PUT",body:JSON.stringify({equipped:cleared})});equipped=d.avatar||{};await renderAvatar();renderWardrobe();toast("Avatar reset")}
   catch(e){toast(e.message)}
  });
- renderAvatar();renderWardrobe();
+ renderWardrobe();await renderAvatar();
 }
 function comingSoon(name){renderSidebar(name.toLowerCase());app.innerHTML='<h1 class="page-title">'+esc(name)+'</h1><div class="section-box muted-box">'+esc(name)+' features are not available yet.</div>'}
 async function friends(){
@@ -345,7 +377,14 @@ async function owner(){
  '<label>Item name<input name="name" maxlength="80" required></label>'+
  '<label>Category<select name="category">'+AVATAR_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
  '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
- '<label>Image URL<input name="image_url" type="url" placeholder="https://..."></label>'+
+ '<label>Preview image URL<input name="image_url" type="url" placeholder="https://..."></label>'+
+ '<label>Asset type<select name="asset_kind"><option value="MODEL_3D">Wearable 3D (.glb)</option><option value="FACE_TEXTURE">Face texture</option><option value="IMAGE_ONLY">Image only</option></select></label>'+
+ '<label>3D model URL<input name="model_url" type="url" placeholder="/assets/catalog/item.glb"></label>'+
+ '<label>Attach to<select name="attachment">'+AVATAR_ATTACHMENTS.map(a=>'<option value="'+a+'">'+a+'</option>').join("")+'</select></label>'+
+ '<label>Model scale<input name="model_scale" type="number" min="0.01" max="10" step="0.01" value="1"></label>'+
+ '<details class="owner-model-adjust"><summary>Advanced model position and rotation</summary><div class="owner-model-adjust-grid">'+
+ '<label>Offset X<input name="offset_x" type="number" step="0.01" value="0"></label><label>Offset Y<input name="offset_y" type="number" step="0.01" value="0"></label><label>Offset Z<input name="offset_z" type="number" step="0.01" value="0"></label>'+
+ '<label>Rotation X<input name="rotation_x" type="number" step="1" value="0"></label><label>Rotation Y<input name="rotation_y" type="number" step="1" value="0"></label><label>Rotation Z<input name="rotation_z" type="number" step="1" value="0"></label></div></details>'+
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>';
@@ -368,13 +407,17 @@ async function owner(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
     '<div class="owner-item-thumb">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="">':'◇')+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
-    '<div class="owner-item-subfields"><select name="category">'+AVATAR_CATEGORIES.map(c=>'<option '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" value="'+esc(x.image_url||"")+'" placeholder="Image URL"></div>'+
+    '<div class="owner-item-subfields"><select name="category">'+AVATAR_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" value="'+esc(x.image_url||"")+'" placeholder="Preview image URL"></div>'+
+    '<div class="owner-item-model-fields"><select name="asset_kind"><option value="MODEL_3D" '+(x.asset_kind==="MODEL_3D"?"selected":"")+'>3D wearable</option><option value="FACE_TEXTURE" '+(x.asset_kind==="FACE_TEXTURE"?"selected":"")+'>Face texture</option><option value="IMAGE_ONLY" '+(x.asset_kind!=="MODEL_3D"&&x.asset_kind!=="FACE_TEXTURE"?"selected":"")+'>Image only</option></select><input name="model_url" type="url" value="'+esc(x.model_url||"")+'" placeholder="3D .glb model URL"><select name="attachment">'+AVATAR_ATTACHMENTS.map(a=>'<option value="'+a+'" '+(a===(x.attachment||"Head")?"selected":"")+'>'+a+'</option>').join("")+'</select><input name="model_scale" type="number" min="0.01" max="10" step="0.01" value="'+Number(x.model_scale||1)+'" title="Model scale"></div>'+
+    '<details class="owner-model-adjust"><summary>Model position and rotation</summary><div class="owner-model-adjust-grid">'+
+    '<label>X<input name="offset_x" type="number" step="0.01" value="'+Number(x.offset_x||0)+'"></label><label>Y<input name="offset_y" type="number" step="0.01" value="'+Number(x.offset_y||0)+'"></label><label>Z<input name="offset_z" type="number" step="0.01" value="'+Number(x.offset_z||0)+'"></label>'+
+    '<label>Rotate X<input name="rotation_x" type="number" value="'+Number(x.rotation_x||0)+'"></label><label>Rotate Y<input name="rotation_y" type="number" value="'+Number(x.rotation_y||0)+'"></label><label>Rotate Z<input name="rotation_z" type="number" value="'+Number(x.rotation_z||0)+'"></label></div></details>'+
     '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?'For sale':'Removed from catalog')+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
-     await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description")})});
+     await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description"),asset_kind:f.get("asset_kind"),model_url:f.get("model_url"),attachment:f.get("attachment"),model_scale:Number(f.get("model_scale")||1),offset_x:Number(f.get("offset_x")||0),offset_y:Number(f.get("offset_y")||0),offset_z:Number(f.get("offset_z")||0),rotation_x:Number(f.get("rotation_x")||0),rotation_y:Number(f.get("rotation_y")||0),rotation_z:Number(f.get("rotation_z")||0)})});
      const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();toast("Item saved");
     }catch(err){toast(err.message)}
    }));
@@ -392,7 +435,7 @@ async function owner(){
   document.getElementById("newItemForm").addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
-    await api("/api/owner/items",{method:"POST",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description")})});
+    await api("/api/owner/items",{method:"POST",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description"),asset_kind:f.get("asset_kind"),model_url:f.get("model_url"),attachment:f.get("attachment"),model_scale:Number(f.get("model_scale")||1),offset_x:Number(f.get("offset_x")||0),offset_y:Number(f.get("offset_y")||0),offset_z:Number(f.get("offset_z")||0),rotation_x:Number(f.get("rotation_x")||0),rotation_y:Number(f.get("rotation_y")||0),rotation_z:Number(f.get("rotation_z")||0)})});
     e.target.reset();e.target.elements.price.value=50;msg.textContent="Item added.";const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();
    }catch(err){msg.textContent=err.message}
   });
@@ -416,7 +459,7 @@ async function render(name){
  else if(name==="login"||name==="register")auth(name);
  else if(name==="inventory")await inventory();
  else if(name==="profile")await profile();
- else if(name==="avatar")avatarPage();
+ else if(name==="avatar")await avatarPage();
  else if(name==="users")users();
  else if(name==="games")comingSoon("Games");
  else if(name==="friends")await friends();
