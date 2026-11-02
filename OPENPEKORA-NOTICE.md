@@ -3,7 +3,11 @@ OpenPekora frontend attribution
 This project adapts interface conventions and selected frontend styling from:
 https://github.com/Blue7366/OpenPekora
 
-The upstream frontend includes an MIT license in frontend/LICENSE, Copyright 2021.
+The navigation sprite at `public/navigation_02012016.svg` is copied from the upstream
+frontend's public image assets. Its navigation sprite styling is adapted from the
+upstream `frontend/styles/roblox/icons.css`.
+
+The upstream frontend includes an MIT license in `frontend/LICENSE`, Copyright 2021.
 Its MIT permission notice and disclaimer are reproduced below.
 
 Copyright 2021
