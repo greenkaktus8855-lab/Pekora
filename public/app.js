@@ -308,6 +308,7 @@ async function ownerRecoveryPage(){
   message.textContent="Resetting password...";
   try{
    await api("/api/owner/recover",{method:"POST",body:JSON.stringify({secret,password})});
+   if(me?.username?.toLowerCase()==="pekoraadmin")setUser(null);
    form.reset();
    message.textContent="Password reset. Sign in as PekoraAdmin using the new password.";
   }catch(error){message.textContent=error.message}
