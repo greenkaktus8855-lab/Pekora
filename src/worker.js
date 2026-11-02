@@ -307,13 +307,21 @@ async function route(request, env) {
     if (rows.some(x=>x.user_id===user.id && x.status==="PENDING")) return fail("Friend request already sent.",409);
     const reverse=rows.find(x=>x.user_id===target.id && x.friend_id===user.id && x.status==="PENDING");
     if (reverse) {
-      await env.DB.batch([
-        env.DB.prepare("UPDATE friends SET status='ACCEPTED' WHERE user_id=? AND friend_id=?").bind(target.id,user.id),
-        env.DB.prepare("INSERT OR REPLACE INTO friends (user_id,friend_id,status) VALUES (?,?,'ACCEPTED')").bind(user.id,target.id)
+      const results = await env.DB.batch([
+        env.DB.prepare("UPDATE friends SET status='ACCEPTED' WHERE user_id=? AND friend_id=? AND status='PENDING'").bind(target.id,user.id),
+        env.DB.prepare("INSERT OR REPLACE INTO friends (user_id,friend_id,status) SELECT ?,?,'ACCEPTED' WHERE changes()=1").bind(user.id,target.id)
       ]);
+      if (!results?.[0]?.meta?.changes) return fail("That friend request was cancelled before it could be accepted.",409);
       return json({ok:true,status:"friends"});
     }
-    await env.DB.prepare("INSERT INTO friends (user_id,friend_id,status) VALUES (?,?,'PENDING')").bind(user.id,target.id).run();
+    try {
+      await env.DB.prepare("INSERT INTO friends (user_id,friend_id,status) VALUES (?,?,'PENDING')").bind(user.id,target.id).run();
+    } catch (error) {
+      const relation = await env.DB.prepare("SELECT status FROM friends WHERE user_id=? AND friend_id=?").bind(user.id,target.id).first().catch(() => null);
+      if (relation?.status === "ACCEPTED") return fail("You are already friends.",409);
+      if (relation?.status === "PENDING") return fail("Friend request already sent.",409);
+      throw error;
+    }
     return json({ok:true,status:"outgoing"},201);
   }
 
@@ -324,12 +332,11 @@ async function route(request, env) {
     if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.");
     const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!target) return fail("User not found.",404);
-    const pending = await env.DB.prepare("SELECT user_id FROM friends WHERE user_id=? AND friend_id=? AND status='PENDING'").bind(target.id,user.id).first();
-    if (!pending) return fail("No pending request from this user.",404);
-    await env.DB.batch([
-      env.DB.prepare("UPDATE friends SET status='ACCEPTED' WHERE user_id=? AND friend_id=?").bind(target.id,user.id),
-      env.DB.prepare("INSERT OR REPLACE INTO friends (user_id,friend_id,status) VALUES (?,?,'ACCEPTED')").bind(user.id,target.id)
+    const results = await env.DB.batch([
+      env.DB.prepare("UPDATE friends SET status='ACCEPTED' WHERE user_id=? AND friend_id=? AND status='PENDING'").bind(target.id,user.id),
+      env.DB.prepare("INSERT OR REPLACE INTO friends (user_id,friend_id,status) SELECT ?,?,'ACCEPTED' WHERE changes()=1").bind(user.id,target.id)
     ]);
+    if (!results?.[0]?.meta?.changes) return fail("No pending request from this user.",404);
     return json({ok:true,status:"friends"});
   }
 
