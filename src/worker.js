@@ -407,6 +407,17 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
+  if (request.method === "GET" && path.startsWith("/api/profile/") && path.endsWith("/avatar")) {
+    let username;
+    try { username = decodeURIComponent(path.slice("/api/profile/".length, -"/avatar".length)); }
+    catch { return fail("Invalid username.",400); }
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Invalid username.",400);
+    const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
+    if (!target) return fail("User not found.",404);
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(target.id).all();
+    return json({equipped:rows.results||[]});
+  }
+
   if (request.method === "GET" && path.startsWith("/api/profile/")) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
