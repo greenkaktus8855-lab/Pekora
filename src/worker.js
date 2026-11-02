@@ -295,6 +295,38 @@ async function announceLimitedItem(item, env, siteOrigin) {
   return {sent:true};
 }
 
+async function announcePriceIncrease(item, oldPrice, newPrice, env, siteOrigin) {
+  if (!env.DISCORD_LIMITED_WEBHOOK || Number(newPrice) <= Number(oldPrice)) return {sent:false};
+  const previous = Number(oldPrice || 0);
+  const current = Number(newPrice || 0);
+  const difference = current - previous;
+  const itemUrl = new URL("/item/" + encodeURIComponent(item.id), siteOrigin).href;
+  const embed = {
+    title:"PRICE INCREASE",
+    description:"The price of **" + String(item.name || "Untitled").slice(0, 200) + "** has increased on Sakura",
+    url:itemUrl,
+    color:0xE67E22,
+    fields:[
+      {name:"Previous price",value:previous.toLocaleString("en-US") + " P$",inline:true},
+      {name:"New price",value:current.toLocaleString("en-US") + " P$",inline:true},
+      {name:"Increase",value:"+" + difference.toLocaleString("en-US") + " P$",inline:true}
+    ],
+    image:item.image_url && /^https:\/\//i.test(String(item.image_url)) ? {url:String(item.image_url)} : undefined,
+    footer:{text:"Sakura • Price update"},
+    timestamp:new Date().toISOString()
+  };
+  const response = await fetch(env.DISCORD_LIMITED_WEBHOOK,{
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({username:"Sakura",embeds:[embed]})
+  });
+  if (!response.ok) {
+    console.error("[Sakura Discord] Price increase webhook failed:",response.status,(await response.text()).slice(0,500));
+    return {sent:false,reason:"discord_error"};
+  }
+  return {sent:true};
+}
+
 async function announceMissingLimitedItems(env, siteOrigin) {
   if (!env.DISCORD_LIMITED_WEBHOOK) return {sent:0,skipped:true};
   const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.price,i.image_url,i.stock_limit FROM items i LEFT JOIN discord_limited_announcements a ON a.item_id=i.id WHERE i.is_limited=1 AND a.item_id IS NULL ORDER BY i.created_at ASC LIMIT 50").all();
@@ -1044,6 +1076,17 @@ async function route(request, env) {
       const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
       await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,match[1]).run();
+      if (Number(merged.price) > Number(current.price || 0) && Number(merged.is_for_sale) === 1) {
+        try {
+          await announcePriceIncrease({
+            id:match[1],
+            name:merged.name,
+            image_url:String(merged.image_url||"").trim()
+          },Number(current.price || 0),Number(merged.price),env,url.origin);
+        } catch (error) {
+          console.error("[Sakura Discord] Price increase announcement failed:",error);
+        }
+      }
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
