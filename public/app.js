@@ -8,7 +8,7 @@ async function api(path,options={}){const res=await fetch(path,{credentials:"sam
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
 function avatar(username=me?.username){const src=String(username||"").toLowerCase()==="koqumo"?"https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png":"https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/generic.svg";return '<img class="avatar-render" src="'+src+'" alt="User avatar" loading="lazy">' }
 const AVATAR_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
-const AVATAR_ATTACHMENTS=["Root","Head","HeadTop","Torso","LeftArm","RightArm","LeftLeg","RightLeg"];
+const AVATAR_ATTACHMENTS=["HeadTop","Head","Torso","Root","LeftArm","RightArm","LeftLeg","RightLeg"];
 function waitForAvatarRenderer(){
  if(window.PekoraAvatar3D)return Promise.resolve(window.PekoraAvatar3D);
  return new Promise(resolve=>{
@@ -379,7 +379,7 @@ async function owner(){
  '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
  '<label>Preview image URL<input name="image_url" type="url" placeholder="https://..."></label>'+
  '<label>Asset type<select name="asset_kind"><option value="MODEL_3D">Wearable 3D (.glb)</option><option value="FACE_TEXTURE">Face texture</option><option value="IMAGE_ONLY">Image only</option></select></label>'+
- '<label>3D model URL<input name="model_url" type="url" placeholder="/assets/catalog/item.glb"></label>'+
+ '<label>3D model URL<input name="model_url" type="text" placeholder="/assets/catalog/item.glb"></label>'+
  '<label>Attach to<select name="attachment">'+AVATAR_ATTACHMENTS.map(a=>'<option value="'+a+'">'+a+'</option>').join("")+'</select></label>'+
  '<label>Model scale<input name="model_scale" type="number" min="0.01" max="10" step="0.01" value="1"></label>'+
  '<details class="owner-model-adjust"><summary>Advanced model position and rotation</summary><div class="owner-model-adjust-grid">'+
