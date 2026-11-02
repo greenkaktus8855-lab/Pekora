@@ -426,7 +426,6 @@ async function route(request, env) {
     const existing = await env.DB.prepare("SELECT user_id,friend_id,status FROM friends WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?)").bind(user.id,target.id,target.id,user.id).all();
     const rows=existing.results||[];
     if (rows.some(x=>x.status==="ACCEPTED")) return fail("You are already friends.",409);
-    if (rows.some(x=>x.user_id===user.id && x.status==="PENDING")) return fail("Friend request already sent.",409);
     const reverse=rows.find(x=>x.user_id===target.id && x.friend_id===user.id && x.status==="PENDING");
     if (reverse) {
       const results = await env.DB.batch([
@@ -436,6 +435,7 @@ async function route(request, env) {
       if (!results?.[0]?.meta?.changes) return fail("That friend request was cancelled before it could be accepted.",409);
       return json({ok:true,status:"friends"});
     }
+    if (rows.some(x=>x.user_id===user.id && x.friend_id===target.id && x.status==="PENDING")) return fail("Friend request already sent.",409);
     try {
       await env.DB.prepare("INSERT INTO friends (user_id,friend_id,status) VALUES (?,?,'PENDING')").bind(user.id,target.id).run();
     } catch (error) {
