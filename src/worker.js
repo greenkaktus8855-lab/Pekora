@@ -75,6 +75,10 @@ async function ensureSiteSettings(env) {
       await env.DB.batch([
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_friends_friend_status ON friends(friend_id,status)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_items_category_name ON items(category,name)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_inventory_user_purchased ON inventory(user_id,purchased_at DESC)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_auth_rate_window ON auth_rate_limits(window_started_at)"),
         env.DB.prepare("DELETE FROM auth_rate_limits WHERE window_started_at < unixepoch()-86400")
       ]);
       // One-time public catalog cleanout requested for the November 2026 reset.
@@ -528,6 +532,13 @@ export default {
         return fail("Server error. Check the Worker logs. Reference: " + crypto.randomUUID().slice(0,8),500);
       }
     }
-    return env.ASSETS.fetch(request);
+    const response = await env.ASSETS.fetch(request);
+    const headers = new Headers(response.headers);
+    headers.set("X-Content-Type-Options","nosniff");
+    headers.set("X-Frame-Options","DENY");
+    headers.set("Referrer-Policy","strict-origin-when-cross-origin");
+    headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
+    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
+    return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   }
 };
