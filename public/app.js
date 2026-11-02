@@ -216,8 +216,12 @@ function drawCatalog(category,q){
  try{
   const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});
   if(!me||me.id!==userId)return;
-  me.balance=d.balance;setUser(me);toast("Item purchased");
-  if(isActiveView(view))catalog();
+  me.balance=d.balance;ownedItemIds.add(itemId);setUser(me);toast("Item purchased");
+  if(isActiveView(view)){
+   const detailButton=document.getElementById("detailBuy");
+   if(detailButton?.isConnected){detailButton.disabled=true;detailButton.textContent="Owned";detailButton.classList.add("button","secondary")}
+   else catalog();
+  }
  }catch(e){toast(e.message)}
 }
 function auth(kind){
