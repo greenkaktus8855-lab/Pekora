@@ -276,7 +276,7 @@ async function route(request, env) {
     }
   }
   if (request.method === "GET" && path === "/api/health") {
-    if (!env.DB) return json({ ok:false, site:"Pekora", database:false, schema:false, error:"D1 binding DB is missing." },503);
+    if (!env.DB) return json({ ok:false, site:"Sakura", database:false, schema:false, error:"D1 binding DB is missing." },503);
     try {
       await ensureSiteSettings(env);
       await env.DB.prepare("SELECT 1 AS ok").first();
@@ -284,7 +284,7 @@ async function route(request, env) {
         "SELECT COUNT(*) AS total FROM sqlite_master WHERE type='table' AND name IN ('users','sessions','profiles','items','inventory','purchases','friends')"
       ).first();
       if ((schema?.total || 0) !== 7) {
-        return json({ ok:false, site:"Pekora", database:true, schema:false, error:"D1 is reachable, but the Pekora migrations are missing or incomplete." },503);
+        return json({ ok:false, site:"Sakura", database:true, schema:false, error:"D1 is reachable, but the Sakura migrations are missing or incomplete." },503);
       }
       const requiredColumns = [
         "SELECT id,username,password_hash,password_salt,role,balance,created_at,is_banned FROM users LIMIT 0",
@@ -299,12 +299,12 @@ async function route(request, env) {
         await env.DB.batch(requiredColumns.map(sql => env.DB.prepare(sql)));
       } catch (schemaError) {
         console.error("[Pekora health] D1 schema validation failed:", schemaError);
-        return json({ ok:false, site:"Pekora", database:true, schema:false, error:"D1 tables exist, but required Pekora columns are missing. Check and apply the migrations." },503);
+        return json({ ok:false, site:"Sakura", database:true, schema:false, error:"D1 tables exist, but required Sakura columns are missing. Check and apply the migrations." },503);
       }
-      return json({ ok:true, site:"Pekora", database:true, schema:true });
+      return json({ ok:true, site:"Sakura", database:true, schema:true });
     } catch (error) {
       console.error("[Pekora health] D1 check failed:", error);
-      return json({ ok:false, site:"Pekora", database:false, schema:false, error:"D1 database check failed. See Worker logs." },503);
+      return json({ ok:false, site:"Sakura", database:false, schema:false, error:"D1 database check failed. See Worker logs." },503);
     }
   }
 
@@ -421,7 +421,7 @@ async function route(request, env) {
     if (typeof data?.itemId !== "string") return fail("Invalid item.");
     const item = await env.DB.prepare("SELECT * FROM items WHERE id=? AND is_for_sale=1").bind(data.itemId).first();
     if (!item) return fail("Item not found or sold out.",404);
-    if (item.price > user.balance) return fail("Not enough Pekora currency.",400);
+    if (item.price > user.balance) return fail("Not enough Sakura currency.",400);
     if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
     const purchaseId=id(), inventoryId=id();
     try {
@@ -436,7 +436,7 @@ async function route(request, env) {
         if (!latest || !latest.is_for_sale) return fail("This item is no longer for sale.",409);
         if (Number(latest.stock_limit)>0 && Number(latest.stock_sold)>=Number(latest.stock_limit)) return fail("This item is sold out.",409);
         if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
-        return fail("Not enough Pekora currency.",409);
+        return fail("Not enough Sakura currency.",409);
       }
       if (!results?.[1]?.meta?.changes) return fail("Purchase could not be completed. Please retry.",409);
     } catch { return fail("Purchase could not be completed.",400); }
@@ -1045,19 +1045,19 @@ export default {
         const pageResponse = await env.ASSETS.fetch(new Request(new URL("/",url), { method:"GET", headers:request.headers }));
         if (pageResponse.ok && (pageResponse.headers.get("content-type")||"").includes("text/html")) {
           const escapeHtml = value => String(value??"").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
-          const title = String(sharedItem.name||"Pekora item").slice(0,100);
+          const title = String(sharedItem.name||"Sakura item").slice(0,100);
           const description = (sharedItem.category+" · "+Number(sharedItem.price||0).toLocaleString("en-US")+" P$"+(String(sharedItem.description||"").trim()?" · "+String(sharedItem.description).trim():"")).slice(0,300);
           const image = /^https:\/\//i.test(String(sharedItem.image_url||"")) ? String(sharedItem.image_url) : "https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/pekora-logo.png";
           const canonical = new URL("/item/"+encodeURIComponent(sharedItem.id),url.origin).href;
           const metadata = '<meta name="description" content="'+escapeHtml(description)+'">' +
-            '<meta property="og:type" content="website"><meta property="og:site_name" content="Pekora">' +
+            '<meta property="og:type" content="website"><meta property="og:site_name" content="Sakura">' +
             '<meta property="og:title" content="'+escapeHtml(title)+'">' +
             '<meta property="og:description" content="'+escapeHtml(description)+'">' +
             '<meta property="og:image" content="'+escapeHtml(image)+'"><meta property="og:url" content="'+escapeHtml(canonical)+'">' +
             '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="'+escapeHtml(title)+'">' +
             '<meta name="twitter:description" content="'+escapeHtml(description)+'"><meta name="twitter:image" content="'+escapeHtml(image)+'">';
           let html = await pageResponse.text();
-          html = html.replace(/<title>[\s\S]*?<\/title>/i,'<title>'+escapeHtml(title)+' | Pekora</title>');
+          html = html.replace(/<title>[\s\S]*?<\/title>/i,'<title>'+escapeHtml(title)+' | Sakura</title>');
           html = html.replace(/<meta\s+name=["']description["'][^>]*>/i,"");
           html = html.replace("</head>",metadata+"</head>");
           const headers = new Headers(pageResponse.headers);
