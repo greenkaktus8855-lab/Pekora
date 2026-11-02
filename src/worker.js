@@ -13,6 +13,14 @@ const randomToken = () => {
 async function digest(value) {
   return hex(await crypto.subtle.digest("SHA-256", encoder.encode(value)));
 }
+function constantTimeEqual(left, right) {
+  const a = encoder.encode(String(left ?? ""));
+  const b = encoder.encode(String(right ?? ""));
+  let difference = a.length ^ b.length;
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i++) difference |= (a[i] || 0) ^ (b[i] || 0);
+  return difference === 0;
+}
 async function passwordHash(password, salt) {
   const material = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: encoder.encode(salt), iterations: 100000, hash: "SHA-256" }, material, 256);
@@ -251,7 +259,7 @@ async function route(request, env) {
     if (await isRateLimited(env,key)) return json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
     const user = await env.DB.prepare("SELECT * FROM users WHERE username=? COLLATE NOCASE").bind(data.username.trim()).first();
     const candidateHash = await passwordHash(data.password,user?.password_salt||DUMMY_PASSWORD_SALT);
-    if (!user || user.is_banned || candidateHash !== user.password_hash) {
+    if (!user || user.is_banned || !constantTimeEqual(candidateHash,user.password_hash)) {
       const blocked = await recordRateLimitFailure(env,key);
       return blocked?json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Incorrect username or password.",401);
     }
@@ -277,7 +285,7 @@ async function route(request, env) {
     if (await isRateLimited(env,key)) return json({error:"Too many owner setup attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
     if (typeof env.OWNER_BOOTSTRAP_SECRET !== "string" || env.OWNER_BOOTSTRAP_SECRET.length < 20 ||
         typeof data?.secret !== "string" || data.secret.length < 20 || data.secret.length > 512 ||
-        await digest(data.secret) !== await digest(env.OWNER_BOOTSTRAP_SECRET)) {
+        !constantTimeEqual(await digest(data.secret),await digest(env.OWNER_BOOTSTRAP_SECRET))) {
       const blocked = await recordRateLimitFailure(env,key);
       return blocked?json({error:"Too many owner setup attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Invalid owner setup key.",403);
     }
@@ -473,7 +481,7 @@ async function route(request, env) {
     const recoverySecret = env.OWNER_BOOTSTRAP_SECRET;
     if (typeof recoverySecret !== "string" || recoverySecret.length < 20 ||
         typeof data?.secret !== "string" || data.secret.length < 20 || data.secret.length > 512 ||
-        await digest(data.secret) !== await digest(recoverySecret)) {
+        !constantTimeEqual(await digest(data.secret),await digest(recoverySecret))) {
       const blocked = await recordRateLimitFailure(env,key);
       return blocked?json({error:"Too many owner recovery attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Invalid owner recovery secret.",403);
     }
