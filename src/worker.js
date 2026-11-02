@@ -170,6 +170,8 @@ async function ensureSiteSettings(env) {
       if (!(itemColumns.results || []).some(column => column.name === "stock_limit")) {
         await env.DB.prepare("ALTER TABLE items ADD COLUMN stock_limit INTEGER NOT NULL DEFAULT 0").run();
       }
+      // Disable legacy Limited flags without deleting items.
+      await env.DB.prepare("UPDATE items SET is_limited=0,stock_limit=0 WHERE is_limited<>0 OR stock_limit<>0").run();
       // One-time public catalog cleanout requested for the November 2026 reset.
       // Inventory, purchases, users and balances are deliberately untouched.
       const cleanout = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='catalog_cleanout_2026_11_02'").first();
@@ -296,7 +298,7 @@ async function route(request, env) {
     const data = await body(request);
     if (!data || typeof data.username !== "string" || typeof data.password !== "string") return registrationFailure("Enter a username and password.");
     const username = data.username.trim();
-    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return registrationFailure("Username must be 3–20 characters and use only letters, numbers or _.");
+    if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return registrationFailure("Username must be 3–20 characters and use only letters, numbers or _.");
     if (username.toLowerCase() === "pekoraadmin") return registrationFailure("That username is reserved.");
     if (data.password.length < 8 || data.password.length > 128) return registrationFailure("Password must be at least 8 characters.");
     const exists = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first();
@@ -324,7 +326,7 @@ async function route(request, env) {
 
   if (request.method === "POST" && path === "/api/login") {
     const data = await body(request);
-    if (!data || typeof data.username !== "string" || !/^[A-Za-z0-9_]{3,20}$/.test(data.username.trim()) || typeof data.password !== "string" || data.password.length < 8 || data.password.length > 128) return fail("Enter a valid username and a password of 8–128 characters.");
+    if (!data || typeof data.username !== "string" || !/^[A-Za-z0-9_]{1,20}$/.test(data.username.trim()) || typeof data.password !== "string" || data.password.length < 8 || data.password.length > 128) return fail("Enter a valid username and a password of 8–128 characters.");
     const key = await rateLimitKey(request,"login");
     if (await isRateLimited(env,key)) return json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
     const user = await env.DB.prepare("SELECT * FROM users WHERE username=? COLLATE NOCASE").bind(data.username.trim()).first();
@@ -388,7 +390,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.stock_limit,(SELECT COUNT(*) FROM inventory v WHERE v.item_id=i.id) AS stock_sold,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
     return json({ items:rows.results || [] });
   }
 
@@ -397,15 +399,14 @@ async function route(request, env) {
     if (!user) return fail("Please sign in.",401);
     const data = await body(request);
     if (typeof data?.itemId !== "string") return fail("Invalid item.");
-    const item = await env.DB.prepare("SELECT *, (SELECT COUNT(*) FROM inventory v WHERE v.item_id=items.id) AS stock_sold FROM items WHERE id=? AND is_for_sale=1").bind(data.itemId).first();
+    const item = await env.DB.prepare("SELECT * FROM items WHERE id=? AND is_for_sale=1").bind(data.itemId).first();
     if (!item) return fail("Item not found or sold out.",404);
-    if (item.is_limited && item.stock_limit > 0 && item.stock_sold >= item.stock_limit) return fail("This limited item is sold out.",409);
     if (item.price > user.balance) return fail("Not enough Pekora currency.",400);
     if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
     const purchaseId=id(), inventoryId=id();
     try {
       const results = await env.DB.batch([
-        env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM items WHERE id=? AND is_for_sale=1) AND EXISTS (SELECT 1 FROM items i WHERE i.id=? AND i.is_for_sale=1 AND (i.is_limited=0 OR i.stock_limit=0 OR (SELECT COUNT(*) FROM inventory v WHERE v.item_id=i.id)<i.stock_limit))").bind(item.price,user.id,item.price,user.id,item.id,item.id,item.id),
+        env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM items WHERE id=? AND is_for_sale=1)").bind(item.price,user.id,item.price,user.id,item.id,item.id),
         env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE changes()=1").bind(inventoryId,user.id,item.id),
         env.DB.prepare("INSERT INTO purchases (id,user_id,item_id,price) SELECT ?,?,?,? WHERE changes()=1").bind(purchaseId,user.id,item.id,item.price)
       ]);
@@ -425,7 +426,7 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.stock_limit,(SELECT COUNT(*) FROM inventory all_stock WHERE all_stock.item_id=i.id) AS stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -434,7 +435,7 @@ async function route(request, env) {
     const username = profileInventoryMatch[1];
     const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.stock_limit,(SELECT COUNT(*) FROM inventory all_stock WHERE all_stock.item_id=i.id) AS stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -442,7 +443,7 @@ async function route(request, env) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length, -"/avatar".length)); }
     catch { return fail("Invalid username.",400); }
-    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Invalid username.",400);
+    if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return fail("Invalid username.",400);
     const target = await env.DB.prepare("SELECT u.id,p.avatar_json FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0").bind(username).first();
     if (!target) return fail("User not found.",404);
     const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(target.id).all();
@@ -520,7 +521,7 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const username = (url.searchParams.get("username")||"").trim();
-    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.");
+    if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return fail("Enter a valid username.");
     const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!target) return fail("User not found.",404);
     if (target.id === user.id) return json({status:"self"});
@@ -536,7 +537,7 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const data = await body(request), username = String(data?.username||"").trim();
-    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.");
+    if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return fail("Enter a valid username.");
     const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!target) return fail("User not found.",404);
     if (target.id === user.id) return fail("You cannot add yourself.");
@@ -581,7 +582,7 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const data = await body(request), username = String(data?.username||"").trim();
-    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.");
+    if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return fail("Enter a valid username.");
     const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!target) return fail("User not found.",404);
     const results = await env.DB.batch([
@@ -596,7 +597,7 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const username = String(url.searchParams.get("username")||"").trim();
-    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.");
+    if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return fail("Enter a valid username.");
     const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first();
     if (!target) return fail("User not found.",404);
     await env.DB.batch([
@@ -888,7 +889,7 @@ async function route(request, env) {
     if (!user) return fail("Please sign in.",401);
     if (user.role !== "OWNER") return fail("Owner access required.",403);
     if (path === "/api/owner/items" && request.method === "GET") {
-      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.stock_limit,(SELECT COUNT(*) FROM inventory v WHERE v.item_id=i.id) AS stock_sold,i.is_for_sale,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i ORDER BY i.created_at DESC,i.name").all();
+      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_for_sale,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i ORDER BY i.created_at DESC,i.name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
@@ -899,15 +900,13 @@ async function route(request, env) {
       const data = await body(request), error = validItem(data);
       if (error) return fail(error);
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
-      if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
-      const stockLimit=Number(data.stock_limit||0);
       if (!Number.isSafeInteger(stockLimit)||stockLimit<0||stockLimit>1000000||(data.is_limited===true&&stockLimit<1)) return fail("Limited items need a stock limit from 1 to 1,000,000. Set 0 for unlimited stock.");
       const itemId=id();
       const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
       const assetId = Number(data.asset_id || 0);
       const assetTypeId = Number(data.asset_type_id || (assetId ? (defaultAssetTypes[data.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID (for example neck, back, front, shoulder or waist).");
-      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,is_for_sale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,data.is_limited?1:0,stockLimit,data.is_for_sale===false?0:1).run();
+      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,is_for_sale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,0,0,data.is_for_sale===false?0:1).run();
       return json({ok:true,id:itemId},201);
     }
     const match=path.match(/^\/api\/owner\/items\/([A-Za-z0-9_-]{1,80})$/i);
@@ -918,15 +917,14 @@ async function route(request, env) {
       if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid item update.");
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
       if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
-      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_limited:data.is_limited===undefined?Boolean(current.is_limited):data.is_limited,stock_limit:data.stock_limit===undefined?Number(current.stock_limit||0):Number(data.stock_limit),is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
-      if (!Number.isSafeInteger(merged.stock_limit)||merged.stock_limit<0||merged.stock_limit>1000000||(merged.is_limited&&merged.stock_limit<1)) return fail("Limited items need a stock limit from 1 to 1,000,000. Set 0 for unlimited stock.");
+      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
       const keepLegacyImage = String(merged.image_url||"") === String(current.image_url||"");
       const error=validItem(merged,keepLegacyImage); if(error)return fail(error);
       const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
       const assetId = Number(merged.asset_id || 0);
       const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
-      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,match[1]).run();
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=0,stock_limit=0,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_for_sale,match[1]).run();
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
