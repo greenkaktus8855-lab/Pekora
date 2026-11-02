@@ -343,7 +343,7 @@ async function profile(username=me?.username){
    '<div class="op-profile-header"><div class="op-profile-avatar">'+avatar(p.username)+'</div><div class="op-profile-info">'+
     '<h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
-    '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+Number(p.balance||0).toLocaleString()+'</b> P$</span></div>'+
+    '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span></div>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
    '</div></div>'+
    '<section class="op-profile-section"><h2>Inventory</h2>'+
@@ -357,17 +357,17 @@ async function loadProfileFriendAction(username){
  try{
   const {status}=await api("/api/friends/status?username="+encodeURIComponent(username));
   if(!isActiveView(view)||!host.isConnected)return;
-  const labels={none:"Add Friend",outgoing:"Request Sent",incoming:"Accept Request",friends:"Remove Friend",self:"Your Profile"};
-  host.innerHTML='<button type="button" class="button '+(status==="friends"?"secondary":"")+'" id="profileFriendBtn" '+(status==="outgoing"||status==="self"?"disabled":"")+'>'+labels[status]+'</button>';
+  const labels={none:"Add Friend",outgoing:"Cancel Request",incoming:"Accept Request",friends:"Remove Friend",self:"Your Profile"};
+  host.innerHTML='<button type="button" class="button '+(status==="friends"?"secondary":"")+'" id="profileFriendBtn" '+(status==="self"?"disabled":"")+'>'+labels[status]+'</button>';
   document.getElementById("profileFriendBtn").addEventListener("click",async()=>{
    try{
     if(status==="none")await api("/api/friends/request",{method:"POST",body:JSON.stringify({username})});
     else if(status==="incoming")await api("/api/friends/accept",{method:"POST",body:JSON.stringify({username})});
-    else if(status==="friends")await api("/api/friends?username="+encodeURIComponent(username),{method:"DELETE"});
+    else if(status==="outgoing"||status==="friends")await api("/api/friends?username="+encodeURIComponent(username),{method:"DELETE"});
     if(isActiveView(view))await profile(username);
    }catch(e){toast(e.message)}
   });
- }catch(e){host.textContent=e.message}
+ }catch(e){if(isActiveView(view)&&host.isConnected)host.textContent=e.message}
 }
 
 async function settings(){
