@@ -1,48 +1,99 @@
 # Pekora
 
-Pekora is a Roblox Revival-inspired website project. It is not affiliated with Roblox Corporation.
+Pekora is an independent community revival website based on the OpenPekora project. It is not affiliated with or endorsed by Roblox Corporation.
 
-**Games are currently unavailable.** This repository contains a website only; it does not include a game launcher, game client, game server, or game downloads.
+This repository currently deploys a lightweight Cloudflare Worker website with a D1 database. It is a partial website implementation, not a complete Roblox revival platform.
 
-## Current foundation
+## Implemented
 
-- Classic 2021-inspired responsive website layout
+- Responsive Pekora-style website shell and navigation
 - Username/password registration and login
-- Password hashing with PBKDF2 and per-user salts
-- HttpOnly session cookies
-- D1 schema for users, profiles, catalog items, inventory, purchases and friends
-- Catalog listing and server-side item purchases
-- User profiles and inventory
-- Protected owner bootstrap and owner statistics endpoint
-- User search
-- Games page marked Coming Soon
+- PBKDF2 password hashes with per-user salts
+- Secure, HttpOnly session cookies
+- D1-backed profiles and profile descriptions
+- Public user search and profile pages
+- Friend requests, acceptance, cancellation and removal
+- Local catalog cards with image previews
+- Server-side virtual-currency purchases
+- Persistent account inventory and purchase history
+- OWNER-only catalog management and password changes
+- Secret-protected OWNER account recovery
+- API health endpoint that checks the database schema
 
-Pekora currency is a virtual site currency with no real-world monetary value.
+New accounts start with 100 P$. The initial OWNER account starts with 1,000 P$.
 
-## Cloudflare setup
+## Not connected in this deployment
 
-1. Create a Cloudflare D1 database named `pekora-db`.
-2. Copy the database ID into `wrangler.toml`, replacing `REPLACE_WITH_D1_DATABASE_ID`.
-3. Install Wrangler: `npm install -D wrangler`.
-4. Apply the schema: `npx wrangler d1 migrations apply pekora-db --remote`.
-5. Set the one-time owner bootstrap secret: `npx wrangler secret put OWNER_BOOTSTRAP_SECRET`.
-6. Deploy: `npx wrangler deploy`.
+- The original OpenPekora Avatar API and wearable Roblox assets
+- The original Thumbnails API and RCC/game-renderer service
+- Real R6/R15 avatar rendering and equipping
+- The original Roblox asset catalog
+- Game launcher, game client, game servers or game downloads
 
-The owner bootstrap secret must be long and private. Never commit it to GitHub or share it in chat.
+Catalog entries created in this build are image-preview cards only. They are not Roblox assets and cannot be worn on an avatar. The Avatar page says this explicitly rather than pretending that avatar rendering works.
 
-## First owner
+Pekora currency is an in-site balance only. It has no real-world monetary value.
 
-After deployment, the first owner account is created by sending a POST request to `/api/bootstrap-owner` with JSON:
+## Cloudflare deployment
 
-```json
-{
-  "secret": "YOUR_OWNER_BOOTSTRAP_SECRET",
-  "password": "A_LONG_UNIQUE_PASSWORD"
-}
+The repository's `wrangler.toml` is configured for the D1 database named `pekora-db`. Its database ID is already filled in for the configured project. When deploying to a different D1 database, update that ID first.
+
+1. Install Wrangler if it is not already installed:
+
+   ```bash
+   npm install -D wrangler
+   ```
+
+2. Apply the D1 schema:
+
+   ```bash
+   npx wrangler d1 migrations apply pekora-db --remote
+   ```
+
+3. Set the one-time owner bootstrap secret. Use a random secret of at least 20 characters and keep it private:
+
+   ```bash
+   npx wrangler secret put OWNER_BOOTSTRAP_SECRET
+   ```
+
+4. Deploy the Worker and static assets:
+
+   ```bash
+   npx wrangler deploy
+   ```
+
+5. Check the deployed API:
+
+   ```text
+   https://YOUR-WORKER-URL/api/health
+   ```
+
+   A healthy response includes `"ok":true`, `"database":true` and `"schema":true`. If the schema check fails, apply the D1 migrations and inspect the Worker logs.
+
+## Creating the first OWNER account
+
+After deployment, send a POST request to `/api/bootstrap-owner` with JSON containing the Worker secret and a new password of at least 12 characters. The username is always `PekoraAdmin`.
+
+PowerShell example:
+
+```powershell
+$body = @{
+  secret = "YOUR_OWNER_BOOTSTRAP_SECRET"
+  password = "YOUR_NEW_LONG_PASSWORD"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri "https://YOUR-WORKER-URL/api/bootstrap-owner" `
+  -ContentType "application/json" `
+  -Body $body
 ```
 
-The account name is always `PekoraAdmin`, role `OWNER`, starting balance 1000. This endpoint permanently closes after an OWNER account exists. Store the password safely.
+This endpoint closes permanently after the first OWNER account has been created. Do not commit the secret or password to GitHub, and never share them in chat.
 
-## Development status
+For an existing OWNER account, use the Owner Panel while signed in, or the recovery link on the login page with the same Worker secret.
 
-This is the initial working foundation, not a finished revival platform. Avatar customization, friends management, limited-item trading, full owner management tools, item image uploads and moderation workflows still need implementation and testing.
+## Development
+
+The project has no separate game runtime. The Worker entry point is `src/worker.js`, static frontend files are in `public/`, and the D1 schema is in `migrations/`.
+
+Run `npx wrangler deploy` to deploy after committing changes to the configured GitHub branch if Cloudflare Workers Builds is connected.
