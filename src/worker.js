@@ -44,18 +44,77 @@ async function body(request) {
 }
 const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:u.balance, createdAt:u.created_at });
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
+const ASSET_KINDS = ["IMAGE_ONLY","MODEL_3D","FACE_TEXTURE"];
+const ITEM_ATTACHMENTS = ["Root","Head","HeadTop","Torso","LeftArm","RightArm","LeftLeg","RightLeg"];
+
+function isSafeModelUrl(value) {
+  const url = String(value || "").trim();
+  if (!url || url.length > 1000 || !/\.glb(?:$|[?#])/i.test(url)) return false;
+  if (url.startsWith("/assets/catalog/")) return !url.includes("..") && !url.includes("\\");
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:";
+  } catch { return false; }
+}
+
 function validItem(data) {
   if (!data || typeof data.name !== "string" || !data.name.trim() || data.name.trim().length > 80) return "Item name must be 1–80 characters.";
   if (!ITEM_CATEGORIES.includes(data.category)) return "Choose a valid item category.";
   if (!Number.isInteger(Number(data.price)) || Number(data.price) < 0 || Number(data.price) > 1000000) return "Price must be between 0 and 1,000,000 P$.";
   if (typeof (data.description ?? "") !== "string" || (data.description ?? "").length > 500) return "Description must be 500 characters or less.";
+
   const image = String(data.image_url ?? "").trim();
   if (image.length > 500) return "Image URL is too long.";
   if (image) {
     try { const u = new URL(image); if (!["http:","https:"].includes(u.protocol)) return "Image URL must use HTTP or HTTPS."; }
     catch { return "Enter a valid image URL."; }
   }
+
+  const assetKind = data.asset_kind || "IMAGE_ONLY";
+  if (!ASSET_KINDS.includes(assetKind)) return "Choose a valid asset type.";
+  const modelUrl = String(data.model_url || "").trim();
+  if (assetKind === "MODEL_3D" && !isSafeModelUrl(modelUrl)) return "A wearable 3D item needs a public .glb model URL. Upload it to /assets/catalog/ or use an HTTPS URL.";
+  if (assetKind === "FACE_TEXTURE" && (data.category !== "Faces" || !image)) return "A face texture needs the Faces category and a preview image URL.";
+
+  if (!ITEM_ATTACHMENTS.includes(data.attachment || "Head")) return "Choose a valid avatar attachment point.";
+  const scale = Number(data.model_scale ?? 1);
+  if (!Number.isFinite(scale) || scale <= 0 || scale > 10) return "Model scale must be greater than 0 and no more than 10.";
+  for (const field of ["offset_x","offset_y","offset_z"]) {
+    const value = Number(data[field] ?? 0);
+    if (!Number.isFinite(value) || Math.abs(value) > 10) return "Model offsets must be between -10 and 10.";
+  }
+  for (const field of ["rotation_x","rotation_y","rotation_z"]) {
+    const value = Number(data[field] ?? 0);
+    if (!Number.isFinite(value) || Math.abs(value) > 360) return "Model rotations must be between -360 and 360 degrees.";
+  }
   return null;
+}
+
+let wearableSchemaPromise;
+async function ensureWearableSchema(env) {
+  if (!wearableSchemaPromise) {
+    wearableSchemaPromise = (async () => {
+      const statements = [
+        "ALTER TABLE items ADD COLUMN asset_kind TEXT NOT NULL DEFAULT 'IMAGE_ONLY'",
+        "ALTER TABLE items ADD COLUMN model_url TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE items ADD COLUMN attachment TEXT NOT NULL DEFAULT 'Head'",
+        "ALTER TABLE items ADD COLUMN model_scale REAL NOT NULL DEFAULT 1",
+        "ALTER TABLE items ADD COLUMN offset_x REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE items ADD COLUMN offset_y REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE items ADD COLUMN offset_z REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE items ADD COLUMN rotation_x REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE items ADD COLUMN rotation_y REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE items ADD COLUMN rotation_z REAL NOT NULL DEFAULT 0"
+      ];
+      for (const statement of statements) {
+        try { await env.DB.prepare(statement).run(); }
+        catch (error) {
+          if (!/duplicate column name/i.test(String(error?.message || error))) throw error;
+        }
+      }
+    })();
+  }
+  return wearableSchemaPromise;
 }
 function parseAvatar(raw) {
   try {
@@ -67,6 +126,13 @@ function parseAvatar(raw) {
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
+  if (path.startsWith("/api/") && path !== "/api/health" && env.DB) {
+    try { await ensureWearableSchema(env); }
+    catch (error) {
+      console.error("[Pekora schema] Wearable schema setup failed:", error);
+      return json({ error:"Catalog database setup failed. Check Worker logs." },503);
+    }
+  }
   if (request.method === "GET" && path === "/api/health") {
     if (!env.DB) return json({ ok:false, site:"Pekora", database:false, error:"D1 binding DB is missing." },503);
     try {
@@ -143,7 +209,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,created_at FROM items WHERE is_for_sale=1 ORDER BY category,name").all();
+    const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,created_at,asset_kind,model_url,attachment,model_scale,offset_x,offset_y,offset_z,rotation_x,rotation_y,rotation_z FROM items WHERE is_for_sale=1 ORDER BY category,name").all();
     return json({ items:rows.results || [] });
   }
 
@@ -172,7 +238,7 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.asset_kind,i.model_url,i.attachment,i.model_scale,i.offset_x,i.offset_y,i.offset_z,i.rotation_x,i.rotation_y,i.rotation_z FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -180,7 +246,7 @@ async function route(request, env) {
     const username = decodeURIComponent(path.slice("/api/profile/".length, -"/inventory".length));
     const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.asset_kind,i.model_url,i.attachment,i.model_scale,i.offset_x,i.offset_y,i.offset_z,i.rotation_x,i.rotation_y,i.rotation_z FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -211,8 +277,8 @@ async function route(request, env) {
       if (!ITEM_CATEGORIES.includes(category)) return fail("Invalid avatar category.");
       if (itemId === null || itemId === "") { clean[category] = null; continue; }
       if (typeof itemId !== "string" || itemId.length > 80) return fail("Invalid avatar item.");
-      const owned = await env.DB.prepare("SELECT i.id,i.category FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
-      if (!owned || owned.category !== category) return fail("You can only wear items you own in the matching category.",403);
+      const owned = await env.DB.prepare("SELECT i.id,i.category,i.asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
+      if (!owned || owned.category !== category || !["MODEL_3D","FACE_TEXTURE"].includes(owned.asset_kind)) return fail("Only owned items with a real 3D model or face texture can be worn.",403);
       clean[category] = itemId;
     }
     const current = await env.DB.prepare("SELECT avatar_json FROM profiles WHERE user_id=?").bind(user.id).first();
@@ -311,7 +377,7 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user || user.role !== "OWNER") return fail("Owner access required.",403);
     if (path === "/api/owner/items" && request.method === "GET") {
-      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,is_for_sale,created_at FROM items ORDER BY created_at DESC,name").all();
+      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,is_for_sale,created_at,asset_kind,model_url,attachment,model_scale,offset_x,offset_y,offset_z,rotation_x,rotation_y,rotation_z FROM items ORDER BY created_at DESC,name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
@@ -322,16 +388,16 @@ async function route(request, env) {
       const data = await body(request), error = validItem(data);
       if (error) return fail(error);
       const itemId=id();
-      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,is_for_sale) VALUES (?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),data.is_for_sale===false?0:1).run();
+      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,is_for_sale,asset_kind,model_url,attachment,model_scale,offset_x,offset_y,offset_z,rotation_x,rotation_y,rotation_z) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),data.is_for_sale===false?0:1,data.asset_kind||"IMAGE_ONLY",String(data.model_url||"").trim(),data.attachment||"Head",Number(data.model_scale??1),Number(data.offset_x??0),Number(data.offset_y??0),Number(data.offset_z??0),Number(data.rotation_x??0),Number(data.rotation_y??0),Number(data.rotation_z??0)).run();
       return json({ok:true,id:itemId},201);
     }
     const match=path.match(/^\/api\/owner\/items\/([A-Za-z0-9_-]{1,80})$/i);
     if (match && request.method === "PATCH") {
       const current=await env.DB.prepare("SELECT * FROM items WHERE id=?").bind(match[1]).first();
       if (!current) return fail("Item not found.",404);
-      const data=await body(request), merged={name:data?.name??current.name,description:data?.description??current.description,category:data?.category??current.category,price:data?.price??current.price,image_url:data?.image_url??current.image_url,is_for_sale:data?.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
+      const data=await body(request), merged={name:data?.name??current.name,description:data?.description??current.description,category:data?.category??current.category,price:data?.price??current.price,image_url:data?.image_url??current.image_url,is_for_sale:data?.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0),asset_kind:data?.asset_kind??current.asset_kind,model_url:data?.model_url??current.model_url,attachment:data?.attachment??current.attachment,model_scale:data?.model_scale??current.model_scale,offset_x:data?.offset_x??current.offset_x,offset_y:data?.offset_y??current.offset_y,offset_z:data?.offset_z??current.offset_z,rotation_x:data?.rotation_x??current.rotation_x,rotation_y:data?.rotation_y??current.rotation_y,rotation_z:data?.rotation_z??current.rotation_z};
       const error=validItem(merged); if(error)return fail(error);
-      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),merged.is_for_sale,match[1]).run();
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,is_for_sale=?,asset_kind,model_url,attachment,model_scale,offset_x,offset_y,offset_z,rotation_x,rotation_y,rotation_z WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),merged.is_for_sale,merged.asset_kind||"IMAGE_ONLY",String(merged.model_url||"").trim(),merged.attachment||"Head",Number(merged.model_scale??1),Number(merged.offset_x??0),Number(merged.offset_y??0),Number(merged.offset_z??0),Number(merged.rotation_x??0),Number(merged.rotation_y??0),Number(merged.rotation_z??0),match[1]).run();
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
@@ -346,7 +412,7 @@ async function route(request, env) {
     if (!user || user.role !== "OWNER") return fail("Owner access required.",403);
     const [users,items,purchases] = await Promise.all([
       env.DB.prepare("SELECT COUNT(*) n FROM users").first(),
-      env.DB.prepare("SELECT COUNT(*) n FROM items").first(),
+      env.DB.prepare("SELECT COUNT(*) n FROM items WHERE is_for_sale=1").first(),
       env.DB.prepare("SELECT COUNT(*) n FROM purchases").first()
     ]);
     return json({users:users.n,items:items.n,purchases:purchases.n});
