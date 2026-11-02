@@ -109,12 +109,17 @@ function home(){
   return;
  }
  const name=esc(me.username);
- app.innerHTML='<div class="op-dashboard">'+
+ app.innerHTML='<div class="op-dashboard"><div id="accountWarnings"></div>'+
   '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile">'+avatar(me.username)+'</a><div><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><p class="home-balance">'+Number(me.balance||0).toLocaleString()+' P$</p></div></div>'+
   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Items</h3><a href="#inventory" data-page="inventory">See All</a></div><div id="homeItems" class="op-section-content"><div class="op-empty">Loading inventory...</div></div></section>'+
   '</div>';
  loadHomeDashboard(view);
+ if(me)api("/api/account/warnings").then(d=>{
+  const host=document.getElementById("accountWarnings");
+  const warnings=d.warnings||[];
+  if(host&&warnings.length)host.innerHTML='<section class="account-warning-panel"><strong>Account warnings</strong>'+warnings.map(w=>'<p>'+esc(w.reason)+' <span class="muted">('+new Date(w.created_at+"Z").toLocaleDateString()+')</span></p>').join("")+'</section>';
+ }).catch(()=>{});
 }
 async function loadHomeDashboard(view=activeView){
  const friendsHost=document.getElementById("homeFriends"),itemsHost=document.getElementById("homeItems");
@@ -589,7 +594,56 @@ async function owner(){
  
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
- '<div id="ownerItems" class="owner-items">Loading items...</div></section>';
+ '<div id="ownerItems" class="owner-items">Loading items...</div></section>'+
+ '<section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Pekora currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="2" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
+ const userSearch=document.getElementById("ownerUserSearch");
+ const userResults=document.getElementById("ownerUserResults");
+ const userDetails=document.getElementById("ownerUserDetails");
+ async function loadOwnerUser(userId){
+  userDetails.innerHTML='<p class="muted">Loading account...</p>';
+  try{
+   const d=await api("/api/owner/users/"+encodeURIComponent(userId));
+   if(!isActiveView(view))return;
+   const u=d.user;
+   userDetails.innerHTML='<div class="owner-user-card"><h3>'+esc(u.username)+'</h3><div class="muted">ID: '+esc(u.id)+'</div><p>Role: '+esc(u.role)+' · Balance: '+Number(u.balance).toLocaleString()+' P$ · Status: '+(u.is_banned?'BANNED':'Active')+'</p>'+
+    (u.role==="OWNER"?'<p class="muted">OWNER accounts cannot be modified.</p>':
+    '<div class="owner-user-actions"><form id="ownerCreditForm" class="owner-item-form"><h4>Give Pekora currency</h4><label>Amount (P$)<input name="amount" type="number" min="1" max="1000000" required></label><label>Note (optional)<input name="reason" maxlength="500"></label><button class="primary" type="submit">Give currency</button></form>'+
+    '<form id="ownerWarnForm" class="owner-item-form"><h4>Issue warning</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button class="primary" type="submit">Send warning</button></form>'+
+    (u.is_banned?'<button type="button" class="button" id="ownerUnban">Unban account</button>':'<form id="ownerBanForm" class="owner-item-form"><h4>Ban account</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button type="submit" class="button secondary">Ban account</button></form>')+'</div>')+
+    '<h4>Warnings</h4>'+(d.warnings.length?'<ul>'+d.warnings.map(x=>'<li>'+esc(x.reason)+' <span class="muted">('+new Date(x.created_at+"Z").toLocaleString()+')</span></li>').join("")+'</ul>':'<p class="muted">No warnings.</p>')+
+    '<h4>Moderation history</h4>'+(d.logs.length?'<ul>'+d.logs.map(x=>'<li><strong>'+esc(x.action)+'</strong> '+esc(x.details)+' <span class="muted">('+new Date(x.created_at+"Z").toLocaleString()+')</span></li>').join("")+'</ul>':'<p class="muted">No actions recorded.</p>')+'</div>';
+   document.getElementById("ownerCreditForm")?.addEventListener("submit",async e=>{
+    e.preventDefault();const f=new FormData(e.currentTarget);
+    try{await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:"credit",amount:Number(f.get("amount")),reason:String(f.get("reason")||"")})});toast("Currency granted");await loadOwnerUser(userId);await refreshMe();}
+    catch(err){toast(err.message)}
+   });
+   document.getElementById("ownerWarnForm")?.addEventListener("submit",async e=>{
+    e.preventDefault();const reason=String(new FormData(e.currentTarget).get("reason")||"");
+    try{await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:"warn",reason})});toast("Warning issued");await loadOwnerUser(userId);}
+    catch(err){toast(err.message)}
+   });
+   document.getElementById("ownerBanForm")?.addEventListener("submit",async e=>{
+    e.preventDefault();const reason=String(new FormData(e.currentTarget).get("reason")||"");
+    if(!confirm("Ban "+u.username+"? Their active sessions will be revoked."))return;
+    try{await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:"ban",reason})});toast("Account banned");await loadOwnerUser(userId);}
+    catch(err){toast(err.message)}
+   });
+   document.getElementById("ownerUnban")?.addEventListener("click",async()=>{
+    try{await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:"unban"})});toast("Account unbanned");await loadOwnerUser(userId);}
+    catch(err){toast(err.message)}
+   });
+  }catch(e){userDetails.textContent=e.message}
+ }
+ userSearch.addEventListener("submit",async e=>{
+  e.preventDefault();const q=String(new FormData(userSearch).get("q")||"").trim();userResults.textContent="Searching...";
+  try{
+   const d=await api("/api/owner/users?q="+encodeURIComponent(q));
+   if(!isActiveView(view))return;
+   userResults.innerHTML=d.users.length?d.users.map(u=>'<button type="button" class="owner-user-result" data-owner-user-id="'+esc(u.id)+'"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role)+' · '+Number(u.balance).toLocaleString()+' P$ · '+(u.is_banned?'BANNED':'Active')+'</span></button>').join(""):'<p class="muted">No matching users.</p>';
+   userResults.querySelectorAll("[data-owner-user-id]").forEach(b=>b.addEventListener("click",()=>loadOwnerUser(b.dataset.ownerUserId)));
+   userDetails.innerHTML="";
+  }catch(err){userResults.textContent=err.message}
+ });
  document.getElementById("ownerPasswordForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const form=e.currentTarget,values=new FormData(form),password=String(values.get("password")||""),confirmPassword=String(values.get("confirmPassword")||""),message=document.getElementById("ownerPasswordMessage");
