@@ -50,7 +50,10 @@ const checks = [
   ["Limited flags are preserved", !worker.includes("UPDATE items SET is_limited=0")],
   ["Limited items have OpenPekora overlay", app.includes("CatalogOverlays/Limited.png") && css.includes(".limited-overlay") && css.includes("width:70px;height:24px")],
   ["stock is capped in the purchase transaction", worker.includes("stock_sold=stock_sold+1") && worker.includes("stock_sold<stock_limit") && worker.includes("merged.stock_limit < Number(current.stock_sold")],
-  ["Owner Panel can create and edit stock", app.includes("name=\"stock_limit\"") && app.includes("name=\"is_limited\"")]
+  ["Owner Panel can create and edit stock", app.includes("name=\"stock_limit\"") && app.includes("name=\"is_limited\"")],
+  ["trade creation rejects non-Limited items", worker.includes("i.is_limited=1") && worker.includes("You can only offer Limited items")],
+  ["trade acceptance rechecks Limited status", worker.includes("Only Limited items can be traded") && worker.includes("i.is_limited=1")],
+  ["trade picker only displays Limited items", app.includes("own.filter(item=>Number(item.is_limited)===1)") && app.includes("target.filter(item=>Number(item.is_limited)===1)")]
 ];
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"} ${name}`);
