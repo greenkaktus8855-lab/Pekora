@@ -2,7 +2,7 @@ const app=document.getElementById("app");
 const accountArea=document.getElementById("accountArea");
 const currency=document.getElementById("currency");
 const sidebar=document.getElementById("sidebar");
-let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set(),ownershipLoaded=true,ownershipUserId=null;
+let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set(),ownershipLoaded=true,ownershipUserId=null,pendingPurchases=new Set();
 let activeView=0;
 const beginView=()=>++activeView;
 const isActiveView=view=>view===activeView;
@@ -288,17 +288,28 @@ function drawCatalog(category,q){
 }async function buy(itemId){
  if(!me){page("login");return}
  if(!ownershipLoaded){toast("Could not verify your inventory. Reload the Catalog and try again.");return}
+ if(pendingPurchases.has(itemId))return;
+ pendingPurchases.add(itemId);
+ const buttons=[...document.querySelectorAll("[data-buy]")].filter(button=>button.dataset.buy===itemId);
+ const detailButton=document.getElementById("detailBuy");
+ buttons.forEach(button=>{button.disabled=true;button.textContent="Buying..."});
+ if(detailButton?.isConnected){detailButton.disabled=true;detailButton.textContent="Buying..."}
  const view=activeView,userId=me.id;
  try{
   const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});
   if(!me||me.id!==userId)return;
   me.balance=d.balance;ownedItemIds.add(itemId);ownershipLoaded=true;setUser(me);toast("Item purchased");
   if(isActiveView(view)){
-   const detailButton=document.getElementById("detailBuy");
-   if(detailButton?.isConnected){detailButton.disabled=true;detailButton.textContent="Owned";detailButton.classList.add("button","secondary")}
+   const currentDetailButton=document.getElementById("detailBuy");
+   if(currentDetailButton?.isConnected){currentDetailButton.disabled=true;currentDetailButton.textContent="Owned";currentDetailButton.classList.add("button","secondary")}
    else catalog();
   }
  }catch(e){toast(e.message)}
+ finally{
+  pendingPurchases.delete(itemId);
+  buttons.forEach(button=>{if(button.isConnected){button.disabled=false;button.textContent="Buy"}});
+  if(detailButton?.isConnected&&!ownedItemIds.has(itemId)){detailButton.disabled=false;detailButton.textContent="Buy"}
+ }
 }
 function auth(kind){
  const view=beginView();
