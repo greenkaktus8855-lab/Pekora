@@ -1,8 +1,13 @@
 $ErrorActionPreference = "Stop"
 
 $bytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-$secret = [Convert]::ToHexString($bytes).ToLowerInvariant()
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+    $rng.GetBytes($bytes)
+} finally {
+    $rng.Dispose()
+}
+$secret = [BitConverter]::ToString($bytes).Replace("-", "").ToLowerInvariant()
 
 [Environment]::SetEnvironmentVariable("PEKORA_RENDERER_SECRET", $secret, "User")
 $env:PEKORA_RENDERER_SECRET = $secret
