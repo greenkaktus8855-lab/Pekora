@@ -653,16 +653,42 @@ async function owner(){
  '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
  '<label>3D model file (.glb, max 1 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
  '<label>Or existing 3D model URL<input name="model_url" type="url" maxlength="1000" placeholder="https://...model.glb"></label>'+
- '<label>Roblox asset ID<input name="asset_id" type="number" min="0" max="2147483647" placeholder="Numeric catalog asset ID"></label>'+
- '<label>Roblox asset type ID<input name="asset_type_id" type="number" min="0" max="2147483647" placeholder="For accessories only"></label>'+
- '<p class="muted">Asset IDs are used by the RCC avatar renderer. Known types are filled automatically for Hats, Hair, Faces, Shirts and Pants. Accessories need their exact type ID.</p>'+
+ ''+
+ ''+
+ ''+
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>'+
- '<section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Pekora currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="2" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
+ '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Pekora currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="2" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
  const userSearch=document.getElementById("ownerUserSearch");
  const userResults=document.getElementById("ownerUserResults");
  const userDetails=document.getElementById("ownerUserDetails");
+ const gameForm=document.getElementById("newGameForm");
+ const ownerGames=document.getElementById("ownerGames");
+ async function loadOwnerGames(){
+  if(!ownerGames)return;
+  try{
+   const data=await api("/api/owner/games");
+   if(!isActiveView(view))return;
+   const games=data.games||[];
+   ownerGames.innerHTML=games.length?games.map(game=>'<article class="owner-game-row"><div class="owner-game-thumb">'+(game.thumbnail_url?'<img src="'+esc(game.thumbnail_url)+'" alt="">':'')+'</div><div class="owner-game-info"><strong>'+esc(game.title)+'</strong><p class="muted">'+esc(game.description||"")+'</p></div><button class="button secondary" type="button" data-delete-game="'+esc(game.id)+'">Delete</button></article>').join(""):'<p class="muted">No games created.</p>';
+   ownerGames.querySelectorAll("[data-delete-game]").forEach(button=>button.addEventListener("click",async()=>{
+    if(!confirm("Delete this game card?"))return;
+    button.disabled=true;
+    try{await api("/api/owner/games/"+encodeURIComponent(button.dataset.deleteGame),{method:"DELETE"});await loadOwnerGames();toast("Game deleted")}
+    catch(error){toast(error.message);button.disabled=false}
+   }));
+  }catch(error){ownerGames.textContent=error.message}
+ }
+ gameForm?.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const values=new FormData(gameForm),message=document.getElementById("gameFormMessage");
+  const data={title:String(values.get("title")||"").trim(),thumbnail_url:String(values.get("thumbnail_url")||"").trim(),description:String(values.get("description")||"").trim()};
+  message.textContent="Creating...";
+  try{await api("/api/owner/games",{method:"POST",body:JSON.stringify(data)});gameForm.reset();message.textContent="Game created. It will appear locked on the Games page.";await loadOwnerGames()}
+  catch(error){message.textContent=error.message}
+ });
+ loadOwnerGames();
  async function loadOwnerUser(userId){
   userDetails.innerHTML='<p class="muted">Loading account...</p>';
   try{
@@ -744,14 +770,14 @@ async function owner(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
     '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
-    '<div class="owner-item-subfields"><select name="category">'+AVATAR_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><input name="asset_id" type="number" min="0" max="2147483647" value="'+Number(x.asset_id||0)+'" placeholder="Roblox asset ID"><input name="asset_type_id" type="number" min="0" max="2147483647" value="'+Number(x.asset_type_id||0)+'" placeholder="Roblox asset type ID"></div>'+
+    '<div class="owner-item-subfields"><select name="category">'+AVATAR_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"></div>'+
     
     '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?'For sale':'Removed from catalog')+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
-     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||"")};
+     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||"")};
      await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(updated)});
      if(!isActiveView(view))return;
      ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated}:item);
