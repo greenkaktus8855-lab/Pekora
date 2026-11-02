@@ -167,6 +167,9 @@ async function ensureSiteSettings(env) {
       if (!(itemColumns.results || []).some(column => column.name === "asset_type_id")) {
         await env.DB.prepare("ALTER TABLE items ADD COLUMN asset_type_id INTEGER NOT NULL DEFAULT 0").run();
       }
+      if (!(itemColumns.results || []).some(column => column.name === "stock_limit")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN stock_limit INTEGER NOT NULL DEFAULT 0").run();
+      }
       // One-time public catalog cleanout requested for the November 2026 reset.
       // Inventory, purchases, users and balances are deliberately untouched.
       const cleanout = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='catalog_cleanout_2026_11_02'").first();
