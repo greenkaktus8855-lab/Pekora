@@ -41,17 +41,19 @@ function renderSidebar(active="home"){
  if(!me){sidebar.classList.remove("visible","mobile-open");sidebar.innerHTML="";return}
  sidebar.classList.add("visible");
  const links=[
-  ["home","icon-nav-home","Home"],["profile","icon-nav-profile","Profile"],["messages","icon-nav-message","Messages"],
-  ["friends","icon-nav-friends","Friends"],["avatar","icon-nav-charactercustomizer","Avatar"],["inventory","icon-nav-inventory","Inventory"],["settings","icon-nav-settings","Settings"],
-  ["trades","icon-nav-trade","Trade"],["groups","icon-nav-group","Groups"],["forums","icon-nav-forum","Forums"]
+  ["home","icon-nav-home","Home"],
+  ["profile","icon-nav-profile","Profile"],
+  ["friends","icon-nav-friends","Friends"],
+  ["avatar","icon-nav-charactercustomizer","Avatar"],
+  ["inventory","icon-nav-inventory","Inventory"],
+  ["settings","icon-nav-settings","Settings"]
  ];
  if(me.role==="OWNER")links.push(["owner","icon-nav-settings","Panel"]);
  sidebar.innerHTML='<div class="sidebar-card">'+
   '<a class="side-user" href="#profile" data-page="profile"><span class="side-avatar">'+avatar()+'</span><span><span class="side-username">'+esc(me.username)+'</span><span class="side-role">Account</span></span></a>'+
   '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span>'+(id==="messages"?'<span class="side-count">0</span>':'')+'</a>').join("")+
   '<div class="side-separator"></div>'+
-  '<a href="#donate" data-page="donate"><span class="side-icon icon-nav-robux"></span><span>Donate</span></a>'+
-  '<a href="#upgrade" data-page="upgrade"><span class="side-icon icon-nav-settings"></span><span>Upgrade Now</span></a>'+
+  (me.role==="OWNER"?'<a href="#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':'')+
   '</nav></div>';
 }
 
@@ -389,6 +391,7 @@ async function owner(){
  renderSidebar("owner");
  if(!me||me.role!=="OWNER"){app.innerHTML='<div class="empty">Owner access required.</div>';return}
  app.innerHTML='<h1 class="page-title">Owner Panel</h1><div id="ownerStats" class="item-grid">Loading...</div>'+
+ '<section class="owner-section"><h2>Owner Account</h2><p class="muted">The current password cannot be displayed because Pekora stores only a password hash. While signed in as OWNER, set a new password here.</p><form id="ownerPasswordForm" class="owner-item-form"><label>New password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><label>Confirm password<input name="confirmPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><button class="primary" type="submit">Set new owner password</button><span id="ownerPasswordMessage" class="muted"></span></form></section>'+
  '<section class="owner-section"><h2>Catalog Management</h2><p class="muted">Remove every item from the public catalog. Existing owners keep their inventory.</p><p class="muted">Wearable items need a real .glb 3D model. Upload it to public/assets/catalog/ and enter /assets/catalog/your-file.glb. Image-only entries are previews and cannot be worn.</p><button class="button secondary" id="clearPublicCatalog" type="button">Remove all items from catalog</button><form id="newItemForm" class="owner-item-form">'+
  '<label>Item name<input name="name" maxlength="80" required></label>'+
  '<label>Category<select name="category">'+AVATAR_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
@@ -404,6 +407,16 @@ async function owner(){
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>';
+ document.getElementById("ownerPasswordForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const form=e.currentTarget,values=new FormData(form),password=String(values.get("password")||""),confirmPassword=String(values.get("confirmPassword")||""),message=document.getElementById("ownerPasswordMessage");
+  if(password!==confirmPassword){message.textContent="Passwords do not match.";return}
+  message.textContent="Updating password...";
+  try{
+   await api("/api/owner/password",{method:"POST",body:JSON.stringify({password})});
+   form.reset();message.textContent="Owner password changed. Save the new password somewhere safe.";
+  }catch(error){message.textContent=error.message}
+ });
  try{
   const [stats,data]=await Promise.all([api("/api/owner/stats"),api("/api/owner/items")]);
   document.getElementById("ownerStats").innerHTML='<div class="info-panel"><h3>Users</h3><b>'+stats.users+'</b></div><div class="info-panel"><h3>Catalog Items</h3><b>'+stats.items+'</b></div><div class="info-panel"><h3>Purchases</h3><b>'+stats.purchases+'</b></div>';
@@ -482,17 +495,9 @@ async function render(name){
  else if(name==="profile")await profile();
  else if(name==="avatar")await avatarPage();
  else if(name==="users")users();
- else if(name==="games")comingSoon("Games");
  else if(name==="friends")await friends();
- else if(name==="messages")comingSoon("Messages");
- else if(name==="groups")comingSoon("Groups");
- else if(name==="forums")comingSoon("Forums");
- else if(name==="donate")comingSoon("Donate");
- else if(name==="upgrade")comingSoon("Upgrade");
- else if(name==="community")users();
+ else if(name==="community"||name==="users")users();
  else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
- else if(name==="develop"||name==="download")comingSoon(name==="develop"?"Create":"Download");
- else if(name==="trades")comingSoon("Trades");
  else if(name==="settings")await settings();
  else if(name==="owner")await owner();
  else home();
