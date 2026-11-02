@@ -598,13 +598,14 @@ pekora-avatar-viewer:active{cursor:grabbing}
 .owner-inline-check{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;white-space:nowrap;padding:6px 8px;background:#fff;border:1px solid #d9d9d9;border-radius:4px}
 .owner-item-subfields input,.owner-item-subfields select{min-height:34px}
 .owner-item-fields>span.muted{display:block;line-height:1.4;overflow-wrap:anywhere}
-.owner-id-form{grid-template-columns:minmax(180px,1fr) minmax(180px,1fr) auto;align-items:end}
+.owner-id-form{grid-template-columns:minmax(180px,1fr) auto;align-items:end}
 .owner-id-form h4{grid-column:1/-1;margin:0}
 .owner-id-form p{grid-column:1/-1;margin:0}
-.owner-id-form label{margin:0}
-.owner-id-form button{grid-column:3;grid-row:2}
+.owner-id-form label{grid-column:1;margin:0}
+.owner-id-form button{grid-column:2;grid-row:3}
 @media(max-width:767px){
  .owner-id-form{grid-template-columns:1fr}
  .owner-id-form h4,.owner-id-form p,.owner-id-form button{grid-column:1;grid-row:auto}
+ .owner-item-subfields{grid-template-columns:repeat(2,minmax(0,1fr))}
  .limited-overlay{width:70px;height:24px}
 }
