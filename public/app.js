@@ -91,6 +91,7 @@ async function loadHomeDashboard(view=activeView){
   friendsHost.innerHTML=friends.length?'<div class="op-home-friends">'+friends.slice(0,12).map(u=>'<a href="#profile" class="op-home-friend" data-profile="'+esc(u.username)+'">'+avatar(u.username)+'<span>'+esc(u.username)+'</span></a>').join("")+'</div>':'<div class="op-empty">You have no friends to display yet.</div>';
   itemsHost.innerHTML=owned.length?'<div class="op-home-items">'+owned.slice(0,6).map(itemCard).join("")+'</div>':'<div class="op-empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Visit the Catalog</a>.</div>';
  }catch(e){
+  if(!isActiveView(view)||!friendsHost.isConnected||!itemsHost.isConnected)return;
   friendsHost.innerHTML='<div class="op-empty">Could not load friends.</div>';
   itemsHost.innerHTML='<div class="op-empty">Could not load inventory.</div>';
  }
@@ -108,9 +109,27 @@ async function loadHomeInventory(){
  }catch(e){el.textContent=e.message}
 }
 function itemCard(x){return '<article class="item-card"><div class="item-image">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div></article>'}
-function showItem(itemId){
- const item=items.find(x=>x.id===itemId);
- if(!item){toast("Item not found");return}
+async function showItem(itemId,updateHistory=true){
+ const view=beginView();
+ if(updateHistory)history.pushState({page:"item",itemId},"","#item?id="+encodeURIComponent(itemId||""));
+ let item=items.find(x=>x.id===itemId);
+ if(!item){
+  try{
+   const [catalogData,inventoryData]=await Promise.all([
+    api("/api/catalog"),
+    me?api("/api/inventory"):Promise.resolve({items:[]})
+   ]);
+   if(!isActiveView(view))return;
+   items=catalogData.items||[];
+   ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
+   item=items.find(x=>x.id===itemId);
+  }catch(error){
+   if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(error.message)+'</div>';
+   return;
+  }
+ }
+ if(!isActiveView(view))return;
+ if(!item){app.innerHTML='<div class="empty">Item not found. <a href="#catalog" data-page="catalog">Back to Catalog</a></div>';return}
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'">':'<span>No preview available</span>')+'</div>'+
   '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div><p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(item.id)?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
@@ -320,10 +339,11 @@ async function settings(){
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> first.</div>';return}
  const username=me.username;
  app.innerHTML='<div class="empty">Loading settings...</div>';
- let description="";
- try{const d=await api("/api/profile/"+encodeURIComponent(username));description=d.profile.description||""}catch{}
+ let description="",loadError="";
+ try{const d=await api("/api/profile/"+encodeURIComponent(username));description=d.profile.description||""}
+ catch(error){loadError=error.message||"Could not load your profile description."}
  if(!isActiveView(view))return;
- app.innerHTML='<h1 class="page-title">Account Settings</h1><div class="form" style="max-width:600px;margin:0"><h2>Profile</h2><form id="settingsForm"><label>Username</label><input value="'+esc(username)+'" disabled><label>Profile description</label><textarea name="description" rows="5" maxlength="500">'+esc(description)+'</textarea><button class="primary" type="submit">Save changes</button><div id="settingsMessage" class="muted"></div></form></div>';
+ app.innerHTML='<h1 class="page-title">Account Settings</h1><div class="form" style="max-width:600px;margin:0"><h2>Profile</h2><form id="settingsForm"><label>Username</label><input value="'+esc(username)+'" disabled><label>Profile description</label><textarea name="description" rows="5" maxlength="500" '+(loadError?'disabled':'')+'>'+esc(description)+'</textarea><button class="primary" type="submit" '+(loadError?'disabled':'')+'>Save changes</button><div id="settingsMessage" class="muted">'+esc(loadError)+'</div></form></div>';
  document.getElementById("settingsForm").addEventListener("submit",async e=>{
   e.preventDefault();const description=new FormData(e.target).get("description"),message=document.getElementById("settingsMessage");
   try{await api("/api/profile",{method:"PUT",body:JSON.stringify({description})});if(isActiveView(view)&&message?.isConnected)message.textContent="Profile saved."}
@@ -546,6 +566,7 @@ async function render(name){
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
  else if(name==="profile")await profile(query.get("username")||me?.username);
+ else if(name==="item")await showItem(query.get("id"),false);
  else if(name==="avatar")await avatarPage();
  else if(name==="users"||name==="community")users();
  else if(name==="friends")await friends();
