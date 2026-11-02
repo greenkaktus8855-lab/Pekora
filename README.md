@@ -29,7 +29,7 @@ New accounts start with 100 P$. The initial OWNER account starts with 1,000 P$.
 
 On the first API request, the Worker creates its small site-settings and rate-limit tables and supporting indexes in D1. It also runs the one-time public-catalog cleanout without deleting account inventories or balances.
 
-Failed sign-in, registration and OWNER setup/recovery attempts are rate-limited by a hashed network-address identifier. Ten attempts within the 15-minute window trigger a 15-minute cooldown. JSON API request bodies are limited to 16 KB. New catalog preview images must use HTTPS.
+Failed sign-in, registration and OWNER setup/recovery attempts are rate-limited by a hashed network-address identifier. Ten attempts within the 15-minute window trigger a 15-minute cooldown. Expired per-address counters reset when that address is used again; stale rows are also removed during Worker setup. JSON API request bodies are limited to 16 KB. New catalog preview images must use HTTPS.
 
 ## Not connected in this deployment
 
