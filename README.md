@@ -13,6 +13,9 @@ This repository currently deploys a lightweight Cloudflare Worker website with a
 - D1-backed profiles and profile descriptions
 - Public user search and profile pages
 - Friend requests, acceptance, cancellation and removal
+- Player-to-player item trades with pending item reservations, accept, decline and cancel
+- OWNER-managed game cards with title, description and thumbnail
+- Locked game cards that visibly show a lock and cannot be launched
 - Local catalog cards with image previews
 - Server-side virtual-currency purchases
 - Persistent account inventory and purchase history
@@ -34,12 +37,11 @@ Failed sign-in, registration and OWNER setup/recovery attempts are rate-limited 
 ## Not connected in this deployment
 
 - The original OpenPekora Avatar API and wearable Roblox assets
-- The original Thumbnails API and RCC/game-renderer service
-- Real R6/R15 avatar rendering and equipping
+- Real R6/R15 avatar rendering and the local RCC renderer (removed from this deployment)
 - The original Roblox asset catalog
 - Game launcher, game client, game servers or game downloads
 
-Catalog entries created in this build are image-preview cards only. They are not Roblox assets and cannot be worn on an avatar. The Avatar page says this explicitly rather than pretending that avatar rendering works.
+Catalog entries created in this build are Pekora inventory items with image or optional GLB previews. They are not Roblox assets. Trades exchange existing inventory items only; they do not transfer Pekora currency or real money. The Avatar page keeps basic equipped-item records but does not generate a 3D avatar. The former RCC renderer scripts, local setup instructions and browser avatar-rendering component have been removed. Game cards are informational and remain locked; no game launcher is connected.
 
 Pekora currency is an in-site balance only. It has no real-world monetary value.
 

@@ -134,8 +134,14 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_files (id TEXT PRIMARY KEY, model_data BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_render_users (render_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE, last_rendered_at INTEGER NOT NULL DEFAULT 0)"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_render_files (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, file_name TEXT NOT NULL, file_data BLOB NOT NULL, content_type TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("DROP TABLE IF EXISTS avatar_render_files"),
+        env.DB.prepare("DROP TABLE IF EXISTS avatar_render_users"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', thumbnail_url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS trades (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, offered_items TEXT NOT NULL DEFAULT '[]', requested_items TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','DECLINED','CANCELLED')), created_at TEXT NOT NULL DEFAULT (datetime('now')), responded_at TEXT)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS trade_locks (owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE CASCADE, PRIMARY KEY(owner_id,item_id))"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_trades_sender ON trades(sender_id,status,created_at DESC)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_trades_recipient ON trades(recipient_id,status,created_at DESC)"),
+        env.DB.prepare("UPDATE profiles SET avatar_json='{}' WHERE avatar_json<>'{}'"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS moderation_warnings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, moderator_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), acknowledged INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_moderation_warnings_user ON moderation_warnings(user_id,created_at DESC)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS owner_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL REFERENCES users(id), target_user_id TEXT REFERENCES users(id) ON DELETE SET NULL, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
@@ -234,12 +240,6 @@ async function clearRateLimit(env, key) {
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
-  const avatarServiceRoute = path === "/v1.1/avatar-fetch" || path === "/v1/avatar-fetch" || path === "/Asset/BodyColors.ashx";
-  if (avatarServiceRoute && !env.DB) return json({error:"D1 binding DB is missing."},503);
-  if (avatarServiceRoute && env.DB) {
-    try { await ensureSiteSettings(env); }
-    catch (error) { console.error("[Pekora avatar setup] Database setup failed:",error); return json({error:"Avatar database setup failed."},503); }
-  }
   if (path.startsWith("/api/") && path !== "/api/health" && !env.DB) {
     return json({ error:"D1 binding DB is missing." },503);
   }
@@ -250,51 +250,6 @@ async function route(request, env) {
       return json({ error:"Catalog database setup failed. Check Worker logs." },503);
     }
   }
-  if (request.method === "GET" && (path === "/v1.1/avatar-fetch" || path === "/v1/avatar-fetch")) {
-    const renderId = Number(url.searchParams.get("userId"));
-    const placeId = Number(url.searchParams.get("placeId") || 0);
-    if (!Number.isSafeInteger(renderId) || renderId < 1 || !Number.isSafeInteger(placeId) || placeId < 0) return fail("Invalid avatar request.",400);
-    const target = await env.DB.prepare("SELECT u.id FROM avatar_render_users r JOIN users u ON u.id=r.user_id WHERE r.render_id=? AND u.is_banned=0").bind(renderId).first();
-    if (!target) return fail("Avatar not found.",404);
-    const colorId = 194;
-    const bodyColors = {
-      headColorId:colorId,leftArmColorId:colorId,leftLegColorId:colorId,rightArmColorId:colorId,rightLegColorId:colorId,torsoColorId:colorId,
-      HeadColor:colorId,LeftArmColor:colorId,LeftLegColor:colorId,RightArmColor:colorId,RightLegColor:colorId,TorsoColor:colorId
-    };
-    const wornAssets = await env.DB.prepare("SELECT i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND i.asset_id>0 AND i.asset_type_id>0 ORDER BY e.equipped_at DESC").bind(target.id).all();
-    const assetAndAssetTypeIds = (wornAssets.results || []).map(item=>({assetId:Number(item.asset_id),assetTypeId:Number(item.asset_type_id)}));
-    const scales = {height:1,Height:1,width:1,Width:1,head:1,Head:1,depth:1,Depth:1,proportion:0,Proportion:0,bodyType:0,BodyType:0};
-    const bodyColorsUrl = new URL("/Asset/BodyColors.ashx?userId="+renderId,request.url).toString();
-    return json({
-      resolvedAvatarType:"R15",
-      accessoryVersionIds:[],
-      equippedGearVersionIds:[],
-      assetAndAssetTypeIds,
-      backpackGearVersionIds:[],
-      animationAssetIds:{},
-      playerAvatarType:"R15",
-      scales,
-      bodyColorsUrl,
-      bodyColors,
-      emotes:[]
-    },200,{"cache-control":"no-store"});
-  }
-
-  if (request.method === "GET" && path === "/Asset/BodyColors.ashx") {
-    const renderId = Number(url.searchParams.get("userId"));
-    if (!Number.isSafeInteger(renderId) || renderId < 1) return fail("Invalid avatar request.",400);
-    const target = await env.DB.prepare("SELECT render_id FROM avatar_render_users WHERE render_id=?").bind(renderId).first();
-    if (!target) return fail("Avatar not found.",404);
-    const colorId = 194;
-    const xml = '<?xml version="1.0" encoding="utf-8"?>' +
-      '<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">' +
-      '<External>null</External><External>nil</External><Item class="BodyColors"><Properties>' +
-      '<int name="HeadColor">'+colorId+'</int><int name="LeftArmColor">'+colorId+'</int><int name="LeftLegColor">'+colorId+'</int>' +
-      '<string name="Name">Body Colors</string><int name="RightArmColor">'+colorId+'</int><int name="RightLegColor">'+colorId+'</int>' +
-      '<int name="TorsoColor">'+colorId+'</int><bool name="archivable">true</bool></Properties></Item></roblox>';
-    return new Response(xml,{headers:{"content-type":"application/xml; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});
-  }
-
   if (request.method === "GET" && path === "/api/health") {
     if (!env.DB) return json({ ok:false, site:"Pekora", database:false, schema:false, error:"D1 binding DB is missing." },503);
     try {
@@ -506,134 +461,11 @@ async function route(request, env) {
     return json({ profile:{id:profile.id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n} });
   }
 
-  if (request.method === "POST" && path === "/api/avatar/render") {
-    const user = await requireUser(request,env);
-    if (!user) return fail("Please sign in.",401);
-    const rendererBase = String(env.AVATAR_RENDERER_URL || "").trim();
-    const rendererSecret = String(env.AVATAR_RENDERER_SECRET || "").trim();
-    if (!rendererBase || rendererSecret.length < 32) {
-      return json({error:"The renderer URL or shared renderer secret is not configured in Cloudflare Worker secrets."},503);
-    }
-    let rendererUrl;
-    try {
-      const base = new URL(rendererBase);
-      if (base.protocol !== "https:" || base.username || base.password) throw new Error("Invalid renderer URL");
-      rendererUrl = new URL("/player/thumbnail-3d",base).toString();
-    } catch {
-      return json({error:"AVATAR_RENDERER_URL must be a valid HTTPS URL."},503);
-    }
-
-    await env.DB.prepare("INSERT OR IGNORE INTO avatar_render_users (user_id) VALUES (?)").bind(user.id).run();
-    const mapping = await env.DB.prepare("SELECT render_id,last_rendered_at FROM avatar_render_users WHERE user_id=?").bind(user.id).first();
-    if (!mapping) return json({error:"Could not allocate an avatar render ID."},503);
-    const now = Math.floor(Date.now()/1000);
-    if (Number(mapping.last_rendered_at || 0) > now - 4) {
-      const cached = await env.DB.prepare("SELECT avatar_json FROM profiles WHERE user_id=?").bind(user.id).first();
-      try {
-        const render = cached?.avatar_json ? JSON.parse(cached.avatar_json) : null;
-        if (render?.camera && render?.aabb && render?.obj && render?.mtl && Array.isArray(render?.textures)) return json({ok:true,cached:true,render});
-      } catch {}
-      return json({error:"Avatar renderer is busy. Wait a few seconds and try again."},429,{"retry-after":"4"});
-    }
-    await env.DB.prepare("UPDATE avatar_render_users SET last_rendered_at=? WHERE user_id=?").bind(now,user.id).run();
-
-    let upstream;
-    try {
-      upstream = await fetch(rendererUrl,{
-        method:"POST",
-        headers:{
-          "content-type":"application/json",
-          "X-Pekora-Renderer-Secret":rendererSecret
-        },
-        body:JSON.stringify({userId:Number(mapping.render_id)})
-      });
-    } catch (error) {
-      console.error("[Pekora avatar] Renderer request failed:",error);
-      return json({error:"Could not reach the private avatar renderer."},502);
-    }
-    const upstreamText = await upstream.text();
-    let upstreamData;
-    try { upstreamData = JSON.parse(upstreamText); }
-    catch { return json({error:"The avatar renderer returned an invalid response."},502); }
-    if (!upstream.ok || upstreamData?.success !== true) {
-      console.error("[Pekora avatar] Renderer rejected request:",upstream.status,upstreamData?.message);
-      return json({error:"The avatar renderer could not render this character."},502);
-    }
-
-    let source = upstreamData.data;
-    if (typeof source === "string") {
-      try { source = JSON.parse(source); }
-      catch { return json({error:"The renderer returned malformed 3D data."},502); }
-    }
-    const aabb = source?.aabb || source?.AABB;
-    const files = source?.files;
-    const camera = source?.camera;
-    if (!camera?.position || !camera?.direction || !aabb?.min || !aabb?.max || !files || typeof files !== "object") {
-      return json({error:"The renderer response is missing camera, bounds, or model files."},502);
-    }
-    const fileEntries = Object.entries(files).filter(([name,value]) =>
-      /^[A-Za-z0-9_.-]{1,120}$/.test(name) && value && typeof value.content === "string"
-    );
-    const objEntry = fileEntries.find(([name])=>name.toLowerCase()==="scene.obj");
-    const mtlEntry = fileEntries.find(([name])=>name.toLowerCase()==="scene.mtl");
-    const textureEntries = fileEntries.filter(([name])=>name.toLowerCase().includes("tex.png"));
-    if (!objEntry || !mtlEntry || textureEntries.length > 12) return json({error:"The renderer did not return a complete OBJ/MTL avatar."},502);
-
-    const storedFiles = [];
-    let totalBytes = 0;
-    for (const [fileName,fileValue] of [objEntry,mtlEntry,...textureEntries]) {
-      const encoded = fileValue.content.replace(/\s/g,"");
-      if (!encoded || encoded.length > 1400000 || encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
-        return json({error:"A 3D avatar file has an invalid or oversized payload."},413);
-      }
-      let binary;
-      try { binary = atob(encoded); }
-      catch { return json({error:"A 3D avatar file could not be decoded."},502); }
-      const bytes = new Uint8Array(binary.length);
-      for (let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
-      totalBytes += bytes.byteLength;
-      if (bytes.byteLength > 1000000 || totalBytes > 4000000) return json({error:"The 3D avatar files exceed the storage limit."},413);
-      const fileId = id();
-      const contentType = fileName.toLowerCase().endsWith(".png") ? "image/png" : (fileName.toLowerCase()==="scene.obj" ? "text/plain; charset=utf-8" : "text/plain; charset=utf-8");
-      const fileUrl = new URL("/api/avatar-assets/"+fileId+"/"+encodeURIComponent(fileName),request.url).toString();
-      storedFiles.push({id:fileId,fileName,bytes,contentType,url:fileUrl});
-    }
-    const objFile = storedFiles.find(file=>file.fileName.toLowerCase()==="scene.obj");
-    const mtlFile = storedFiles.find(file=>file.fileName.toLowerCase()==="scene.mtl");
-    const textures = storedFiles.filter(file=>file.fileName.toLowerCase().includes("tex.png")).map(file=>file.url);
-    const render = {camera,aabb,mtl:mtlFile.url,obj:objFile.url,textures};
-    const statements = [
-      env.DB.prepare("DELETE FROM avatar_render_files WHERE user_id=?").bind(user.id),
-      ...storedFiles.map(file=>env.DB.prepare("INSERT INTO avatar_render_files (id,user_id,file_name,file_data,content_type) VALUES (?,?,?,?,?)").bind(file.id,user.id,file.fileName,file.bytes,file.contentType)),
-      env.DB.prepare("INSERT INTO profiles (user_id,avatar_json) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET avatar_json=excluded.avatar_json").bind(user.id,JSON.stringify(render))
-    ];
-    await env.DB.batch(statements);
-    return json({ok:true,render});
-  }
-
-  const avatarAssetMatch = path.match(/^\/api\/avatar-assets\/([A-Za-z0-9-]+)\/([A-Za-z0-9_.-]{1,120})$/);
-  if (request.method === "GET" && avatarAssetMatch) {
-    const file = await env.DB.prepare("SELECT file_data,content_type FROM avatar_render_files WHERE id=? AND file_name=?").bind(avatarAssetMatch[1],avatarAssetMatch[2]).first();
-    if (!file?.file_data) return fail("Avatar file not found.",404);
-    return new Response(file.file_data,{headers:{
-      "content-type":file.content_type || "application/octet-stream",
-      "cache-control":"public, max-age=31536000, immutable",
-      "x-content-type-options":"nosniff",
-      "access-control-allow-origin":"*"
-    }});
-  }
-
   if (path === "/api/avatar" && request.method === "GET") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(user.id).all();
-    const profile = await env.DB.prepare("SELECT avatar_json FROM profiles WHERE user_id=?").bind(user.id).first();
-    let render = null;
-    try {
-      const parsed = profile?.avatar_json ? JSON.parse(profile.avatar_json) : null;
-      if (parsed && parsed.camera && parsed.aabb && typeof parsed.obj === "string" && typeof parsed.mtl === "string" && Array.isArray(parsed.textures)) render = parsed;
-    } catch {}
-    return json({ enabled:true, rendering:!!render, equipped:rows.results||[], render, message:render ? "OpenPekora 3D avatar data is ready." : "The original renderer is installed. A compatible OpenPekora thumbnail service must generate avatar data." });
+    return json({ enabled:true, equipped:rows.results||[] });
   }
 
   if (path === "/api/avatar" && request.method === "PUT") {
@@ -918,6 +750,135 @@ async function route(request, env) {
     return json({warnings:rows.results||[]});
   }
 
+  if (request.method === "GET" && path === "/api/games") {
+    const rows = await env.DB.prepare("SELECT id,title,description,thumbnail_url,created_at FROM games ORDER BY created_at DESC,title LIMIT 100").all();
+    return json({games:rows.results||[]});
+  }
+
+  if (path.startsWith("/api/owner/games")) {
+    const actor = await requireUser(request,env);
+    if (!actor) return fail("Please sign in.",401);
+    if (actor.role !== "OWNER") return fail("Owner access required.",403);
+    if (path === "/api/owner/games" && request.method === "GET") {
+      const rows = await env.DB.prepare("SELECT id,title,description,thumbnail_url,created_at FROM games ORDER BY created_at DESC").all();
+      return json({games:rows.results||[]});
+    }
+    if (path === "/api/owner/games" && request.method === "POST") {
+      const data = await body(request);
+      const title = String(data?.title||"").trim();
+      const description = String(data?.description||"").trim();
+      const thumbnail = String(data?.thumbnail_url||"").trim();
+      if (!title || title.length>80) return fail("Game title must be 1–80 characters.");
+      if (description.length>500) return fail("Description must be 500 characters or less.");
+      if (thumbnail) {
+        try { const image = new URL(thumbnail); if (image.protocol!=="https:") throw new Error(); }
+        catch { return fail("Game image must be a valid HTTPS URL."); }
+      }
+      const gameId=id();
+      await env.DB.prepare("INSERT INTO games (id,title,description,thumbnail_url) VALUES (?,?,?,?)").bind(gameId,title,description,thumbnail).run();
+      return json({ok:true,id:gameId},201);
+    }
+    const gameMatch=path.match(/^\/api\/owner\/games\/([A-Za-z0-9-]+)$/);
+    if (gameMatch && request.method==="DELETE") {
+      await env.DB.prepare("DELETE FROM games WHERE id=?").bind(gameMatch[1]).run();
+      return json({ok:true});
+    }
+    return fail("Unsupported game management action.",405);
+  }
+
+  if (path === "/api/trades" && request.method === "GET") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const rows = await env.DB.prepare(`SELECT t.*,s.username AS sender_name,r.username AS recipient_name
+      FROM trades t JOIN users s ON s.id=t.sender_id JOIN users r ON r.id=t.recipient_id
+      WHERE t.sender_id=? OR t.recipient_id=? ORDER BY t.created_at DESC LIMIT 40`).bind(user.id,user.id).all();
+    const trades = [];
+    for (const row of rows.results||[]) {
+      const offeredIds = JSON.parse(row.offered_items||"[]");
+      const requestedIds = JSON.parse(row.requested_items||"[]");
+      const loadItems = async (ownerId,ids) => {
+        if (!ids.length) return [];
+        const marks=ids.map(()=>"?").join(",");
+        const found=await env.DB.prepare(`SELECT i.id,i.name,i.category,i.image_url,i.price FROM items i WHERE i.id IN (${marks})`).bind(...ids).all();
+        return found.results||[];
+      };
+      trades.push({...row,offeredItems:await loadItems(row.sender_id,offeredIds),requestedItems:await loadItems(row.recipient_id,requestedIds)});
+    }
+    return json({trades});
+  }
+
+  if (path === "/api/trades" && request.method === "POST") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const data=await body(request);
+    const username=String(data?.username||"").trim();
+    const recipient=await env.DB.prepare("SELECT id,username FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
+    if (!recipient) return fail("Player not found.",404);
+    if (recipient.id===user.id) return fail("You cannot trade with yourself.");
+    const offered=Array.isArray(data?.offeredIds)?data.offeredIds:[];
+    const requested=Array.isArray(data?.requestedIds)?data.requestedIds:[];
+    const validIds=arr=>arr.length<=10&&arr.every(x=>typeof x==="string"&&/^[A-Za-z0-9_-]{1,80}$/.test(x))&&new Set(arr).size===arr.length;
+    if (!validIds(offered)||!validIds(requested)||(!offered.length&&!requested.length)) return fail("Choose up to 10 different items for each side of the trade.");
+    const checkOwned=async(ownerId,ids)=>{
+      if(!ids.length)return true;
+      const marks=ids.map(()=>"?").join(",");
+      const rows=await env.DB.prepare(`SELECT item_id FROM inventory WHERE user_id=? AND item_id IN (${marks})`).bind(ownerId,...ids).all();
+      return (rows.results||[]).length===ids.length;
+    };
+    if(!(await checkOwned(user.id,offered)))return fail("One or more items you offered are not in your inventory.",409);
+    if(!(await checkOwned(recipient.id,requested)))return fail("One or more requested items are not in that player's inventory.",409);
+    const ownsIncoming=async(ownerId,ids)=>ids.length?await checkOwned(ownerId,ids):false;
+    if(await ownsIncoming(recipient.id,offered))return fail("That player already owns an item you offered.",409);
+    if(await ownsIncoming(user.id,requested))return fail("You already own an item requested in this trade.",409);
+    const tradeId=id();
+    const statements=[env.DB.prepare("INSERT INTO trades (id,sender_id,recipient_id,offered_items,requested_items) VALUES (?,?,?,?,?)").bind(tradeId,user.id,recipient.id,JSON.stringify(offered),JSON.stringify(requested))];
+    for(const itemId of offered) statements.push(env.DB.prepare("INSERT INTO trade_locks (owner_id,item_id,trade_id) VALUES (?,?,?)").bind(user.id,itemId,tradeId));
+    for(const itemId of requested) statements.push(env.DB.prepare("INSERT INTO trade_locks (owner_id,item_id,trade_id) VALUES (?,?,?)").bind(recipient.id,itemId,tradeId));
+    try { await env.DB.batch(statements); }
+    catch { return fail("One of these items is already reserved in another pending trade.",409); }
+    return json({ok:true,id:tradeId},201);
+  }
+
+  const tradeActionMatch=path.match(/^\/api\/trades\/([A-Za-z0-9-]+)$/);
+  if (tradeActionMatch && request.method==="POST") {
+    const user=await requireUser(request,env);
+    if(!user)return fail("Please sign in.",401);
+    const trade=await env.DB.prepare("SELECT * FROM trades WHERE id=? AND status='PENDING'").bind(tradeActionMatch[1]).first();
+    if(!trade)return fail("Pending trade not found.",404);
+    const data=await body(request),action=String(data?.action||"");
+    const isSender=trade.sender_id===user.id,isRecipient=trade.recipient_id===user.id;
+    if(action==="cancel"&&!isSender)return fail("Only the sender can cancel this trade.",403);
+    if((action==="accept"||action==="decline")&&!isRecipient)return fail("Only the recipient can respond to this trade.",403);
+    if(!["accept","decline","cancel"].includes(action))return fail("Unknown trade action.");
+    if(action==="accept"){
+      const offered=JSON.parse(trade.offered_items||"[]"),requested=JSON.parse(trade.requested_items||"[]");
+      const owned=async(ownerId,ids)=>{
+        if(!ids.length)return true;
+        const marks=ids.map(()=>"?").join(",");
+        const rows=await env.DB.prepare(`SELECT item_id FROM inventory WHERE user_id=? AND item_id IN (${marks})`).bind(ownerId,...ids).all();
+        return (rows.results||[]).length===ids.length;
+      };
+      if(!(await owned(trade.sender_id,offered))||!(await owned(trade.recipient_id,requested)))return fail("Trade items changed. Cancel this trade and create a new one.",409);
+      if((offered.length&&await owned(trade.recipient_id,offered))||(requested.length&&await owned(trade.sender_id,requested)))return fail("One player already owns an incoming item. Trade cannot be completed.",409);
+      const changed=await env.DB.prepare("UPDATE trades SET status='ACCEPTED',responded_at=datetime('now') WHERE id=? AND status='PENDING' AND recipient_id=?").bind(trade.id,user.id).run();
+      if(!changed?.meta?.changes)return fail("This trade was already answered.",409);
+      const statements=[
+        ...offered.map(itemId=>env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=?").bind(trade.sender_id,itemId)),
+        ...requested.map(itemId=>env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=?").bind(trade.recipient_id,itemId)),
+        ...offered.map(itemId=>env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) VALUES (?,?,?)").bind(id(),trade.recipient_id,itemId)),
+        ...requested.map(itemId=>env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) VALUES (?,?,?)").bind(id(),trade.sender_id,itemId)),
+        env.DB.prepare("DELETE FROM trade_locks WHERE trade_id=?").bind(trade.id)
+      ];
+      await env.DB.batch(statements);
+      return json({ok:true,status:"ACCEPTED"});
+    }
+    const status=action==="decline"?"DECLINED":"CANCELLED";
+    const changed=await env.DB.prepare("UPDATE trades SET status=?,responded_at=datetime('now') WHERE id=? AND status='PENDING' AND "+(action==="decline"?"recipient_id=?":"sender_id=?")).bind(status,trade.id,user.id).run();
+    if(!changed?.meta?.changes)return fail("This trade was already answered.",409);
+    await env.DB.prepare("DELETE FROM trade_locks WHERE trade_id=?").bind(trade.id).run();
+    return json({ok:true,status});
+  }
+
   if (path.startsWith("/api/owner/items")) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
@@ -991,7 +952,7 @@ async function route(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/") || url.pathname === "/v1.1/avatar-fetch" || url.pathname === "/v1/avatar-fetch" || url.pathname === "/Asset/BodyColors.ashx") {
+    if (url.pathname.startsWith("/api/")) {
       try { return await route(request,env); }
       catch (error) {
         if (error instanceof RequestBodyTooLarge) return fail("Request body must be 16 KB or smaller.",413);
