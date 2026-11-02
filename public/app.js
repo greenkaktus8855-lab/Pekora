@@ -382,7 +382,7 @@ async function profile(username=me?.username){
   if(!isActiveView(view))return;
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header"><div class="op-profile-avatar op-profile-avatar-3d"><pekora-avatar-viewer class="profile-avatar-viewer" height="300px" items=\''+esc(JSON.stringify(equipped))+'\'></pekora-avatar-viewer></div><div class="op-profile-info">'+
+   '<div class="op-profile-header"><div class="op-profile-avatar">'+avatar(p.username)+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(p.id)+'</strong></div><h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span></div>'+
