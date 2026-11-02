@@ -579,8 +579,8 @@ pekora-avatar-viewer:active{cursor:grabbing}
 
 /* OpenPekora Limited overlay and inventory stock */
 .item-image,.item-detail-image,.owner-item-thumb{position:relative}
-.limited-overlay{
- position:absolute;left:5px;bottom:5px;width:70px;height:24px;
+.item-image .limited-overlay,.item-detail-image .limited-overlay,.owner-item-thumb .limited-overlay{
+ position:absolute;left:5px;bottom:5px;width:70px;height:24px;max-width:70px;max-height:24px;
  object-fit:contain;z-index:2;pointer-events:none
 }
 .stock-overlay{
