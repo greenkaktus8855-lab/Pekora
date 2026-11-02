@@ -298,7 +298,7 @@ async function route(request, env) {
     const data = await body(request);
     if (!data || typeof data.username !== "string" || typeof data.password !== "string") return registrationFailure("Enter a username and password.");
     const username = data.username.trim();
-    if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return registrationFailure("Username must be 3–20 characters and use only letters, numbers or _.");
+    if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return registrationFailure("Username must be 1–20 characters and use only letters, numbers or _.");
     if (username.toLowerCase() === "pekoraadmin") return registrationFailure("That username is reserved.");
     if (data.password.length < 8 || data.password.length > 128) return registrationFailure("Password must be at least 8 characters.");
     const exists = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first();
@@ -430,7 +430,7 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
-  const profileInventoryMatch = path.match(/^\/api\/profile\/([A-Za-z0-9_]{3,20})\/inventory$/);
+  const profileInventoryMatch = path.match(/^\/api\/profile\/([A-Za-z0-9_]{1,20})\/inventory$/);
   if (request.method === "GET" && profileInventoryMatch) {
     const username = profileInventoryMatch[1];
     const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
