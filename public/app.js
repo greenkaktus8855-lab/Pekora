@@ -2,7 +2,7 @@ const app=document.getElementById("app");
 const accountArea=document.getElementById("accountArea");
 const currency=document.getElementById("currency");
 const sidebar=document.getElementById("sidebar");
-let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set();
+let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set(),ownershipLoaded=true,ownershipUserId=null;
 let activeView=0;
 const beginView=()=>++activeView;
 const isActiveView=view=>view===activeView;
@@ -48,6 +48,12 @@ function renderSidebar(active="home"){
 }
 
 function setUser(user){
+ const nextUserId=user?.id||null;
+ if(nextUserId!==ownershipUserId){
+  ownershipUserId=nextUserId;
+  ownedItemIds=new Set();
+  ownershipLoaded=!user;
+ }
  me=user;
  accountArea.innerHTML=user
   ? '<a class="account-name" href="#profile" data-page="profile">'+esc(user.username)+'</a><button id="logoutBtn" type="button">Log out</button>'
@@ -139,26 +145,31 @@ async function showItem(itemId,updateHistory=true){
  renderSidebar("catalog");
  if(updateHistory)history.pushState({page:"item",itemId},"","#item?id="+encodeURIComponent(itemId||""));
  let item=items.find(x=>x.id===itemId);
- if(!item){
+ if(!item||(me&&!ownershipLoaded)){
   try{
    const [catalogData,inventoryData]=await Promise.all([
-    api("/api/catalog"),
+    item?Promise.resolve({items}):api("/api/catalog"),
     me?api("/api/inventory"):Promise.resolve({items:[]})
    ]);
    if(!isActiveView(view))return;
-   items=catalogData.items||[];
+   if(!item){
+    items=catalogData.items||[];
+    item=items.find(x=>x.id===itemId);
+   }
    ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
-   item=items.find(x=>x.id===itemId)||(inventoryData.items||[]).find(x=>x.id===itemId);
+   ownershipLoaded=true;
+   item=item||(inventoryData.items||[]).find(x=>x.id===itemId);
   }catch(error){
-   if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(error.message)+'</div>';
+   if(isActiveView(view))app.innerHTML='<div class="empty">Could not verify item and inventory: '+esc(error.message)+'</div>';
    return;
   }
  }
  if(!isActiveView(view))return;
  if(!item){app.innerHTML='<div class="empty">Item not found. <a href="#catalog" data-page="catalog">Back to Catalog</a></div>';return}
+ const isOwned=ownedItemIds.has(item.id);
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'">':'<span>No preview available</span>')+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div><p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(item.id)?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div><p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
   '</div></div>';
  document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
 }
@@ -206,11 +217,16 @@ async function catalog(){
   const catalogData=await api("/api/catalog");
   items=catalogData.items||[];
   ownedItemIds=new Set();
+  ownershipLoaded=!me;
   if(me){
    try{
     const inventoryData=await api("/api/inventory");
     ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
-   }catch(error){console.warn("[Pekora catalog] Inventory state unavailable:",error)}
+    ownershipLoaded=true;
+   }catch(error){
+    ownershipLoaded=false;
+    console.warn("[Pekora catalog] Inventory state unavailable:",error);
+   }
   }
   drawCatalog("All","");
  }catch(e){
@@ -252,16 +268,17 @@ function drawCatalog(category,q){
  if(catalogSort==="price-low")list.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
  if(catalogSort==="price-high")list.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
  count.textContent=list.length+" items";
- el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="catalog-asset-kind">'+(x.asset_kind==="IMAGE_ONLY"?"Catalog item":"Original avatar service required")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
+ el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="catalog-asset-kind">'+(x.asset_kind==="IMAGE_ONLY"?"Catalog item":"Original avatar service required")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
 
 }async function buy(itemId){
  if(!me){page("login");return}
+ if(!ownershipLoaded){toast("Could not verify your inventory. Reload the Catalog and try again.");return}
  const view=activeView,userId=me.id;
  try{
   const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});
   if(!me||me.id!==userId)return;
-  me.balance=d.balance;ownedItemIds.add(itemId);setUser(me);toast("Item purchased");
+  me.balance=d.balance;ownedItemIds.add(itemId);ownershipLoaded=true;setUser(me);toast("Item purchased");
   if(isActiveView(view)){
    const detailButton=document.getElementById("detailBuy");
    if(detailButton?.isConnected){detailButton.disabled=true;detailButton.textContent="Owned";detailButton.classList.add("button","secondary")}
