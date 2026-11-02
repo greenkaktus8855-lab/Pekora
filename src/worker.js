@@ -388,7 +388,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,model_url,is_limited,created_at,CASE WHEN category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items WHERE is_for_sale=1 ORDER BY category,name").all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.stock_limit,(SELECT COUNT(*) FROM inventory v WHERE v.item_id=i.id) AS stock_sold,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i WHERE i.is_for_sale=1 AND (i.is_limited=0 OR i.stock_limit=0 OR (SELECT COUNT(*) FROM inventory v WHERE v.item_id=i.id)<i.stock_limit) ORDER BY i.category,i.name").all();
     return json({ items:rows.results || [] });
   }
 
@@ -397,14 +397,15 @@ async function route(request, env) {
     if (!user) return fail("Please sign in.",401);
     const data = await body(request);
     if (typeof data?.itemId !== "string") return fail("Invalid item.");
-    const item = await env.DB.prepare("SELECT * FROM items WHERE id=? AND is_for_sale=1").bind(data.itemId).first();
-    if (!item) return fail("Item not found.",404);
+    const item = await env.DB.prepare("SELECT *, (SELECT COUNT(*) FROM inventory v WHERE v.item_id=items.id) AS stock_sold FROM items WHERE id=? AND is_for_sale=1").bind(data.itemId).first();
+    if (!item) return fail("Item not found or sold out.",404);
+    if (item.is_limited && item.stock_limit > 0 && item.stock_sold >= item.stock_limit) return fail("This limited item is sold out.",409);
     if (item.price > user.balance) return fail("Not enough Pekora currency.",400);
     if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
     const purchaseId=id(), inventoryId=id();
     try {
       const results = await env.DB.batch([
-        env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM items WHERE id=? AND is_for_sale=1)").bind(item.price,user.id,item.price,user.id,item.id,item.id),
+        env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM items i WHERE i.id=? AND i.is_for_sale=1 AND (i.is_limited=0 OR i.stock_limit=0 OR (SELECT COUNT(*) FROM inventory v WHERE v.item_id=i.id)<i.stock_limit))").bind(item.price,user.id,item.price,user.id,item.id,item.id),
         env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE changes()=1").bind(inventoryId,user.id,item.id),
         env.DB.prepare("INSERT INTO purchases (id,user_id,item_id,price) SELECT ?,?,?,? WHERE changes()=1").bind(purchaseId,user.id,item.id,item.price)
       ]);
