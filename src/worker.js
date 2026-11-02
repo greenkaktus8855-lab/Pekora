@@ -103,8 +103,17 @@ function validItem(data, allowLegacyHttp = false) {
     }
     catch { return "Enter a valid image URL."; }
   }
-
-  
+  const model = String(data.model_url ?? "").trim();
+  if (model.length > 1000) return "3D model URL is too long.";
+  if (model) {
+    try {
+      const u = new URL(model);
+      if (u.protocol !== "https:") return "3D model URL must use HTTPS.";
+    } catch { return "Enter a valid 3D model URL."; }
+  }
+  if (data.category === "Accessories" && data.is_for_sale !== false && !model) {
+    return "Accessories need a real HTTPS 3D model URL before they can be listed for sale.";
+  }
   return null;
 }
 
@@ -124,6 +133,10 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("DELETE FROM auth_rate_limits WHERE window_started_at < CAST(strftime('%s','now') AS INTEGER)-86400"),
         env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')")
       ]);
+      const itemColumns = await env.DB.prepare("PRAGMA table_info(items)").all();
+      if (!(itemColumns.results || []).some(column => column.name === "model_url")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN model_url TEXT NOT NULL DEFAULT ''").run();
+      }
       // One-time public catalog cleanout requested for the November 2026 reset.
       // Inventory, purchases, users and balances are deliberately untouched.
       const cleanout = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='catalog_cleanout_2026_11_02'").first();
@@ -197,6 +210,7 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/health") {
     if (!env.DB) return json({ ok:false, site:"Pekora", database:false, schema:false, error:"D1 binding DB is missing." },503);
     try {
+      await ensureSiteSettings(env);
       await env.DB.prepare("SELECT 1 AS ok").first();
       const schema = await env.DB.prepare(
         "SELECT COUNT(*) AS total FROM sqlite_master WHERE type='table' AND name IN ('users','sessions','profiles','items','inventory','purchases','friends')"
@@ -208,7 +222,7 @@ async function route(request, env) {
         "SELECT id,username,password_hash,password_salt,role,balance,created_at,is_banned FROM users LIMIT 0",
         "SELECT token_hash,user_id,expires_at FROM sessions LIMIT 0",
         "SELECT user_id,description,avatar_json FROM profiles LIMIT 0",
-        "SELECT id,name,description,category,price,image_url,is_limited,is_for_sale,created_at FROM items LIMIT 0",
+        "SELECT id,name,description,category,price,image_url,model_url,is_limited,is_for_sale,created_at FROM items LIMIT 0",
         "SELECT id,user_id,item_id,purchased_at FROM inventory LIMIT 0",
         "SELECT id,user_id,item_id,price,purchased_at FROM purchases LIMIT 0",
         "SELECT user_id,friend_id,status,created_at FROM friends LIMIT 0"
@@ -328,7 +342,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,created_at,'IMAGE_ONLY' AS asset_kind FROM items WHERE is_for_sale=1 ORDER BY category,name").all();
+    const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,model_url,is_limited,created_at,CASE WHEN category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items WHERE is_for_sale=1 ORDER BY category,name").all();
     return json({ items:rows.results || [] });
   }
 
@@ -364,7 +378,7 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,'IMAGE_ONLY' AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -373,7 +387,7 @@ async function route(request, env) {
     const username = profileInventoryMatch[1];
     const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,'IMAGE_ONLY' AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -565,7 +579,7 @@ async function route(request, env) {
     if (!user) return fail("Please sign in.",401);
     if (user.role !== "OWNER") return fail("Owner access required.",403);
     if (path === "/api/owner/items" && request.method === "GET") {
-      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,is_for_sale,created_at,'IMAGE_ONLY' AS asset_kind FROM items ORDER BY created_at DESC,name").all();
+      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,model_url,is_limited,is_for_sale,created_at,CASE WHEN category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items ORDER BY created_at DESC,name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
@@ -577,7 +591,7 @@ async function route(request, env) {
       if (error) return fail(error);
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
       const itemId=id();
-      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,is_for_sale) VALUES (?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),data.is_for_sale===false?0:1).run();
+      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,is_for_sale) VALUES (?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),data.is_for_sale===false?0:1).run();
       return json({ok:true,id:itemId},201);
     }
     const match=path.match(/^\/api\/owner\/items\/([A-Za-z0-9_-]{1,80})$/i);
@@ -587,10 +601,10 @@ async function route(request, env) {
       const data=await body(request);
       if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid item update.");
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
-      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
+      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
       const keepLegacyImage = String(merged.image_url||"") === String(current.image_url||"");
       const error=validItem(merged,keepLegacyImage); if(error)return fail(error);
-      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),merged.is_for_sale,match[1]).run();
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),merged.is_for_sale,match[1]).run();
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
