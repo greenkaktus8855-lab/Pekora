@@ -592,7 +592,7 @@ async function route(request, env) {
     }
     const key = "items/" + crypto.randomUUID() + ".glb";
     await env.MODELS.put(key,bytes,{httpMetadata:{contentType:"model/gltf-binary",cacheControl:"public, max-age=31536000, immutable"}});
-    return json({ok:true,key,url:"/api/models/"+key},201);
+    return json({ok:true,key,url:new URL("/api/models/"+key,request.url).toString()},201);
   }
 
   const modelMatch = path.match(/^\/api\/models\/(items\/[A-Za-z0-9-]+\.glb)$/);
