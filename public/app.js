@@ -20,10 +20,9 @@ function renderSidebar(active="home"){
   ["inventory","icon-nav-inventory","Inventory"],
   ["settings","icon-nav-settings","Settings"]
  ];
- if(me.role==="OWNER")links.push(["owner","icon-nav-settings","Panel"]);
  sidebar.innerHTML='<div class="sidebar-card">'+
   '<a class="side-user" href="#profile" data-page="profile"><span class="side-avatar">'+avatar()+'</span><span><span class="side-username">'+esc(me.username)+'</span><span class="side-role">Account</span></span></a>'+
-  '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span>'+(id==="messages"?'<span class="side-count">0</span>':'')+'</a>').join("")+
+  '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span></a>').join("")+
   '<div class="side-separator"></div>'+
   (me.role==="OWNER"?'<a href="#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':'')+
   '</nav></div>';
@@ -433,9 +432,8 @@ async function render(name){
  else if(name==="inventory")await inventory();
  else if(name==="profile")await profile();
  else if(name==="avatar")await avatarPage();
- else if(name==="users")users();
+ else if(name==="users"||name==="community")users();
  else if(name==="friends")await friends();
- else if(name==="community"||name==="users")users();
  else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
  else if(name==="settings")await settings();
  else if(name==="owner")await owner();
