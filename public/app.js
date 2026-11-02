@@ -150,20 +150,7 @@ function itemPreview(x,extraClass=""){
  }
  return x?.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name||"Item")+'" loading="lazy">':'◇';
 }
-const LIMITED_BADGE_IMAGE="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEYAAAAYCAYAAABHqosDAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYxIDY0LjE0MDk0OSwgMjAxMC8xMi8wNy0xMDo1NzowMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNS4xIFdpbmRvd3MiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6NTBGNTlFMTgyNTMzMTFFMkE0NDlCNkU3NzkyQzlFM0QiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6NTBGNTlFMTkyNTMzMTFFMkE0NDlCNkU3NzkyQzlFM0QiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDo1MEY1OUUxNjI1MzMxMUUyQTQ0OUI2RTc3OTJDOUUzRCIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDo1MEY1OUUxNzI1MzMxMUUyQTQ0OUI2RTc3OTJDOUUzRCIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PrwhJkcAAAXVSURBVHja7FlrbBVF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";
-function limitedBadge(x){
- if(!Number(x?.is_limited))return "";
- return '<img class="limited-item-badge" src="'+LIMITED_BADGE_IMAGE+'" alt="Limited item">';
-}
-function limitedStockInfo(x){
- if(!Number(x?.is_limited))return "";
- const limit=Number(x.stock_limit||0),sold=Number(x.stock_sold||0);
- if(limit<=0)return '<div class="limited-stock-info">Limited item · Unlimited stock</div>';
- const left=Math.max(0,limit-sold);
- return '<div class="limited-stock-info"><span>'+left+' left</span><span>'+sold+' / '+limit+' sold</span></div>';
-}
-function isLimitedSoldOut(x){return Number(x?.is_limited)===1&&Number(x?.stock_limit||0)>0&&Number(x?.stock_sold||0)>=Number(x.stock_limit)}
-function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+limitedBadge(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+limitedStockInfo(x)+'</article>'}
+function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div></article>'}
 async function showItem(itemId,updateHistory=true){
  const view=beginView();
  const requestedUserId=me?.id||null;
@@ -202,8 +189,8 @@ async function showItem(itemId,updateHistory=true){
  if(!item){app.innerHTML='<div class="empty">Item not found. <a href="#catalog" data-page="catalog">Back to Catalog</a></div>';return}
  const isOwned=ownedItemIds.has(item.id);
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
-  '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+limitedBadge(item)+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+limitedStockInfo(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isLimitedSoldOut(item)?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
+  '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+'</div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
   '</div></div>';
  if(!isOwned&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
  document.getElementById("copyItemLink")?.addEventListener("click",async()=>{const shareUrl=new URL("/item/"+encodeURIComponent(item.id),location.origin).href;try{await navigator.clipboard.writeText(shareUrl);toast("Item link copied")}catch{toast("Could not copy link. Copy it from the address bar.")}});
@@ -311,7 +298,7 @@ function drawCatalog(category,q){
  if(catalogSort==="price-low")list.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
  if(catalogSort==="price-high")list.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
  count.textContent=list.length+" items";
- el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+limitedBadge(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+limitedStockInfo(x)+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(isLimitedSoldOut(x)?'<button class="button secondary" type="button" disabled>Sold Out</button>':ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
+ el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
 
 }async function buy(itemId){
@@ -344,7 +331,7 @@ function auth(kind){
  const view=beginView();
  renderSidebar("");
  const reg=kind==="register";
- app.innerHTML='<div class="form"><h2>'+(reg?"Create your Pekora account":"Log in to Pekora")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="3" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="8" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error"></div></form><p class="muted">'+(reg?'Already have an account? <a href="#login" data-page="login">Log in</a>':'New to Pekora? <a href="#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="#owner-recovery" data-page="owner-recovery">Recover PekoraAdmin account</a></p>')+'</div>';
+ app.innerHTML='<div class="form"><h2>'+(reg?"Create your Pekora account":"Log in to Pekora")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="1" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="8" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error"></div></form><p class="muted">'+(reg?'Already have an account? <a href="#login" data-page="login">Log in</a>':'New to Pekora? <a href="#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="#owner-recovery" data-page="owner-recovery">Recover PekoraAdmin account</a></p>')+'</div>';
  document.getElementById("authForm").addEventListener("submit",async e=>{
   e.preventDefault();const f=new FormData(e.target);
   try{
@@ -468,7 +455,7 @@ async function tradesPage(){
  renderSidebar("trades");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to trade items.</div>';return}
  app.innerHTML='<div class="trades-page"><h1 class="page-title">Trades</h1><section class="owner-section"><h2>Create a trade</h2><p class="muted">Choose items from your inventory and items from another player. Items are reserved while the offer is pending. Trades exchange items only and do not use real money.</p>'+
- '<form id="tradeTargetForm" class="trade-target-form"><label>Player username<input name="username" minlength="3" maxlength="20" required placeholder="Username"></label><button class="button" type="submit">Load inventories</button></form><div id="tradeBuilder" class="trade-builder"></div><div id="tradeMessage" class="muted"></div></section>'+
+ '<form id="tradeTargetForm" class="trade-target-form"><label>Player username<input name="username" minlength="1" maxlength="20" required placeholder="Username"></label><button class="button" type="submit">Load inventories</button></form><div id="tradeBuilder" class="trade-builder"></div><div id="tradeMessage" class="muted"></div></section>'+
  '<section class="owner-section"><h2>Your trade offers</h2><div id="tradeList" class="trade-list">Loading trades...</div></section></div>';
  async function loadTrades(){
   const host=document.getElementById("tradeList");if(!host)return;
@@ -553,7 +540,7 @@ async function loadFriendsList(view=activeView){
 function users(){
  const view=beginView();
  renderSidebar("users");
- app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Enter a username..." minlength="2" maxlength="20" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type at least 2 characters to find users. Search results will appear below.</div><div id="userResults" class="people-results"></div>';
+ app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Enter a username..." minlength="1" maxlength="20" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type at least 2 characters to find users. Search results will appear below.</div><div id="userResults" class="people-results"></div>';
  const form=document.getElementById("peopleSearchForm");
  const input=document.getElementById("userSearch");
  const results=document.getElementById("userResults");
@@ -562,7 +549,7 @@ function users(){
  async function runSearch(){
   const requestId=++latest;
   const q=input.value.trim();
-  if(q.length<2){results.innerHTML="";hint.textContent="Type at least 2 characters to find users. Search results will appear below.";hint.style.display="block";return}
+  if(q.length<1){results.innerHTML="";hint.textContent="Type at least 2 characters to find users. Search results will appear below.";hint.style.display="block";return}
   hint.textContent="Searching Pekora users...";
   hint.style.display="block";
   try{
@@ -589,7 +576,7 @@ function users(){
  });
  if(location.hash.startsWith("#users?")){
   input.value=new URLSearchParams(location.hash.split("?")[1]).get("q")||"";
-  if(input.value.length>=2)runSearch();
+  if(input.value.length>=1)runSearch();
  }
 }
 async function owner(){
@@ -602,9 +589,7 @@ async function owner(){
  '<label>Item name<input name="name" maxlength="80" required></label>'+
  '<label>Category<select name="category">'+ITEM_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
  '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
- '<label><span><input name="is_limited" type="checkbox"> Limited item</span></label>'+
- '<label>Stock limit (0 = unlimited)<input name="stock_limit" type="number" min="0" max="1000000" value="0"></label>'+
- '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
+ ''<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
  '<label>3D model file (.glb, max 1 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
  '<label>Or existing 3D model URL<input name="model_url" type="url" maxlength="1000" placeholder="https://...model.glb"></label>'+
  ''+
@@ -722,16 +707,16 @@ async function owner(){
   });
   function drawOwnerItems(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
-    '<div class="owner-item-thumb">'+itemPreview(x)+limitedBadge(x)+'</div>'+
+    '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
-    '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><label><input name="is_limited" type="checkbox" '+(x.is_limited?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" value="'+Number(x.stock_limit||0)+'" title="Stock limit (0 = unlimited)"><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"></div>'+
+    '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"></div>'+
     
-    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_limited?'Limited · '+Number(x.stock_sold||0)+'/'+Number(x.stock_limit||0)+' sold · '+Math.max(0,Number(x.stock_limit||0)-Number(x.stock_sold||0))+' left · ':'Unlimited · ')+(x.is_for_sale?'For sale':'Removed from catalog')+'</span></div>'+
+    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?'For sale':'Removed from catalog')+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
-     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",stock_limit:Number(f.get("stock_limit")||0)};
+     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||"")};
      await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(updated)});
      if(!isActiveView(view))return;
      ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated}:item);
@@ -764,7 +749,7 @@ async function owner(){
   newItemForm.addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
-    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",stock_limit:Number(f.get("stock_limit")||0)};
+    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||"")};
     const modelFile=f.get("model_file");
     if(modelFile instanceof File && modelFile.size){
      msg.textContent="Uploading 3D model...";
