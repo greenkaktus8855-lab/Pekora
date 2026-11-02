@@ -75,7 +75,11 @@ async function ensureSiteSettings(env) {
           env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('catalog_cleanout_2026_11_02','done')")
         ]);
       }
-    })();
+    })().catch(error => {
+      // Do not cache a rejected setup promise forever after a transient D1 failure.
+      siteSettingsPromise = undefined;
+      throw error;
+    });
   }
   return siteSettingsPromise;
 }
@@ -91,13 +95,19 @@ async function route(request, env) {
     }
   }
   if (request.method === "GET" && path === "/api/health") {
-    if (!env.DB) return json({ ok:false, site:"Pekora", database:false, error:"D1 binding DB is missing." },503);
+    if (!env.DB) return json({ ok:false, site:"Pekora", database:false, schema:false, error:"D1 binding DB is missing." },503);
     try {
       await env.DB.prepare("SELECT 1 AS ok").first();
-      return json({ ok:true, site:"Pekora", database:true });
+      const schema = await env.DB.prepare(
+        "SELECT COUNT(*) AS total FROM sqlite_master WHERE type='table' AND name IN ('users','sessions','profiles','items','inventory','purchases','friends')"
+      ).first();
+      if ((schema?.total || 0) !== 7) {
+        return json({ ok:false, site:"Pekora", database:true, schema:false, error:"D1 is reachable, but the Pekora migrations are missing or incomplete." },503);
+      }
+      return json({ ok:true, site:"Pekora", database:true, schema:true });
     } catch (error) {
       console.error("[Pekora health] D1 check failed:", error);
-      return json({ ok:false, site:"Pekora", database:false, error:"D1 database check failed. See Worker logs." },503);
+      return json({ ok:false, site:"Pekora", database:false, schema:false, error:"D1 database check failed. See Worker logs." },503);
     }
   }
 
@@ -127,7 +137,7 @@ async function route(request, env) {
 
   if (request.method === "POST" && path === "/api/login") {
     const data = await body(request);
-    if (!data || typeof data.username !== "string" || typeof data.password !== "string") return fail("Enter your username and password.");
+    if (!data || typeof data.username !== "string" || typeof data.password !== "string" || data.password.length < 8 || data.password.length > 128) return fail("Enter a valid username and a password of 8–128 characters.");
     const user = await env.DB.prepare("SELECT * FROM users WHERE username=? COLLATE NOCASE").bind(data.username.trim()).first();
     if (!user || user.is_banned || await passwordHash(data.password, user.password_salt) !== user.password_hash) return fail("Incorrect username or password.", 401);
     const token = randomToken();
@@ -148,7 +158,8 @@ async function route(request, env) {
 
   if (request.method === "POST" && path === "/api/bootstrap-owner") {
     const data = await body(request);
-    if (!env.OWNER_BOOTSTRAP_SECRET || typeof data?.secret !== "string" || data.secret.length < 1 ||
+    if (typeof env.OWNER_BOOTSTRAP_SECRET !== "string" || env.OWNER_BOOTSTRAP_SECRET.length < 20 ||
+        typeof data?.secret !== "string" || data.secret.length < 20 || data.secret.length > 512 ||
         await digest(data.secret) !== await digest(env.OWNER_BOOTSTRAP_SECRET)) return fail("Invalid owner setup key.",403);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE role='OWNER'").first();
     if (count.n > 0) return fail("An owner account has already been created.",409);
@@ -182,7 +193,7 @@ async function route(request, env) {
     const purchaseId=id(), inventoryId=id();
     try {
       const results = await env.DB.batch([
-        env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)").bind(item.price,user.id,item.price,user.id,item.id),
+        env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM items WHERE id=? AND is_for_sale=1)").bind(item.price,user.id,item.price,user.id,item.id,item.id),
         env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE changes()=1").bind(inventoryId,user.id,item.id),
         env.DB.prepare("INSERT INTO purchases (id,user_id,item_id,price) SELECT ?,?,?,? WHERE changes()=1").bind(purchaseId,user.id,item.id,item.price)
       ]);
@@ -200,7 +211,9 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path.startsWith("/api/profile/") && path.endsWith("/inventory")) {
-    const username = decodeURIComponent(path.slice("/api/profile/".length, -"/inventory".length));
+    let username;
+    try { username = decodeURIComponent(path.slice("/api/profile/".length, -"/inventory".length)); }
+    catch { return fail("Invalid username.",400); }
     const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!profile) return fail("User not found.",404);
     const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,'IMAGE_ONLY' AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
@@ -208,7 +221,9 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path.startsWith("/api/profile/")) {
-    const username = decodeURIComponent(path.slice("/api/profile/".length));
+    let username;
+    try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
+    catch { return fail("Invalid username.",400); }
     const profile = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.created_at,p.description,p.avatar_json
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
@@ -316,7 +331,7 @@ async function route(request, env) {
     const data = await body(request);
     const recoverySecret = env.OWNER_BOOTSTRAP_SECRET;
     if (typeof recoverySecret !== "string" || recoverySecret.length < 20 ||
-        typeof data?.secret !== "string" ||
+        typeof data?.secret !== "string" || data.secret.length < 20 || data.secret.length > 512 ||
         await digest(data.secret) !== await digest(recoverySecret)) {
       return fail("Invalid owner recovery secret.",403);
     }
