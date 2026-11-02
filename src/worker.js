@@ -383,7 +383,8 @@ async function route(request, env) {
     if (!user) return fail("Please sign in.",401);
     const data = await body(request);
     if (typeof data?.description !== "string" || data.description.length > 500) return fail("Description must be 500 characters or less.");
-    await env.DB.prepare("UPDATE profiles SET description=? WHERE user_id=?").bind(data.description,user.id).run();
+    await env.DB.prepare(`INSERT INTO profiles (user_id,description) VALUES (?,?)
+      ON CONFLICT(user_id) DO UPDATE SET description=excluded.description`).bind(user.id,data.description).run();
     return json({ok:true});
   }
 
