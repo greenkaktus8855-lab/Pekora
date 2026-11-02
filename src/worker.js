@@ -171,7 +171,11 @@ async function recordRateLimitFailure(env, key) {
   return false;
 }
 async function clearRateLimit(env, key) {
-  await env.DB.prepare("DELETE FROM auth_rate_limits WHERE rate_key=?").bind(key).run();
+  try {
+    await env.DB.prepare("DELETE FROM auth_rate_limits WHERE rate_key=?").bind(key).run();
+  } catch (error) {
+    console.warn("[Pekora rate limit] Could not clear attempt counter:", error);
+  }
 }
 
 async function route(request, env) {
