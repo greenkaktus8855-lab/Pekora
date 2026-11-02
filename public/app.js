@@ -45,6 +45,8 @@ function renderSidebar(active="home"){
   ["friends","icon-nav-friends","Friends"],
   ["avatar","icon-nav-charactercustomizer","Avatar"],
   ["inventory","icon-nav-inventory","Inventory"],
+  ["currency","icon-nav-currency","Currency"],
+  ["games","icon-nav-games","Games"],
   ["settings","icon-nav-settings","Settings"]
  ];
  sidebar.innerHTML='<div class="sidebar-card">'+
@@ -402,6 +404,27 @@ async function loadProfileFriendAction(username){
  }catch(e){if(isActiveView(view)&&host.isConnected)host.textContent=e.message}
 }
 
+async function currencyPage(){
+ const view=beginView();
+ renderSidebar("currency");
+ if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your Pekora balance.</div>';return}
+ app.innerHTML='<div class="currency-page"><h1 class="page-title">Pekora Currency</h1><section class="info-panel currency-balance-panel"><h2>Your balance</h2><strong class="currency-balance-value">'+Number(me.balance||0).toLocaleString()+' P$</strong><p class="muted">P$ is a virtual balance used only on this Pekora website. It has no real-world monetary value and cannot be purchased or withdrawn here.</p></section><section class="owner-section"><h2>Recent purchases</h2><div id="currencyHistory" class="currency-history">Loading purchase history...</div></section><a class="button" href="#catalog" data-page="catalog">Browse Catalog</a></div>';
+ try{
+  const d=await api("/api/currency/history");
+  const host=document.getElementById("currencyHistory");
+  if(!isActiveView(view)||!host)return;
+  const rows=d.purchases||[];
+  host.innerHTML=rows.length?'<div class="currency-history-list">'+rows.map(x=>'<article class="currency-history-row"><div><strong>'+esc(x.name)+'</strong><span class="muted">'+esc(x.category)+' · '+new Date(x.purchased_at).toLocaleString()+'</span></div><b>−'+Number(x.price||0).toLocaleString()+' P$</b></article>').join("")+'</div>':'<div class="op-empty">No purchases yet.</div>';
+ }catch(e){
+  const host=document.getElementById("currencyHistory");
+  if(isActiveView(view)&&host)host.textContent=e.message;
+ }
+}
+function gamesPage(){
+ beginView();
+ renderSidebar("games");
+ app.innerHTML='<div class="games-page"><h1 class="page-title">Games</h1><section class="info-panel games-coming-soon"><h2>Games are coming soon</h2><p class="muted">The Pekora game runtime and game servers are not connected yet. This page will be updated when a supported game service is available.</p></section></div>';
+}
 async function settings(){
  const view=beginView();
  renderSidebar("settings");
@@ -652,6 +675,8 @@ async function render(name){
  else if(name==="users"||name==="community")users();
  else if(name==="friends")await friends();
  else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
+ else if(name==="currency")await currencyPage();
+ else if(name==="games")gamesPage();
  else if(name==="settings")await settings();
  else if(name==="owner")await owner();
  else home();
