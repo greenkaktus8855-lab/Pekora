@@ -75,7 +75,7 @@ function setUser(user){
  renderSidebar(currentPage==="item"?"catalog":currentPage);
 }
 async function refreshMe(){try{const d=await api("/api/me");setUser(d.user)}catch{setUser(null)}}
-function page(name){const base=location.pathname.startsWith("/item/")?"/":"");history.pushState({page:name},"",base+"#"+name);render(name)}
+function page(name){const base=location.pathname.startsWith("/item/")?"/":"";history.pushState({page:name},"",base+"#"+name);render(name)}
 function currentRoute(){const match=location.pathname.match(new RegExp("^/item/([A-Za-z0-9_-]{1,80})/?$"));return match?"item?id="+encodeURIComponent(match[1]):(location.hash.slice(1)||"home")}
 window.addEventListener("popstate",()=>render(currentRoute()));
 document.addEventListener("click",e=>{
