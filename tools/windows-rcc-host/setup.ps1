@@ -15,8 +15,8 @@ foreach ($command in @("git", "node", "npm")) {
 }
 
 $nodeVersion = (node --version).Trim()
-if ($nodeVersion -notmatch '^v(2[2-9]|[3-9][0-9])\.') {
-    Write-Warning "Detected Node.js $nodeVersion. Node.js 22 LTS or newer is recommended for this renderer."
+if ($nodeVersion -notmatch '^v22\.') {
+    throw "Detected Node.js $nodeVersion. This upstream uWebSockets.js build requires Node.js 22 LTS on Windows. Install Node.js 22 LTS and run setup again."
 }
 
 New-Item -ItemType Directory -Force -Path $HostRoot | Out-Null
@@ -37,7 +37,7 @@ if (-not (Test-Path $PackageFile)) { throw "Missing upstream game-renderer/packa
 if (-not (Test-Path $RccFile)) { throw "Missing RCCService.exe in the upstream checkout." }
 
 $config = @{
-    BaseUrl = "https://YOUR-PEKORA-WORKER-URL/"
+    BaseUrl = "https://pekora.green-kaktus8855.workers.dev/"
     RCCUrl = "http://127.0.0.1"
     Debug = $true
     Ports = @{
@@ -72,4 +72,4 @@ Write-Host ""
 Write-Host "Preparation complete." -ForegroundColor Green
 Write-Host "Next: inspect and scan the upstream RCC executable before running it."
 Write-Host "Then start RCC and the renderer in separate PowerShell windows."
-Write-Host "NOTE: avatar rendering remains pending until Pekora implements /v1.1/avatar-fetch and a secured tunnel gateway."
+Write-Host "NOTE: avatar rendering requires the Pekora Worker deployment and an authenticated Cloudflare Tunnel connection."
