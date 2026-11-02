@@ -393,9 +393,9 @@ function users(){
  const hint=document.getElementById("peopleHint");
  let latest=0;
  async function runSearch(){
+  const requestId=++latest;
   const q=input.value.trim();
   if(q.length<2){results.innerHTML="";hint.textContent="Type at least 2 characters to find users. Search results will appear below.";hint.style.display="block";return}
-  const requestId=++latest;
   hint.textContent="Searching Pekora users...";
   hint.style.display="block";
   try{
@@ -407,7 +407,14 @@ function users(){
   }catch(e){if(requestId!==latest||!isActiveView(view))return;hint.textContent="Could not load users: "+e.message;hint.style.display="block";results.innerHTML=""}
  }
  form.addEventListener("submit",e=>{e.preventDefault();runSearch()});
- input.addEventListener("input",()=>{if(input.value.trim().length===0){latest++;results.innerHTML="";hint.textContent="Type at least 2 characters to find users. Search results will appear below.";hint.style.display="block"}});
+ input.addEventListener("input",()=>{
+  latest++;
+  results.innerHTML="";
+  hint.textContent=input.value.trim().length<2
+   ?"Type at least 2 characters to find users. Search results will appear below."
+   :"Press Search to find matching Pekora users.";
+  hint.style.display="block";
+ });
  if(location.hash.startsWith("#users?")){input.value=new URLSearchParams(location.hash.split("?")[1]).get("q")||"";if(input.value.length>=2)runSearch()}
 }
 async function owner(){
