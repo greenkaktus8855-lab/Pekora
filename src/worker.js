@@ -887,7 +887,7 @@ async function route(request, env) {
     if (!user) return fail("Please sign in.",401);
     if (user.role !== "OWNER") return fail("Owner access required.",403);
     if (path === "/api/owner/items" && request.method === "GET") {
-      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_limited,is_for_sale,created_at,CASE WHEN category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items ORDER BY created_at DESC,name").all();
+      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.stock_limit,(SELECT COUNT(*) FROM inventory v WHERE v.item_id=i.id) AS stock_sold,i.is_for_sale,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i ORDER BY i.created_at DESC,i.name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
@@ -898,12 +898,15 @@ async function route(request, env) {
       const data = await body(request), error = validItem(data);
       if (error) return fail(error);
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
+      if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
+      const stockLimit=Number(data.stock_limit||0);
+      if (!Number.isSafeInteger(stockLimit)||stockLimit<0||stockLimit>1000000||(data.is_limited===true&&stockLimit<1)) return fail("Limited items need a stock limit from 1 to 1,000,000. Set 0 for unlimited stock.");
       const itemId=id();
       const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
       const assetId = Number(data.asset_id || 0);
       const assetTypeId = Number(data.asset_type_id || (assetId ? (defaultAssetTypes[data.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID (for example neck, back, front, shoulder or waist).");
-      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_for_sale) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,data.is_for_sale===false?0:1).run();
+      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,is_for_sale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,data.is_limited?1:0,stockLimit,data.is_for_sale===false?0:1).run();
       return json({ok:true,id:itemId},201);
     }
     const match=path.match(/^\/api\/owner\/items\/([A-Za-z0-9_-]{1,80})$/i);
@@ -913,14 +916,16 @@ async function route(request, env) {
       const data=await body(request);
       if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid item update.");
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
-      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
+      if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
+      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_limited:data.is_limited===undefined?Boolean(current.is_limited):data.is_limited,stock_limit:data.stock_limit===undefined?Number(current.stock_limit||0):Number(data.stock_limit),is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
+      if (!Number.isSafeInteger(merged.stock_limit)||merged.stock_limit<0||merged.stock_limit>1000000||(merged.is_limited&&merged.stock_limit<1)) return fail("Limited items need a stock limit from 1 to 1,000,000. Set 0 for unlimited stock.");
       const keepLegacyImage = String(merged.image_url||"") === String(current.image_url||"");
       const error=validItem(merged,keepLegacyImage); if(error)return fail(error);
       const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
       const assetId = Number(merged.asset_id || 0);
       const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
-      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_for_sale,match[1]).run();
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,match[1]).run();
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
