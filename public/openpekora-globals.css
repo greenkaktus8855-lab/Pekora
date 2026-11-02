@@ -330,15 +330,15 @@ html div.container.big {
 }
 
 .spinner {
-    background-position: 50%;
-    background-repeat: no-repeat;
-    background-color: transparent;
     display: inline-block;
-    width: 100%;
-    background-size: auto 24px;
+    width: 24px;
     height: 24px;
     margin: 6px auto;
-    background-image: url("/img/loading.gif");
+    border: 3px solid #d5d5d5;
+    border-top-color: var(--primary-color, #00a2ff);
+    border-radius: 50%;
+    background: transparent;
+    animation: pekora-spin .8s linear infinite;
 }
 
 .text-overflow {
@@ -372,10 +372,23 @@ html div.container.big {
 }
 
 .icon-loading-legacy {
-    background: url(/img/loading_old.gif);
-    background-size: 48px 17px;
-    width: 48px;
+    display: inline-block;
+    width: 17px;
     height: 17px;
+    border: 2px solid #d5d5d5;
+    border-top-color: var(--primary-color, #00a2ff);
+    border-radius: 50%;
+    background: transparent;
+    vertical-align: middle;
+    animation: pekora-spin .8s linear infinite;
+}
+
+@keyframes pekora-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spinner, .icon-loading-legacy { animation-duration: 2s; }
 }
 
 .status-confirm, .status-error {
