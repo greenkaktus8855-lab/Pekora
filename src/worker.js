@@ -222,16 +222,18 @@ async function route(request, env) {
   if (request.method === "POST" && path === "/api/register") {
     const key = await rateLimitKey(request,"register");
     if (await isRateLimited(env,key)) return json({error:"Too many registration attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
-    const blocked = await recordRateLimitFailure(env,key);
-    if (blocked) return json({error:"Too many registration attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
+    const registrationFailure = async (message,status=400) => {
+      const blocked = await recordRateLimitFailure(env,key);
+      return blocked?json({error:"Too many registration attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail(message,status);
+    };
     const data = await body(request);
-    if (!data || typeof data.username !== "string" || typeof data.password !== "string") return fail("Enter a username and password.");
+    if (!data || typeof data.username !== "string" || typeof data.password !== "string") return registrationFailure("Enter a username and password.");
     const username = data.username.trim();
-    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Username must be 3–20 characters and use only letters, numbers or _.");
-    if (username.toLowerCase() === "pekoraadmin") return fail("That username is reserved.");
-    if (data.password.length < 8 || data.password.length > 128) return fail("Password must be at least 8 characters.");
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return registrationFailure("Username must be 3–20 characters and use only letters, numbers or _.");
+    if (username.toLowerCase() === "pekoraadmin") return registrationFailure("That username is reserved.");
+    if (data.password.length < 8 || data.password.length > 128) return registrationFailure("Password must be at least 8 characters.");
     const exists = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first();
-    if (exists) return fail("That username is already taken.", 409);
+    if (exists) return registrationFailure("That username is already taken.",409);
     const salt = randomToken();
     const hash = await passwordHash(data.password, salt);
     const userId = id();
@@ -244,10 +246,11 @@ async function route(request, env) {
       ]);
     } catch (error) {
       const existing = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first().catch(() => null);
-      if (existing) return fail("That username is already taken.", 409);
+      if (existing) return registrationFailure("That username is already taken.",409);
       console.error("[Pekora register] Account creation failed:", error);
-      return fail("Account creation failed. Please try again.", 503);
+      return registrationFailure("Account creation failed. Please try again.",503);
     }
+    await clearRateLimit(env,key);
     const user = await env.DB.prepare("SELECT id,username,role,balance,created_at,is_banned FROM users WHERE id=?").bind(userId).first();
     return json({ user:publicUser(user) }, 201, { "set-cookie":cookie("pekora_session",token,60*60*24*30) });
   }
