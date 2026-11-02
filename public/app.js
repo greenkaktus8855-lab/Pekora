@@ -540,7 +540,7 @@ async function loadFriendsList(view=activeView){
 function users(){
  const view=beginView();
  renderSidebar("users");
- app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Enter a username..." minlength="1" maxlength="20" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type at least 2 characters to find users. Search results will appear below.</div><div id="userResults" class="people-results"></div>';
+ app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Enter a username..." minlength="1" maxlength="20" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type at least 1 character to find users. Search results will appear below.</div><div id="userResults" class="people-results"></div>';
  const form=document.getElementById("peopleSearchForm");
  const input=document.getElementById("userSearch");
  const results=document.getElementById("userResults");
@@ -549,7 +549,7 @@ function users(){
  async function runSearch(){
   const requestId=++latest;
   const q=input.value.trim();
-  if(q.length<1){results.innerHTML="";hint.textContent="Type at least 2 characters to find users. Search results will appear below.";hint.style.display="block";return}
+  if(q.length<1){results.innerHTML="";hint.textContent="Type at least 1 character to find users. Search results will appear below.";hint.style.display="block";return}
   hint.textContent="Searching Pekora users...";
   hint.style.display="block";
   try{
@@ -569,8 +569,8 @@ function users(){
  input.addEventListener("input",()=>{
   latest++;
   results.innerHTML="";
-  hint.textContent=input.value.trim().length<2
-   ?"Type at least 2 characters to find users. Search results will appear below."
+  hint.textContent=input.value.trim().length<1
+   ?"Type at least 1 character to find users. Search results will appear below."
    :"Press Search to find matching Pekora users.";
   hint.style.display="block";
  });
