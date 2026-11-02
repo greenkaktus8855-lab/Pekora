@@ -288,13 +288,13 @@ function drawCatalog(category,q){
 }async function buy(itemId){
  if(!me){page("login");return}
  if(!ownershipLoaded){toast("Could not verify your inventory. Reload the Catalog and try again.");return}
- if(pendingPurchases.has(itemId))return;
- pendingPurchases.add(itemId);
+ const view=activeView,userId=me.id,pendingKey=userId+":"+itemId;
+ if(pendingPurchases.has(pendingKey))return;
+ pendingPurchases.add(pendingKey);
  const buttons=[...document.querySelectorAll("[data-buy]")].filter(button=>button.dataset.buy===itemId);
  const detailButton=document.getElementById("detailBuy");
  buttons.forEach(button=>{button.disabled=true;button.textContent="Buying..."});
  if(detailButton?.isConnected){detailButton.disabled=true;detailButton.textContent="Buying..."}
- const view=activeView,userId=me.id;
  try{
   const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});
   if(!me||me.id!==userId)return;
@@ -306,7 +306,7 @@ function drawCatalog(category,q){
   }
  }catch(e){toast(e.message)}
  finally{
-  pendingPurchases.delete(itemId);
+  pendingPurchases.delete(pendingKey);
   buttons.forEach(button=>{if(button.isConnected){button.disabled=false;button.textContent="Buy"}});
   if(detailButton?.isConnected&&!ownedItemIds.has(itemId)){detailButton.disabled=false;detailButton.textContent="Buy"}
  }
