@@ -190,11 +190,11 @@ async function route(request, env) {
     const data = await body(request);
     if (!data || typeof data.username !== "string" || !/^[A-Za-z0-9_]{3,20}$/.test(data.username.trim()) || typeof data.password !== "string" || data.password.length < 8 || data.password.length > 128) return fail("Enter a valid username and a password of 8–128 characters.");
     const key = await rateLimitKey(request,"login");
-    if (await isRateLimited(env,key)) return fail("Too many sign-in attempts. Try again in 15 minutes.",429,{"retry-after":"900"});
+    if (await isRateLimited(env,key)) return json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
     const user = await env.DB.prepare("SELECT * FROM users WHERE username=? COLLATE NOCASE").bind(data.username.trim()).first();
     if (!user || user.is_banned || await passwordHash(data.password, user.password_salt) !== user.password_hash) {
       const blocked = await recordRateLimitFailure(env,key);
-      return fail(blocked?"Too many sign-in attempts. Try again in 15 minutes.":"Incorrect username or password.",blocked?429:401,blocked?{"retry-after":"900"}:{});
+      return blocked?json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Incorrect username or password.",401);
     }
     await clearRateLimit(env,key);
     const token = randomToken();
