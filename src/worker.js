@@ -74,7 +74,7 @@ async function body(request) {
 }
 const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:u.balance, createdAt:u.created_at });
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
-function validItem(data) {
+function validItem(data, allowLegacyHttp = false) {
   if (!data || typeof data !== "object" || Array.isArray(data)) return "Invalid item details.";
   if (typeof data.name !== "string" || !data.name.trim() || data.name.trim().length > 80) return "Item name must be 1–80 characters.";
   if (!ITEM_CATEGORIES.includes(data.category)) return "Choose a valid item category.";
@@ -89,7 +89,10 @@ function validItem(data) {
   const image = String(data.image_url ?? "").trim();
   if (image.length > 500) return "Image URL is too long.";
   if (image) {
-    try { const u = new URL(image); if (!["http:","https:"].includes(u.protocol)) return "Image URL must use HTTP or HTTPS."; }
+    try {
+      const u = new URL(image);
+      if (u.protocol !== "https:" && !(allowLegacyHttp && u.protocol === "http:")) return "Image URL must use HTTPS.";
+    }
     catch { return "Enter a valid image URL."; }
   }
 
@@ -521,7 +524,8 @@ async function route(request, env) {
       if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid item update.");
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
       const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
-      const error=validItem(merged); if(error)return fail(error);
+      const keepLegacyImage = String(merged.image_url||"") === String(current.image_url||"");
+      const error=validItem(merged,keepLegacyImage); if(error)return fail(error);
       await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),merged.is_for_sale,match[1]).run();
       return json({ok:true});
     }
@@ -571,7 +575,7 @@ export default {
     headers.set("X-Frame-Options","DENY");
     headers.set("Referrer-Policy","strict-origin-when-cross-origin");
     headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
-    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
+    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
     return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   }
 };
