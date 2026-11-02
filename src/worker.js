@@ -352,6 +352,13 @@ async function route(request, env) {
     return json({ ok:true,balance:updated.balance });
   }
 
+  if (request.method === "GET" && path === "/api/currency/history") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const rows = await env.DB.prepare("SELECT p.price,p.purchased_at,i.name,i.category FROM purchases p JOIN items i ON i.id=p.item_id WHERE p.user_id=? ORDER BY p.purchased_at DESC LIMIT 50").bind(user.id).all();
+    return json({ purchases:rows.results || [] });
+  }
+
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
