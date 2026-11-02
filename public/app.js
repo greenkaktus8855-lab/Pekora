@@ -560,7 +560,8 @@ async function owner(){
  '<label>Category<select name="category">'+AVATAR_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
  '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
  '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
- '<label>3D model URL (.glb / .gltf)<input name="model_url" type="url" maxlength="1000" placeholder="https://...model.glb"></label>'+
+ '<label>3D model file (.glb, max 15 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
+ '<label>Or existing 3D model URL<input name="model_url" type="url" maxlength="1000" placeholder="https://...model.glb"></label>'+
  
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
@@ -642,6 +643,16 @@ async function owner(){
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
     const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||"")};
+    const modelFile=f.get("model_file");
+    if(modelFile instanceof File && modelFile.size){
+     msg.textContent="Uploading 3D model...";
+     const upload=await fetch("/api/owner/models",{method:"POST",credentials:"same-origin",headers:{"content-type":"model/gltf-binary"},body:modelFile});
+     let uploaded={};try{uploaded=await upload.json()}catch{}
+     if(!upload.ok)throw new Error(uploaded.error||"3D model upload failed.");
+     data.model_url=uploaded.url;
+    }
+    if(data.category==="Accessories"&&!data.model_url)throw new Error("Upload a GLB model before listing an accessory.");
+    msg.textContent="Saving item...";
     const result=await api("/api/owner/items",{method:"POST",body:JSON.stringify(data)});
     if(!isActiveView(view))return;
     e.target.reset();e.target.elements.price.value=50;msg.textContent="Item added.";
