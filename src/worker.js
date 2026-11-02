@@ -57,36 +57,15 @@ function validItem(data) {
     catch { return "Enter a valid image URL."; }
   }
 
-  const assetKind = data.asset_kind || "IMAGE_ONLY";
-  if (assetKind !== "IMAGE_ONLY") return "Wearable assets require the original Pekora Asset and Avatar APIs, which are not connected to this deployment.";
   
   return null;
 }
 
-let wearableSchemaPromise;
-async function ensureWearableSchema(env) {
-  if (!wearableSchemaPromise) {
-    wearableSchemaPromise = (async () => {
-      const statements = [
-        "ALTER TABLE items ADD COLUMN asset_kind TEXT NOT NULL DEFAULT 'IMAGE_ONLY'",
-        "ALTER TABLE items ADD COLUMN model_url TEXT NOT NULL DEFAULT ''",
-        "ALTER TABLE items ADD COLUMN attachment TEXT NOT NULL DEFAULT 'Head'",
-        "ALTER TABLE items ADD COLUMN model_scale REAL NOT NULL DEFAULT 1",
-        "ALTER TABLE items ADD COLUMN offset_x REAL NOT NULL DEFAULT 0",
-        "ALTER TABLE items ADD COLUMN offset_y REAL NOT NULL DEFAULT 0",
-        "ALTER TABLE items ADD COLUMN offset_z REAL NOT NULL DEFAULT 0",
-        "ALTER TABLE items ADD COLUMN rotation_x REAL NOT NULL DEFAULT 0",
-        "ALTER TABLE items ADD COLUMN rotation_y REAL NOT NULL DEFAULT 0",
-        "ALTER TABLE items ADD COLUMN rotation_z REAL NOT NULL DEFAULT 0",
-        "CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"
-      ];
-      for (const statement of statements) {
-        try { await env.DB.prepare(statement).run(); }
-        catch (error) {
-          if (!/duplicate column name/i.test(String(error?.message || error))) throw error;
-        }
-      }
-
+let siteSettingsPromise;
+async function ensureSiteSettings(env) {
+  if (!siteSettingsPromise) {
+    siteSettingsPromise = (async () => {
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)").run();
       // One-time public catalog cleanout requested for the November 2026 reset.
       // Inventory, purchases, users and balances are deliberately untouched.
       const cleanout = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='catalog_cleanout_2026_11_02'").first();
@@ -98,22 +77,16 @@ async function ensureWearableSchema(env) {
       }
     })();
   }
-  return wearableSchemaPromise;
-}
-function parseAvatar(raw) {
-  try {
-    const value = JSON.parse(raw || "{}");
-    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  } catch { return {}; }
+  return siteSettingsPromise;
 }
 
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
   if (path.startsWith("/api/") && path !== "/api/health" && env.DB) {
-    try { await ensureWearableSchema(env); }
+    try { await ensureSiteSettings(env); }
     catch (error) {
-      console.error("[Pekora schema] Wearable schema setup failed:", error);
+      console.error("[Pekora setup] Site settings setup failed:", error);
       return json({ error:"Catalog database setup failed. Check Worker logs." },503);
     }
   }
@@ -193,7 +166,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,created_at,asset_kind,model_url,attachment,model_scale,offset_x,offset_y,offset_z,rotation_x,rotation_y,rotation_z FROM items WHERE is_for_sale=1 ORDER BY category,name").all();
+    const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,created_at,'IMAGE_ONLY' AS asset_kind FROM items WHERE is_for_sale=1 ORDER BY category,name").all();
     return json({ items:rows.results || [] });
   }
 
@@ -222,7 +195,7 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.asset_kind,i.model_url,i.attachment,i.model_scale,i.offset_x,i.offset_y,i.offset_z,i.rotation_x,i.rotation_y,i.rotation_z FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,'IMAGE_ONLY' AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -230,7 +203,7 @@ async function route(request, env) {
     const username = decodeURIComponent(path.slice("/api/profile/".length, -"/inventory".length));
     const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.asset_kind,i.model_url,i.attachment,i.model_scale,i.offset_x,i.offset_y,i.offset_z,i.rotation_x,i.rotation_y,i.rotation_z FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,'IMAGE_ONLY' AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -240,7 +213,7 @@ async function route(request, env) {
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
-    return json({ profile:{...publicUser(profile),description:profile.description,itemCount:count.n,avatar:parseAvatar(profile.avatar_json)} });
+    return json({ profile:{...publicUser(profile),description:profile.description,itemCount:count.n} });
   }
 
   if (path === "/api/avatar" && request.method === "GET") {
@@ -361,7 +334,7 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user || user.role !== "OWNER") return fail("Owner access required.",403);
     if (path === "/api/owner/items" && request.method === "GET") {
-      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,is_for_sale,created_at,asset_kind,model_url,attachment,model_scale,offset_x,offset_y,offset_z,rotation_x,rotation_y,rotation_z FROM items ORDER BY created_at DESC,name").all();
+      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,is_for_sale,created_at,'IMAGE_ONLY' AS asset_kind FROM items ORDER BY created_at DESC,name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
@@ -372,16 +345,16 @@ async function route(request, env) {
       const data = await body(request), error = validItem(data);
       if (error) return fail(error);
       const itemId=id();
-      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,is_for_sale,asset_kind,model_url,attachment,model_scale,offset_x,offset_y,offset_z,rotation_x,rotation_y,rotation_z) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),data.is_for_sale===false?0:1,data.asset_kind||"IMAGE_ONLY",String(data.model_url||"").trim(),data.attachment||"Head",Number(data.model_scale??1),Number(data.offset_x??0),Number(data.offset_y??0),Number(data.offset_z??0),Number(data.rotation_x??0),Number(data.rotation_y??0),Number(data.rotation_z??0)).run();
+      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,is_for_sale) VALUES (?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),data.is_for_sale===false?0:1).run();
       return json({ok:true,id:itemId},201);
     }
     const match=path.match(/^\/api\/owner\/items\/([A-Za-z0-9_-]{1,80})$/i);
     if (match && request.method === "PATCH") {
       const current=await env.DB.prepare("SELECT * FROM items WHERE id=?").bind(match[1]).first();
       if (!current) return fail("Item not found.",404);
-      const data=await body(request), merged={name:data?.name??current.name,description:data?.description??current.description,category:data?.category??current.category,price:data?.price??current.price,image_url:data?.image_url??current.image_url,is_for_sale:data?.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0),asset_kind:data?.asset_kind??current.asset_kind,model_url:data?.model_url??current.model_url,attachment:data?.attachment??current.attachment,model_scale:data?.model_scale??current.model_scale,offset_x:data?.offset_x??current.offset_x,offset_y:data?.offset_y??current.offset_y,offset_z:data?.offset_z??current.offset_z,rotation_x:data?.rotation_x??current.rotation_x,rotation_y:data?.rotation_y??current.rotation_y,rotation_z:data?.rotation_z??current.rotation_z};
+      const data=await body(request), merged={name:data?.name??current.name,description:data?.description??current.description,category:data?.category??current.category,price:data?.price??current.price,image_url:data?.image_url??current.image_url,is_for_sale:data?.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
       const error=validItem(merged); if(error)return fail(error);
-      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,is_for_sale=?,asset_kind=?,model_url=?,attachment=?,model_scale=?,offset_x=?,offset_y=?,offset_z=?,rotation_x=?,rotation_y=?,rotation_z=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),merged.is_for_sale,merged.asset_kind||"IMAGE_ONLY",String(merged.model_url||"").trim(),merged.attachment||"Head",Number(merged.model_scale??1),Number(merged.offset_x??0),Number(merged.offset_y??0),Number(merged.offset_z??0),Number(merged.rotation_x??0),Number(merged.rotation_y??0),Number(merged.rotation_z??0),match[1]).run();
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),merged.is_for_sale,match[1]).run();
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
