@@ -388,7 +388,7 @@ html div.container.big {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .spinner, .icon-loading-legacy { animation-duration: 2s; }
+    .spinner, .icon-loading-legacy { animation: none; }
 }
 
 .status-confirm, .status-error {
