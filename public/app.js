@@ -75,7 +75,7 @@ function setUser(user){
  renderSidebar(currentPage==="item"?"catalog":currentPage);
 }
 async function refreshMe(){try{const d=await api("/api/me");setUser(d.user)}catch{setUser(null)}}
-function page(name){history.pushState({page:name},"","#"+name);render(name)}
+function page(name){const base=location.pathname.startsWith("/item/")?"/":"");history.pushState({page:name},"",base+"#"+name);render(name)}
 function currentRoute(){const match=location.pathname.match(new RegExp("^/item/([A-Za-z0-9_-]{1,80})/?$"));return match?"item?id="+encodeURIComponent(match[1]):(location.hash.slice(1)||"home")}
 window.addEventListener("popstate",()=>render(currentRoute()));
 document.addEventListener("click",e=>{
@@ -86,7 +86,7 @@ document.addEventListener("click",e=>{
   e.preventDefault();
   sidebar.classList.remove("mobile-open");
   const username=p.dataset.profile;
-  history.pushState({page:"profile",username},"","#profile?username="+encodeURIComponent(username));
+  history.pushState({page:"profile",username},"","/#profile?username="+encodeURIComponent(username));
   profile(username);
  }
  const item=e.target.closest("[data-item-view]");
@@ -96,7 +96,7 @@ document.getElementById("globalSearchForm").addEventListener("submit",e=>{
  e.preventDefault();
  const q=document.getElementById("globalSearch").value.trim().slice(0,20);
  const target="#users?q="+encodeURIComponent(q);
- history.pushState({page:"users",query:q},"",target);
+ history.pushState({page:"users",query:q},"","/"+target);
  render("users");
 });
 
