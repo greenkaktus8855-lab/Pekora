@@ -464,7 +464,7 @@ async function avatarPage(){
  app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1><a class="button" href="#catalog" data-page="catalog">Catalog</a></div>'+
   '<div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Avatar</h2><div class="avatar-preview-placeholder" id="avatarPreview">'+avatar(me.username)+'</div>'+
   '<p class="muted">Your equipped items are saved to your Pekora account.</p>'+
-  '<p class="muted">The original OpenPekora 3D preview needs its avatar-rendering service.</p><div id="avatarEquipped" class="avatar-equipped-list">Loading outfit...</div></section>'+
+  '<p class="muted" id="avatarRenderStatus">Preparing your 3D avatar...</p><div id="avatarEquipped" class="avatar-equipped-list">Loading outfit...</div></section>'+
   '<section class="avatar-wardrobe"><h2>Inventory</h2><div class="avatar-category-tabs" id="avatarCategories"></div><div id="avatarWardrobe" class="avatar-wardrobe-grid">Loading inventory...</div></section></div></div>';
  let wardrobe=[],activeCategory="Hats",equipped=new Set();
  try{
@@ -472,8 +472,27 @@ async function avatarPage(){
   if(!isActiveView(view))return;
   wardrobe=inventoryData.items||[];
   equipped=new Set((avatarData.equipped||[]).map(x=>x.id));
-  if(avatarData.render){const preview=document.getElementById("avatarPreview");if(preview)preview.innerHTML='<openpekora-avatar-renderer data-render=\''+esc(JSON.stringify(avatarData.render))+'\'></openpekora-avatar-renderer>';}
+  if(avatarData.render)showAvatarRender(avatarData.render);
+  else await refreshAvatarRender();
  }catch(e){const host=document.getElementById("avatarWardrobe");if(isActiveView(view)&&host)host.textContent=e.message;return}
+ function showAvatarRender(render){
+  const preview=document.getElementById("avatarPreview");
+  const status=document.getElementById("avatarRenderStatus");
+  if(preview)preview.innerHTML='<openpekora-avatar-renderer data-render=\''+esc(JSON.stringify(render))+'\'></openpekora-avatar-renderer>';
+  if(status)status.textContent="3D avatar is ready.";
+ }
+ async function refreshAvatarRender(){
+  const status=document.getElementById("avatarRenderStatus");
+  if(status)status.textContent="Rendering your avatar...";
+  try{
+   const result=await api("/api/avatar/render",{method:"POST"});
+   if(!isActiveView(view))return;
+   if(!result.render)throw new Error("The renderer did not return 3D avatar data.");
+   showAvatarRender(result.render);
+  }catch(error){
+   if(isActiveView(view)&&status?.isConnected)status.textContent=error.message;
+  }
+ }
  function renderEquipped(){
   const host=document.getElementById("avatarEquipped");if(!host)return;
   const worn=wardrobe.filter(x=>equipped.has(x.id));
@@ -498,6 +517,7 @@ async function avatarPage(){
     if(!isActiveView(view))return;
     if(action==="wear")equipped.add(itemId);else equipped.delete(itemId);
     renderWardrobe();renderEquipped();
+    await refreshAvatarRender();
    }catch(e){toast(e.message);b.disabled=false}
   }));
  }
