@@ -382,7 +382,7 @@ async function profile(username=me?.username){
   ]);
   if(!isActiveView(view))return;
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
-  const profileAvatar=avatarData.render?'<openpekora-avatar-renderer data-render=\\''+esc(JSON.stringify(avatarData.render))+'\\'></openpekora-avatar-renderer>':avatar(p.username);
+  const profileAvatar=avatarData.render?'<openpekora-avatar-renderer data-render=\''+esc(JSON.stringify(avatarData.render))+'\'></openpekora-avatar-renderer>':avatar(p.username);
   app.innerHTML='<div class="op-profile">'+
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(p.id)+'</strong></div><h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
@@ -467,7 +467,7 @@ async function avatarPage(){
   if(!isActiveView(view))return;
   wardrobe=inventoryData.items||[];
   equipped=new Set((avatarData.equipped||[]).map(x=>x.id));
-  if(avatarData.render){const preview=document.getElementById("avatarPreview");if(preview)preview.innerHTML='<openpekora-avatar-renderer data-render=\\''+esc(JSON.stringify(avatarData.render))+'\\'></openpekora-avatar-renderer>';}
+  if(avatarData.render){const preview=document.getElementById("avatarPreview");if(preview)preview.innerHTML='<openpekora-avatar-renderer data-render=\''+esc(JSON.stringify(avatarData.render))+'\'></openpekora-avatar-renderer>';}
  }catch(e){const host=document.getElementById("avatarWardrobe");if(isActiveView(view)&&host)host.textContent=e.message;return}
  function renderEquipped(){
   const host=document.getElementById("avatarEquipped");if(!host)return;
