@@ -483,3 +483,17 @@ button,input,textarea,select{font:inherit}
 .games-coming-soon{max-width:650px}
 .games-coming-soon h2{font-size:23px;font-weight:700;margin:0 0 8px}
 @media(max-width:767px){.currency-history-row{align-items:flex-start}.currency-history-row b{font-size:13px}}
+
+
+/* Interactive 3D accessory previews */
+model-viewer.pekora-model{display:block;width:100%;height:100%;min-height:150px;background:#f3f3f3;--poster-color:transparent}
+.item-image model-viewer.pekora-model{min-height:132px;height:100%;aspect-ratio:1/1}
+.item-detail-image model-viewer.pekora-model{min-height:300px;height:100%;max-height:420px}
+.avatar-wardrobe-image model-viewer.pekora-model{min-height:120px;height:100%;aspect-ratio:1/1}
+.owner-item-thumb model-viewer.pekora-model{min-height:76px;height:76px}
+.pekora-model-missing{display:flex;align-items:center;justify-content:center;width:100%;min-height:132px;padding:10px;background:#f3f3f3;color:#757575;text-align:center;font-size:12px}
+.item-detail-image .pekora-model-missing{min-height:300px}
+.avatar-wardrobe-image .pekora-model-missing{min-height:100%;font-size:11px}
+.owner-item-thumb .pekora-model-missing{min-height:76px;font-size:10px}
+.owner-item-subfields input[name="model_url"]{grid-column:1/-1}
+@media(max-width:767px){.item-detail-image model-viewer.pekora-model{min-height:220px}.item-detail-image .pekora-model-missing{min-height:220px}}
