@@ -4,7 +4,7 @@
 
 :root{
     --primary-color: #a64dff;
-    --primary-color-2: rgb(0, 162, 255);
+    --primary-color-2: rgb(166, 77, 255);
     --primary-color-hover: #c18aff;
     --secondary-color: #6b2eb5;
     --success-color: #02b757;
@@ -28,8 +28,8 @@
     --success-gradient: linear-gradient(0deg, rgba(0,113,0,1) 0%, rgba(64,193,64,1) 100%);
     --success-gradient-hover: linear-gradient(0deg, rgba(71,232,71,1) 0%, rgba(71,232,71,1) 100%);
     --success-border: #007001;
-    --continue-gradient: linear-gradient(0deg, rgba(8,79,192,1) 0%, rgba(5,103,234,1) 100%);
-    --continue-gradient-hover: linear-gradient(0deg, rgba(2,73,198,1) 0%, rgba(7,147,253,1) 100%);
+    --continue-gradient: linear-gradient(0deg, rgba(106,27,177,1) 0%, rgba(142,68,214,1) 100%);
+    --continue-gradient-hover: linear-gradient(0deg, rgba(94,35,157,1) 0%, rgba(166,77,255,1) 100%);
     --continue-border: #6a1bb1;
     --cancel-gradient: linear-gradient(0deg, rgba(69,69,69,1) 0%, rgba(140,140,140,1) 100%);
     --cancel-gradient-hover: grey;
