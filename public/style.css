@@ -591,3 +591,22 @@ pekora-avatar-viewer:active{cursor:grabbing}
 .item-detail-image .limited-item-badge{top:12px;left:12px}
 .owner-item-thumb .limited-item-badge{top:5px;left:5px;padding:3px 5px;font-size:9px}
 .owner-item-thumb .limited-item-badge img{width:15px;height:15px}
+
+
+/* Match OpenPekora's original 70x24 Limited.png overlay */
+.limited-item-badge{
+ display:block;
+ width:70px;
+ height:24px;
+ padding:0;
+ border:0;
+ border-radius:0;
+ background:transparent;
+ box-shadow:none;
+ object-fit:contain;
+}
+.owner-item-thumb .limited-item-badge{
+ width:70px;
+ height:24px;
+ padding:0;
+}
