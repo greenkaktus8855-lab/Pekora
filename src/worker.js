@@ -41,7 +41,34 @@ async function requireUser(request, env) {
   return user || null;
 }
 async function body(request) {
-  try { return await request.json(); } catch { return null; }
+  const maxBytes = 16 * 1024;
+  const length = Number(request.headers.get("content-length") || 0);
+  if (length > maxBytes) return null;
+  const reader = request.body?.getReader();
+  if (!reader) return null;
+  const chunks = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
 }
 const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:u.balance, createdAt:u.created_at });
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
