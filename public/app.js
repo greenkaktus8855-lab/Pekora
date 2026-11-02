@@ -518,22 +518,6 @@ async function settings(){
   catch(err){if(isActiveView(view)&&message?.isConnected)message.textContent=err.message}
  });
 }
-async function avatarPage(){
- const view=beginView();
-nderSidebar("friends");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view friends.</div>';return}
- app.innerHTML='<h1 class="page-title">Friends</h1><form id="addFriendForm" class="people-search"><input class="search-input" name="username" placeholder="Username" minlength="3" maxlength="20" required><button class="button" type="submit">Add Friend</button></form><div id="friendsMessage" class="muted"></div><div id="friendsContent">Loading...</div>';
- document.getElementById("addFriendForm").addEventListener("submit",async e=>{
-  e.preventDefault();const username=new FormData(e.target).get("username").trim();
-  try{
-   const result=await api("/api/friends/request",{method:"POST",body:JSON.stringify({username})});
-   if(!isActiveView(view))return;
-   document.getElementById("friendsMessage").textContent=result.status==="friends"?"You are now friends.":"Friend request sent.";
-   e.target.reset();loadFriendsList(view);
-  }catch(err){const message=document.getElementById("friendsMessage");if(isActiveView(view)&&message)message.textContent=err.message}
- });
- await loadFriendsList(view);
-}
 async function loadFriendsList(view=activeView){
  const host=document.getElementById("friendsContent");if(!host)return;
  try{
