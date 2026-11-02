@@ -132,7 +132,7 @@ async function ensureSiteSettings(env) {
     siteSettingsPromise = (async () => {
       await env.DB.batch([
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS discord_limited_announcements (item_id TEXT PRIMARY KEY, announced_at TEXT NOT NULL DEFAULT (datetime('now')))",
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS discord_limited_announcements (item_id TEXT PRIMARY KEY, announced_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_files (id TEXT PRIMARY KEY, model_data BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("DROP TABLE IF EXISTS avatar_render_files"),
