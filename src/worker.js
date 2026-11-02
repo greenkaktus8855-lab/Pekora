@@ -540,9 +540,9 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const [accepted,incoming,outgoing] = await Promise.all([
-      env.DB.prepare("SELECT u.username,u.role FROM friends f JOIN users u ON u.id=f.friend_id WHERE f.user_id=? AND f.status='ACCEPTED' AND u.is_banned=0 UNION SELECT u.username,u.role FROM friends f JOIN users u ON u.id=f.user_id WHERE f.friend_id=? AND f.status='ACCEPTED' AND u.is_banned=0 ORDER BY username").bind(user.id,user.id).all(),
-      env.DB.prepare("SELECT u.username,u.role FROM friends f JOIN users u ON u.id=f.user_id WHERE f.friend_id=? AND f.status='PENDING' AND u.is_banned=0 ORDER BY u.username").bind(user.id).all(),
-      env.DB.prepare("SELECT u.username,u.role FROM friends f JOIN users u ON u.id=f.friend_id WHERE f.user_id=? AND f.status='PENDING' AND u.is_banned=0 ORDER BY u.username").bind(user.id).all()
+      env.DB.prepare("SELECT u.username,u.role,u.public_id,u.is_verified FROM friends f JOIN users u ON u.id=f.friend_id WHERE f.user_id=? AND f.status='ACCEPTED' AND u.is_banned=0 UNION SELECT u.username,u.role,u.public_id,u.is_verified FROM friends f JOIN users u ON u.id=f.user_id WHERE f.friend_id=? AND f.status='ACCEPTED' AND u.is_banned=0 ORDER BY username").bind(user.id,user.id).all(),
+      env.DB.prepare("SELECT u.username,u.role,u.public_id,u.is_verified FROM friends f JOIN users u ON u.id=f.user_id WHERE f.friend_id=? AND f.status='PENDING' AND u.is_banned=0 ORDER BY u.username").bind(user.id).all(),
+      env.DB.prepare("SELECT u.username,u.role,u.public_id,u.is_verified FROM friends f JOIN users u ON u.id=f.friend_id WHERE f.user_id=? AND f.status='PENDING' AND u.is_banned=0 ORDER BY u.username").bind(user.id).all()
     ]);
     return json({ friends:accepted.results||[],incoming:incoming.results||[],outgoing:outgoing.results||[] });
   }
