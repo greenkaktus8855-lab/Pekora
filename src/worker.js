@@ -117,7 +117,9 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_friends_friend_status ON friends(friend_id,status)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_items_category_name ON items(category,name)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_items_public_catalog ON items(is_for_sale,category,name)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_inventory_user_purchased ON inventory(user_id,purchased_at DESC)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_auth_rate_window ON auth_rate_limits(window_started_at)"),
         env.DB.prepare("DELETE FROM auth_rate_limits WHERE window_started_at < CAST(strftime('%s','now') AS INTEGER)-86400"),
         env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')")
