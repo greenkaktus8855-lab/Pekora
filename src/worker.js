@@ -329,8 +329,7 @@ async function route(request, env) {
     const token = randomToken();
     try {
       await env.DB.batch([
-        env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,balance) VALUES (?,?,?,?,100)").bind(userId, username, hash, salt),
-        env.DB.prepare("UPDATE users SET public_id=rowid WHERE id=? AND public_id IS NULL").bind(userId),
+        env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,balance,public_id) VALUES (?,?,?,?,100,(SELECT COALESCE(MAX(public_id),0)+1 FROM users))").bind(userId, username, hash, salt),
         env.DB.prepare("INSERT INTO profiles (user_id) VALUES (?)").bind(userId),
         env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token), userId)
       ]);
@@ -393,8 +392,7 @@ async function route(request, env) {
     const token = randomToken();
     try {
       await env.DB.batch([
-        env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,role,balance) VALUES (?,?,?,?, 'OWNER',1000)").bind(userId,username,hash,salt),
-        env.DB.prepare("UPDATE users SET public_id=rowid WHERE id=? AND public_id IS NULL").bind(userId),
+        env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,role,balance,public_id) VALUES (?,?,?,?, 'OWNER',1000,(SELECT COALESCE(MAX(public_id),0)+1 FROM users))").bind(userId,username,hash,salt),
         env.DB.prepare("INSERT INTO profiles (user_id) VALUES (?)").bind(userId),
         env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token),userId)
       ]);
@@ -785,12 +783,11 @@ async function route(request, env) {
     } else if (action === "set_public_id") {
       const publicId = Number(data?.publicId);
       if (!Number.isSafeInteger(publicId) || publicId < 1 || publicId > 2147483647) return fail("User ID must be a whole number from 1 to 2,147,483,647.");
-      const duplicate = await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND id<>?").bind(publicId,targetId).first();
-      if (duplicate) return fail("That User ID is already assigned to another player.",409);
-      await env.DB.batch([
-        env.DB.prepare("UPDATE users SET public_id=? WHERE id=?").bind(publicId,targetId),
-        env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"PUBLIC_ID_CHANGE","User ID changed to "+publicId)
+      const results = await env.DB.batch([
+        env.DB.prepare("UPDATE users SET public_id=? WHERE id=? AND NOT EXISTS (SELECT 1 FROM users WHERE public_id=? AND id<>?)").bind(publicId,targetId,publicId,targetId),
+        env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) SELECT ?,?,?,?,? WHERE changes()=1").bind(id(),actor.id,targetId,"PUBLIC_ID_CHANGE","User ID changed to "+publicId)
       ]);
+      if (!results?.[0]?.meta?.changes) return fail("That User ID is already assigned to another player.",409);
     } else if (action === "warn") {
       if (details.length < 3) return fail("Enter a warning reason (at least 3 characters).");
       await env.DB.batch([
