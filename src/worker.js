@@ -384,6 +384,24 @@ async function route(request, env) {
     return json({ok:true});
   }
 
+  if (path === "/api/owner/password" && request.method === "POST") {
+    const user = await requireUser(request,env);
+    if (!user || user.role !== "OWNER") return fail("Owner access required.",403);
+    const data = await body(request);
+    if (typeof data?.password !== "string" || data.password.length < 12 || data.password.length > 128) {
+      return fail("New owner password must be 12–128 characters.");
+    }
+    const salt = randomToken();
+    const hash = await passwordHash(data.password,salt);
+    const currentToken = getCookie(request,"pekora_session");
+    const currentTokenHash = await digest(currentToken);
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET password_hash=?,password_salt=? WHERE id=? AND role='OWNER'").bind(hash,salt,user.id),
+      env.DB.prepare("DELETE FROM sessions WHERE user_id=? AND token_hash<>?").bind(user.id,currentTokenHash)
+    ]);
+    return json({ok:true,message:"Owner password updated. Other sessions for this account were signed out."});
+  }
+
   if (path.startsWith("/api/owner/items")) {
     const user = await requireUser(request,env);
     if (!user || user.role !== "OWNER") return fail("Owner access required.",403);
