@@ -972,6 +972,35 @@ export default {
     if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
       return new Response("Static asset binding ASSETS is missing.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
     }
+    const itemShareMatch = url.pathname.match(new RegExp("^/item/([A-Za-z0-9_-]{1,80})/?$"));
+    if (request.method === "GET" && itemShareMatch && env.DB) {
+      const sharedItem = await env.DB.prepare("SELECT id,name,description,category,price,image_url FROM items WHERE id=? AND is_for_sale=1").bind(itemShareMatch[1]).first();
+      if (sharedItem) {
+        const pageResponse = await env.ASSETS.fetch(new Request(new URL("/",url), { method:"GET", headers:request.headers }));
+        if (pageResponse.ok && (pageResponse.headers.get("content-type")||"").includes("text/html")) {
+          const escapeHtml = value => String(value??"").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+          const title = String(sharedItem.name||"Pekora item").slice(0,100);
+          const description = (String(sharedItem.description||"").trim() || (sharedItem.category+" · "+Number(sharedItem.price||0).toLocaleString("en-US")+" P$")).slice(0,300);
+          const image = /^https:\/\//i.test(String(sharedItem.image_url||"")) ? String(sharedItem.image_url) : "https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/pekora-logo.png";
+          const canonical = new URL("/item/"+encodeURIComponent(sharedItem.id),url.origin).href;
+          const metadata = '<meta name="description" content="'+escapeHtml(description)+'">' +
+            '<meta property="og:type" content="website"><meta property="og:site_name" content="Pekora">' +
+            '<meta property="og:title" content="'+escapeHtml(title)+'">' +
+            '<meta property="og:description" content="'+escapeHtml(description)+'">' +
+            '<meta property="og:image" content="'+escapeHtml(image)+'"><meta property="og:url" content="'+escapeHtml(canonical)+'">' +
+            '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="'+escapeHtml(title)+'">' +
+            '<meta name="twitter:description" content="'+escapeHtml(description)+'"><meta name="twitter:image" content="'+escapeHtml(image)+'">';
+          let html = await pageResponse.text();
+          html = html.replace(/<title>[\s\S]*?<\/title>/i,'<title>'+escapeHtml(title)+' | Pekora</title>');
+          html = html.replace(/<meta\s+name=["']description["'][^>]*>/i,"");
+          html = html.replace("</head>",metadata+"</head>");
+          const headers = new Headers(pageResponse.headers);
+          headers.set("content-type","text/html; charset=utf-8");
+          headers.set("cache-control","public, max-age=60, s-maxage=300");
+          return new Response(html,{status:200,headers});
+        }
+      }
+    }
     const response = await env.ASSETS.fetch(request);
     const headers = new Headers(response.headers);
     headers.set("X-Content-Type-Options","nosniff");
