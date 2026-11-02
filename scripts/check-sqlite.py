@@ -69,7 +69,8 @@ assert db.execute("SELECT COUNT(*) FROM inventory WHERE user_id='test-user'").fe
 assert db.execute("SELECT balance FROM users WHERE id='test-user'").fetchone()[0] == 75
 print("PASS public catalog cleanout preserves ownership and balance")
 
-# Limited inventory: stock never goes below zero or above its configured limit.
+# Limited inventory: mirror the columns added by Worker setup.
+db.execute("ALTER TABLE items ADD COLUMN stock_limit INTEGER NOT NULL DEFAULT 0")
 db.execute("ALTER TABLE items ADD COLUMN stock_sold INTEGER NOT NULL DEFAULT 0")
 db.execute("INSERT INTO users (id,username,password_hash,password_salt,balance,public_id) VALUES (?,?,?,?,?,?)",
            ("test-third","TestThird","hash","salt",100,3))
