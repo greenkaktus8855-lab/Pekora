@@ -141,6 +141,7 @@ async function loadHomeInventory(){
 function itemCard(x){return '<article class="item-card"><div class="item-image">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div></article>'}
 async function showItem(itemId,updateHistory=true){
  const view=beginView();
+ const requestedUserId=me?.id||null;
  sidebar.classList.remove("mobile-open");
  renderSidebar("catalog");
  if(updateHistory)history.pushState({page:"item",itemId},"","#item?id="+encodeURIComponent(itemId||""));
@@ -151,7 +152,7 @@ async function showItem(itemId,updateHistory=true){
     item?Promise.resolve({items}):api("/api/catalog"),
     me?api("/api/inventory"):Promise.resolve({items:[]})
    ]);
-   if(!isActiveView(view))return;
+   if(!isActiveView(view)||(me?.id||null)!==requestedUserId)return;
    if(!item){
     items=catalogData.items||[];
     item=items.find(x=>x.id===itemId);
@@ -177,6 +178,7 @@ async function showItem(itemId,updateHistory=true){
 
 async function catalog(){
  const view=beginView();
+ const requestedUserId=me?.id||null;
  renderSidebar("catalog");
  app.innerHTML=
   '<div class="container mt-4 ssp catalog-page">'+
@@ -215,15 +217,18 @@ async function catalog(){
   '</div>';
  try{
   const catalogData=await api("/api/catalog");
+  if(!isActiveView(view)||(me?.id||null)!==requestedUserId)return;
   items=catalogData.items||[];
   ownedItemIds=new Set();
   ownershipLoaded=!me;
   if(me){
    try{
     const inventoryData=await api("/api/inventory");
+    if(!isActiveView(view)||(me?.id||null)!==requestedUserId)return;
     ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
     ownershipLoaded=true;
    }catch(error){
+    if(!isActiveView(view)||(me?.id||null)!==requestedUserId)return;
     ownershipLoaded=false;
     console.warn("[Pekora catalog] Inventory state unavailable:",error);
    }
