@@ -572,3 +572,22 @@ pekora-avatar-viewer:active{cursor:grabbing}
 .owner-game-info{flex:1;min-width:0}
 .owner-game-info p{margin:3px 0 0}
 @media(max-width:650px){.trade-pick-columns{grid-template-columns:1fr}.trade-target-form{align-items:stretch}.trade-target-form button{width:100%}.owner-game-row{align-items:flex-start}}
+
+
+/* Limited edition item labels and live stock information */
+.item-image,.item-detail-image,.owner-item-thumb{position:relative}
+.limited-item-badge{
+ position:absolute;top:8px;left:8px;z-index:5;display:inline-flex;align-items:center;gap:5px;
+ padding:4px 8px 4px 5px;border-radius:4px;background:rgba(24,24,28,.94);
+ color:#fff;font-size:10px;font-weight:800;letter-spacing:.7px;line-height:1;
+ box-shadow:0 2px 7px rgba(0,0,0,.3);pointer-events:none
+}
+.limited-item-badge img{display:block;width:19px;height:19px;object-fit:contain}
+.limited-stock-info{
+ display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px;margin:6px 0 9px;
+ color:#8b2525;font-size:12px;font-weight:700
+}
+.limited-stock-info span+span{color:#666;font-weight:500}
+.item-detail-image .limited-item-badge{top:12px;left:12px}
+.owner-item-thumb .limited-item-badge{top:5px;left:5px;padding:3px 5px;font-size:9px}
+.owner-item-thumb .limited-item-badge img{width:15px;height:15px}
