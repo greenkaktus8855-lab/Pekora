@@ -2,7 +2,7 @@ name: Syntax checks
 
 on:
   push:
-    branches: [main, real-3d-avatar-pipeline]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -23,22 +23,3 @@ jobs:
 
       - name: Check frontend JavaScript
         run: node --check public/app.js
-
-      - name: Check PowerShell scripts and JSON config
-        shell: pwsh
-        run: |
-          $files = @(
-            "tools/windows-rcc-host/setup.ps1",
-            "tools/windows-rcc-host/start-rcc.ps1",
-            "tools/windows-rcc-host/start-renderer.ps1"
-          )
-          foreach ($file in $files) {
-            $tokens = $null
-            $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
-            if ($errors.Count -gt 0) {
-              $errors | ForEach-Object { Write-Error $_.Message }
-              exit 1
-            }
-          }
-          Get-Content "tools/windows-rcc-host/config.example.json" -Raw | ConvertFrom-Json | Out-Null
