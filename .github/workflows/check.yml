@@ -18,6 +18,13 @@ jobs:
           node-version: 22
       - name: Check browser JavaScript syntax
         run: node --check public/app.js
+      - name: Check original OpenPekora renderer syntax
+        run: |
+          node --check public/openpekora/thumbnail3D.js
+          node --check public/openpekora-avatar-renderer.js
+          node --check public/openpekora/three-r137/MTLLoaderr.js
+          node --check public/openpekora/three-r137/OBJLoaderr.js
+          node --check public/openpekora/three-r137/RobloxOrbitControls.js
       - name: Check Worker module syntax
         run: node --input-type=module --check < src/worker.js
       - name: Check static assets and critical safeguards
