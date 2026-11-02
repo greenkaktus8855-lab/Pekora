@@ -388,16 +388,70 @@ async function ownerRecoveryPage(){
 }
 
 async function logout(){try{await api("/api/logout",{method:"POST"});setUser(null);page("home")}catch(e){toast(e.message)}}
+function inventorySellCard(item,selectedId){
+ const selected=selectedId===item.id;
+ return '<article class="item-card inventory-sell-card'+(selected?' is-selected':'')+'">'+
+  '<div class="item-image">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
+  '<h3>'+esc(item.name)+'</h3>'+
+  '<div class="muted">'+esc(item.category)+'</div>'+
+  '<div class="inventory-item-price">Current value: '+Number(item.price||0).toLocaleString()+' P$</div>'+
+  '<button class="button secondary inventory-select-button" type="button" data-select-inventory="'+esc(item.id)+'" aria-pressed="'+(selected?'true':'false')+'">'+(selected?'Selected':'Select item')+'</button>'+
+  '</article>';
+}
 async function inventory(){
  const view=beginView();
  renderSidebar("inventory");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your inventory.</div>';return}
- app.innerHTML='<h1 class="page-title">Inventory</h1><div id="inventoryGrid" class="item-grid">Loading...</div>';
- const grid=document.getElementById("inventoryGrid");
+ app.innerHTML='<h1 class="page-title">Inventory</h1><p class="inventory-sell-intro">Select an item to sell it for its current value.</p><div id="inventoryGrid" class="item-grid">Loading...</div><div id="inventorySellPanel" class="inventory-sell-panel" hidden></div>';
+ const grid=document.getElementById("inventoryGrid"),panel=document.getElementById("inventorySellPanel");
+ let ownedItems=[],selectedItemId=null;
+
+ function renderSelection(){
+  const selected=ownedItems.find(item=>item.id===selectedItemId);
+  grid.querySelectorAll("[data-select-inventory]").forEach(button=>{
+   const active=button.dataset.selectInventory===selectedItemId;
+   button.setAttribute("aria-pressed",active?"true":"false");
+   button.textContent=active?"Selected":"Select item";
+   button.closest(".inventory-sell-card")?.classList.toggle("is-selected",active);
+  });
+  if(!selected){panel.hidden=true;panel.innerHTML="";return}
+  panel.hidden=false;
+  panel.innerHTML='<div class="inventory-sell-summary"><strong>'+esc(selected.name)+'</strong><p>You will receive <b>'+Number(selected.price||0).toLocaleString()+' P$</b> at the current listed price.</p><p class="muted">Selling removes this item from your inventory.</p></div><button class="primary inventory-confirm-sell" type="button" data-sell-selected>Sell item</button>';
+ }
+
+ grid.addEventListener("click",event=>{
+  const button=event.target.closest("[data-select-inventory]");
+  if(!button)return;
+  selectedItemId=button.dataset.selectInventory;
+  renderSelection();
+ });
+ panel.addEventListener("click",async event=>{
+  const button=event.target.closest("[data-sell-selected]");
+  if(!button||!selectedItemId)return;
+  const selected=ownedItems.find(item=>item.id===selectedItemId);
+  if(!selected)return;
+  const shownPrice=Number(selected.price||0);
+  if(!confirm('Sell "'+selected.name+'" for '+shownPrice.toLocaleString()+' P$? This cannot be undone.'))return;
+  button.disabled=true;
+  button.textContent="Selling...";
+  try{
+   const result=await api("/api/inventory/sell",{method:"POST",body:JSON.stringify({itemId:selected.id})});
+   setUser({...me,balance:result.balance});
+   selectedItemId=null;
+   if(isActiveView(view))await inventory();
+   toast('Sold '+result.item.name+' for '+Number(result.item.price).toLocaleString()+' P$');
+  }catch(error){
+   toast(error.message);
+   if(button.isConnected){button.disabled=false;button.textContent="Sell item"}
+  }
+ });
+
  try{
   const d=await api("/api/inventory");
   if(!isActiveView(view)||!grid?.isConnected)return;
-  grid.innerHTML=d.items.length?d.items.map(itemCard).join(""):'<div class="empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+  ownedItems=Array.isArray(d.items)?d.items:[];
+  grid.innerHTML=ownedItems.length?ownedItems.map(item=>inventorySellCard(item,selectedItemId)).join(""):'<div class="empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+  renderSelection();
  }catch(e){if(isActiveView(view)&&grid?.isConnected)grid.textContent=e.message}
 }
 async function profile(identifier=me?.username,byId=false){
