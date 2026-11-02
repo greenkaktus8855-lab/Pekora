@@ -125,6 +125,8 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_files (id TEXT PRIMARY KEY, model_data BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS equipped_items (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, category TEXT NOT NULL, equipped_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,item_id))"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_equipped_items_user ON equipped_items(user_id,category)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_friends_friend_status ON friends(friend_id,status)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_items_category_name ON items(category,name)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_items_public_catalog ON items(is_for_sale,category,name)"),
@@ -417,13 +419,33 @@ async function route(request, env) {
   }
 
   if (path === "/api/avatar" && request.method === "GET") {
-    return json({ enabled:false, message:"Original Pekora Avatar API and RCC renderer are not connected." });
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(user.id).all();
+    return json({ enabled:true, rendering:false, equipped:rows.results||[], message:"Equipped items are saved. 3D avatar rendering still needs a separate RCC service." });
   }
 
   if (path === "/api/avatar" && request.method === "PUT") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    return fail("Avatar editing is disabled until the original Pekora Avatar API and RCC renderer are connected.",501);
+    const data = await body(request);
+    const itemId = String(data?.itemId||"");
+    const action = data?.action;
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId) || !["wear","remove"].includes(action)) return fail("Choose an inventory item and a valid avatar action.");
+    const item = await env.DB.prepare("SELECT i.id,i.category FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
+    if (!item) return fail("You can only equip items in your inventory.",404);
+    if (!["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category)) return fail("This item category cannot be equipped on the avatar.");
+    if (action === "remove") {
+      await env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=?").bind(user.id,itemId).run();
+      return json({ok:true,action,equipped:false});
+    }
+    const statements = [];
+    if (["Hair","Faces","Shirts","Pants"].includes(item.category)) {
+      statements.push(env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND category=?").bind(user.id,item.category));
+    }
+    statements.push(env.DB.prepare("INSERT OR IGNORE INTO equipped_items (user_id,item_id,category) VALUES (?,?,?)").bind(user.id,item.id,item.category));
+    await env.DB.batch(statements);
+    return json({ok:true,action,equipped:true});
   }
 
   if (request.method === "PUT" && path === "/api/profile") {
