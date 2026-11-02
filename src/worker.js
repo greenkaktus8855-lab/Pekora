@@ -213,10 +213,9 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
-  if (request.method === "GET" && path.startsWith("/api/profile/") && path.endsWith("/inventory")) {
-    let username;
-    try { username = decodeURIComponent(path.slice("/api/profile/".length, -"/inventory".length)); }
-    catch { return fail("Invalid username.",400); }
+  const profileInventoryMatch = path.match(/^\/api\/profile\/([A-Za-z0-9_]{3,20})\/inventory$/);
+  if (request.method === "GET" && profileInventoryMatch) {
+    const username = profileInventoryMatch[1];
     const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!profile) return fail("User not found.",404);
     const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,'IMAGE_ONLY' AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
