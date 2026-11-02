@@ -294,9 +294,11 @@ async function route(request, env) {
   if (request.method === "POST" && path === "/api/bootstrap-owner") {
     const data = await body(request), key = await rateLimitKey(request,"owner-bootstrap");
     if (await isRateLimited(env,key)) return json({error:"Too many owner setup attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
-    if (typeof env.OWNER_BOOTSTRAP_SECRET !== "string" || env.OWNER_BOOTSTRAP_SECRET.length < 20 ||
-        typeof data?.secret !== "string" || data.secret.length < 20 || data.secret.length > 512 ||
-        !constantTimeEqual(await digest(data.secret),await digest(env.OWNER_BOOTSTRAP_SECRET))) {
+    const configuredOwnerSecret = typeof env.OWNER_BOOTSTRAP_SECRET === "string" ? env.OWNER_BOOTSTRAP_SECRET.trim() : "";
+    const suppliedOwnerSecret = typeof data?.secret === "string" ? data.secret.trim() : "";
+    if (configuredOwnerSecret.length < 20 ||
+        suppliedOwnerSecret.length < 20 || suppliedOwnerSecret.length > 512 ||
+        !constantTimeEqual(await digest(suppliedOwnerSecret),await digest(configuredOwnerSecret))) {
       const blocked = await recordRateLimitFailure(env,key);
       return blocked?json({error:"Too many owner setup attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Invalid owner setup key.",403);
     }
@@ -510,10 +512,11 @@ async function route(request, env) {
   if (path === "/api/owner/recover" && request.method === "POST") {
     const data = await body(request), key = await rateLimitKey(request,"owner-recovery");
     if (await isRateLimited(env,key)) return json({error:"Too many owner recovery attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
-    const recoverySecret = env.OWNER_BOOTSTRAP_SECRET;
-    if (typeof recoverySecret !== "string" || recoverySecret.length < 20 ||
-        typeof data?.secret !== "string" || data.secret.length < 20 || data.secret.length > 512 ||
-        !constantTimeEqual(await digest(data.secret),await digest(recoverySecret))) {
+    const recoverySecret = typeof env.OWNER_BOOTSTRAP_SECRET === "string" ? env.OWNER_BOOTSTRAP_SECRET.trim() : "";
+    const suppliedSecret = typeof data?.secret === "string" ? data.secret.trim() : "";
+    if (recoverySecret.length < 20 ||
+        suppliedSecret.length < 20 || suppliedSecret.length > 512 ||
+        !constantTimeEqual(await digest(suppliedSecret),await digest(recoverySecret))) {
       const blocked = await recordRateLimitFailure(env,key);
       return blocked?json({error:"Too many owner recovery attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Invalid owner recovery secret.",403);
     }
