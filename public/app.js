@@ -76,7 +76,8 @@ function setUser(user){
 }
 async function refreshMe(){try{const d=await api("/api/me");setUser(d.user)}catch{setUser(null)}}
 function page(name){history.pushState({page:name},"","#"+name);render(name)}
-window.addEventListener("popstate",()=>render(location.hash.slice(1)||"home"));
+function currentRoute(){const match=location.pathname.match(new RegExp("^/item/([A-Za-z0-9_-]{1,80})/?$"));return match?"item?id="+encodeURIComponent(match[1]):(location.hash.slice(1)||"home")}
+window.addEventListener("popstate",()=>render(currentRoute()));
 document.addEventListener("click",e=>{
  const a=e.target.closest("[data-page]");
  if(a){e.preventDefault();sidebar.classList.remove("mobile-open");page(a.dataset.page)}
@@ -168,7 +169,7 @@ async function showItem(itemId,updateHistory=true){
  const requestedUserId=me?.id||null;
  sidebar.classList.remove("mobile-open");
  renderSidebar("catalog");
- if(updateHistory)history.pushState({page:"item",itemId},"","#item?id="+encodeURIComponent(itemId||""));
+ if(updateHistory)history.pushState({page:"item",itemId},"","/item/"+encodeURIComponent(itemId||""));
  let item=items.find(x=>x.id===itemId);
  if(!item||(me&&!ownershipLoaded)){
   try{
@@ -202,9 +203,10 @@ async function showItem(itemId,updateHistory=true){
  const isOwned=ownedItemIds.has(item.id);
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+limitedBadge(item)+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+limitedStockInfo(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isLimitedSoldOut(item)?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+limitedStockInfo(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isLimitedSoldOut(item)?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
   '</div></div>';
  if(!isOwned&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
+ document.getElementById("copyItemLink")?.addEventListener("click",async()=>{const shareUrl=new URL("/item/"+encodeURIComponent(item.id),location.origin).href;try{await navigator.clipboard.writeText(shareUrl);toast("Item link copied")}catch{toast("Could not copy link. Copy it from the address bar.")}});
 }
 
 
@@ -821,4 +823,4 @@ async function render(name){
  else if(name==="owner")await owner();
  else home();
 }
-(async()=>{await refreshMe();await render(location.hash.slice(1)||"home")})();
+(async()=>{await refreshMe();await render(currentRoute())})();
