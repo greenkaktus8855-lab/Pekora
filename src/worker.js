@@ -146,6 +146,19 @@ async function ensureSiteSettings(env) {
           env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('catalog_cleanout_2026_11_02','done')")
         ]);
       }
+      // One-time owner transfer: promote the existing Admin account first.
+      // Only remove PekoraAdmin after Admin is confirmed to exist as OWNER.
+      const ownerTransfer = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='owner_transfer_admin_2026_11_02'").first();
+      if (!ownerTransfer) {
+        const adminAccount = await env.DB.prepare("SELECT id FROM users WHERE username='Admin' COLLATE NOCASE").first();
+        if (adminAccount) {
+          await env.DB.batch([
+            env.DB.prepare("UPDATE users SET role='OWNER' WHERE id=?").bind(adminAccount.id),
+            env.DB.prepare("DELETE FROM users WHERE username='PekoraAdmin' COLLATE NOCASE AND EXISTS (SELECT 1 FROM users WHERE id=? AND role='OWNER')").bind(adminAccount.id),
+            env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) SELECT 'owner_transfer_admin_2026_11_02','done' WHERE EXISTS (SELECT 1 FROM users WHERE id=? AND role='OWNER')").bind(adminAccount.id)
+          ]);
+        }
+      }
     })().catch(error => {
       // Do not cache a rejected setup promise forever after a transient D1 failure.
       siteSettingsPromise = undefined;
