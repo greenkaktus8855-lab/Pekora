@@ -447,7 +447,8 @@ async function route(request, env) {
 
   if (path === "/api/owner/password" && request.method === "POST") {
     const user = await requireUser(request,env);
-    if (!user || user.role !== "OWNER") return fail("Owner access required.",403);
+    if (!user) return fail("Please sign in.",401);
+    if (user.role !== "OWNER") return fail("Owner access required.",403);
     const data = await body(request);
     if (typeof data?.password !== "string" || data.password.length < 12 || data.password.length > 128) {
       return fail("New owner password must be 12–128 characters.");
@@ -465,7 +466,8 @@ async function route(request, env) {
 
   if (path.startsWith("/api/owner/items")) {
     const user = await requireUser(request,env);
-    if (!user || user.role !== "OWNER") return fail("Owner access required.",403);
+    if (!user) return fail("Please sign in.",401);
+    if (user.role !== "OWNER") return fail("Owner access required.",403);
     if (path === "/api/owner/items" && request.method === "GET") {
       const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,is_limited,is_for_sale,created_at,'IMAGE_ONLY' AS asset_kind FROM items ORDER BY created_at DESC,name").all();
       return json({items:rows.results||[]});
@@ -503,7 +505,8 @@ async function route(request, env) {
 
   if (request.method === "GET" && path === "/api/owner/stats") {
     const user = await requireUser(request,env);
-    if (!user || user.role !== "OWNER") return fail("Owner access required.",403);
+    if (!user) return fail("Please sign in.",401);
+    if (user.role !== "OWNER") return fail("Owner access required.",403);
     const [users,items,purchases] = await Promise.all([
       env.DB.prepare("SELECT COUNT(*) n FROM users").first(),
       env.DB.prepare("SELECT COUNT(*) n FROM items WHERE is_for_sale=1").first(),
