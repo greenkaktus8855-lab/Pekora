@@ -642,3 +642,10 @@ pekora-avatar-viewer:active{cursor:grabbing}
 .tabs a.active,.tabs a:hover{color:#a64dff;border-bottom-color:#a64dff}
 @media(max-width:991px){.op-logo{flex-basis:80px;width:80px}.sakura-brand-wordmark{font-size:25px;line-height:34px}}
 @media(max-width:560px){.op-logo{flex-basis:80px;width:80px}.sakura-brand-wordmark{font-size:23px;line-height:30px}}
+
+
+/* Supplied Sakura header logo */
+.op-logo{display:flex;align-items:center;flex:0 0 122px;width:122px;height:40px}
+.sakura-brand-logo{display:block;width:122px;height:40px;max-width:100%;object-fit:contain;object-position:left center}
+@media(max-width:991px){.op-logo{flex-basis:80px;width:80px}.sakura-brand-logo{width:80px;height:34px}}
+@media(max-width:560px){.op-logo{flex-basis:80px;width:80px}.sakura-brand-logo{width:80px;height:30px}}
