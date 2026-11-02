@@ -3,6 +3,9 @@ const accountArea=document.getElementById("accountArea");
 const currency=document.getElementById("currency");
 const sidebar=document.getElementById("sidebar");
 let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set();
+let activeView=0;
+const beginView=()=>++activeView;
+const isActiveView=view=>view===activeView;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function api(path,options={}){const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||"Something went wrong");return data}
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
@@ -47,6 +50,7 @@ document.getElementById("globalSearchForm").addEventListener("submit",e=>{e.prev
 
 document.getElementById("mobileMenu")?.addEventListener("click",()=>sidebar.classList.toggle("mobile-open"));
 function home(){
+ const view=beginView();
  renderSidebar("home");
  if(!me){
   app.innerHTML='<div class="op-guest"><h1>Welcome to Pekora</h1><p>Join the community and explore the catalog.</p><a class="button" href="#login" data-page="login">Login</a><a class="button" href="#register" data-page="register">Sign Up</a></div>';
@@ -58,18 +62,17 @@ function home(){
   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Items</h3><a href="#inventory" data-page="inventory">See All</a></div><div id="homeItems" class="op-section-content"><div class="op-empty">Loading inventory...</div></div></section>'+
   '</div>';
- loadHomeDashboard();
+ loadHomeDashboard(view);
 }
-async function loadHomeDashboard(){
+async function loadHomeDashboard(view=activeView){
  const friendsHost=document.getElementById("homeFriends"),itemsHost=document.getElementById("homeItems");
  if(!friendsHost||!itemsHost||!me)return;
  try{
-  const [profileData,inventoryData,friendsData]=await Promise.all([
-   api("/api/profile/"+encodeURIComponent(me.username)),
+  const [inventoryData,friendsData]=await Promise.all([
    api("/api/inventory"),
    api("/api/friends")
   ]);
-  if(!document.getElementById("homeFriends"))return;
+  if(!isActiveView(view)||!document.getElementById("homeFriends"))return;
   const owned=inventoryData.items||[];
   const friends=friendsData.friends||[];
   document.getElementById("homeFriendCount").textContent=friends.length;
@@ -105,6 +108,7 @@ function showItem(itemId){
 
 
 async function catalog(){
+ const view=beginView();
  renderSidebar("catalog");
  app.innerHTML=
   '<div class="container mt-4 ssp catalog-page">'+
@@ -152,9 +156,14 @@ async function catalog(){
    }catch(error){console.warn("[Pekora catalog] Inventory state unavailable:",error)}
   }
   drawCatalog("All","");
- }catch(e){document.getElementById("catalogGrid").textContent=e.message}
+ }catch(e){
+  const grid=document.getElementById("catalogGrid");
+  if(isActiveView(view)&&grid)grid.textContent=e.message;
+ }
+ if(!isActiveView(view))return;
  const search=document.getElementById("itemSearch");
  const select=document.getElementById("itemCategorySelect");
+ if(!search||!select||!document.getElementById("catalogSearchForm"))return;
  const activeCategory=()=>document.querySelector("[data-category].active")?.dataset.category||"All";
  function chooseCategory(category){
   document.querySelectorAll("[data-category]").forEach(x=>x.classList.toggle("active",x.dataset.category===category));
@@ -179,23 +188,45 @@ async function catalog(){
  }));
 }
 function drawCatalog(category,q){
- const el=document.getElementById("catalogGrid");if(!el)return;
+ const el=document.getElementById("catalogGrid"),count=document.getElementById("catalogCount");
+ if(!el||!count)return;
  let list=items.filter(x=>(category==="All"||x.category===category)&&((x.name||"")+" "+(x.description||"")).toLowerCase().includes(q.toLowerCase()));
  if(catalogSort==="newest")list.sort((a,b)=>String(b.created_at||"").localeCompare(String(a.created_at||"")));
  if(catalogSort==="price-low")list.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
  if(catalogSort==="price-high")list.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
- document.getElementById("catalogCount").textContent=list.length+" items";
+ count.textContent=list.length+" items";
  el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="catalog-asset-kind">'+(x.asset_kind==="IMAGE_ONLY"?"Catalog item":"Original avatar service required")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
  el.querySelectorAll("[data-item-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();showItem(a.dataset.itemView)}));
-}async function buy(itemId){if(!me){page("login");return}try{const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});me.balance=d.balance;setUser(me);toast("Item purchased");catalog()}catch(e){toast(e.message)}}
+}async function buy(itemId){
+ if(!me){page("login");return}
+ const view=activeView,userId=me.id;
+ try{
+  const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});
+  if(!me||me.id!==userId)return;
+  me.balance=d.balance;setUser(me);toast("Item purchased");
+  if(isActiveView(view))catalog();
+ }catch(e){toast(e.message)}
+}
 function auth(kind){
+ const view=beginView();
  renderSidebar("");
  const reg=kind==="register";
  app.innerHTML='<div class="form"><h2>'+(reg?"Create your Pekora account":"Log in to Pekora")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="3" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="'+(reg?8:1)+'" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error"></div></form><p class="muted">'+(reg?'Already have an account? <a href="#login" data-page="login">Log in</a>':'New to Pekora? <a href="#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="#owner-recovery" data-page="owner-recovery">Recover PekoraAdmin account</a></p>')+'</div>';
- document.getElementById("authForm").addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.target);try{const d=await api(reg?"/api/register":"/api/login",{method:"POST",body:JSON.stringify({username:f.get("username"),password:f.get("password")})});setUser(d.user);page("home")}catch(err){document.getElementById("authError").textContent=err.message}});
+ document.getElementById("authForm").addEventListener("submit",async e=>{
+  e.preventDefault();const f=new FormData(e.target);
+  try{
+   const d=await api(reg?"/api/register":"/api/login",{method:"POST",body:JSON.stringify({username:f.get("username"),password:f.get("password")})});
+   setUser(d.user);
+   if(isActiveView(view))page("home");
+  }catch(err){
+   const error=document.getElementById("authError");
+   if(isActiveView(view)&&error)error.textContent=err.message;
+  }
+ });
 }
 async function ownerRecoveryPage(){
+ const view=beginView();
  renderSidebar("");
  app.innerHTML='<div class="form"><h2>Recover Pekora OWNER account</h2><p class="muted">Use the Worker secret OWNER_BOOTSTRAP_SECRET from your Cloudflare settings. This resets the PekoraAdmin password and signs out previous sessions.</p><form id="ownerRecoveryForm"><label>Worker recovery secret<input name="secret" type="password" required autocomplete="off"></label><label>New password<input name="password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><label>Confirm new password<input name="confirmPassword" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><button class="primary" type="submit">Reset owner password</button><div id="ownerRecoveryMessage" class="error" role="status"></div></form><p class="muted"><a href="#login" data-page="login">Back to login</a></p></div>';
  document.getElementById("ownerRecoveryForm").addEventListener("submit",async e=>{
@@ -213,19 +244,28 @@ async function ownerRecoveryPage(){
 
 async function logout(){try{await api("/api/logout",{method:"POST"});setUser(null);page("home")}catch(e){toast(e.message)}}
 async function inventory(){
+ const view=beginView();
  renderSidebar("inventory");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your inventory.</div>';return}
  app.innerHTML='<h1 class="page-title">Inventory</h1><div id="inventoryGrid" class="item-grid">Loading...</div>';
- try{const d=await api("/api/inventory");document.getElementById("inventoryGrid").innerHTML=d.items.length?d.items.map(itemCard).join(""):'<div class="empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>'}catch(e){document.getElementById("inventoryGrid").textContent=e.message}
+ const grid=document.getElementById("inventoryGrid");
+ try{
+  const d=await api("/api/inventory");
+  if(!isActiveView(view)||!grid?.isConnected)return;
+  grid.innerHTML=d.items.length?d.items.map(itemCard).join(""):'<div class="empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+ }catch(e){if(isActiveView(view)&&grid?.isConnected)grid.textContent=e.message}
 }
 async function profile(username=me?.username){
+ const view=beginView();
  renderSidebar("profile");
  if(!username){app.innerHTML='<div class="empty">Choose a user profile.</div>';return}
+ app.innerHTML='<div class="empty">Loading profile...</div>';
  try{
   const [d,inventoryData]=await Promise.all([
    api("/api/profile/"+encodeURIComponent(username)),
    api("/api/profile/"+encodeURIComponent(username)+"/inventory")
   ]);
+  if(!isActiveView(view))return;
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
   app.innerHTML='<div class="op-profile">'+
    '<div class="op-profile-header"><div class="op-profile-avatar">'+avatar(p.username)+'</div><div class="op-profile-info">'+
@@ -247,12 +287,13 @@ async function profile(username=me?.username){
     : '<div class="op-profile-section"><h2>Creations</h2><div class="op-profile-empty">No creations to display.</div></div>';
   }));
   if(!isSelf&&me)loadProfileFriendAction(p.username);
- }catch(e){app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+ }catch(e){if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
 async function loadProfileFriendAction(username){
- const host=document.getElementById("profileFriendAction");if(!host)return;
+ const view=activeView,host=document.getElementById("profileFriendAction");if(!host)return;
  try{
   const {status}=await api("/api/friends/status?username="+encodeURIComponent(username));
+  if(!isActiveView(view)||!host.isConnected)return;
   const labels={none:"Add Friend",outgoing:"Request Sent",incoming:"Accept Request",friends:"Remove Friend",self:"Your Profile"};
   host.innerHTML='<button type="button" class="button '+(status==="friends"?"secondary":"")+'" id="profileFriendBtn" '+(status==="outgoing"||status==="self"?"disabled":"")+'>'+labels[status]+'</button>';
   document.getElementById("profileFriendBtn").addEventListener("click",async()=>{
@@ -260,7 +301,7 @@ async function loadProfileFriendAction(username){
     if(status==="none")await api("/api/friends/request",{method:"POST",body:JSON.stringify({username})});
     else if(status==="incoming")await api("/api/friends/accept",{method:"POST",body:JSON.stringify({username})});
     else if(status==="friends")await api("/api/friends?username="+encodeURIComponent(username),{method:"DELETE"});
-    await profile(username);
+    if(isActiveView(view))await profile(username);
    }catch(e){toast(e.message)}
   });
  }catch(e){host.textContent=e.message}
