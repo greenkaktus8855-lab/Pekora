@@ -13,7 +13,7 @@ const missing = [];
 for (const file of files) {
   const source = fs.readFileSync(path.join(root, file), "utf8");
   const refs = [
-    ...source.matchAll(/(?:src|href)=["'](\/[^"'?#]+)|url\\(\\s*["']?(\/[^)'"\\s?#]+)/g)
+    ...source.matchAll(/(?:src|href)=["'](\/[^"'?#]+)|url\(\s*["']?(\/[^)'"\s?#]+)/g)
   ];
   for (const match of refs) {
     const url = match[1] || match[2];
