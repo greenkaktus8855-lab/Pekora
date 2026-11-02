@@ -34,8 +34,6 @@ document.addEventListener("error",event=>{
  placeholder.append(icon);
  image.replaceWith(placeholder);
 },true);
-const AVATAR_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
-
 function renderSidebar(active="home"){
  if(!me){sidebar.classList.remove("visible","mobile-open");sidebar.innerHTML="";return}
  sidebar.classList.add("visible");
@@ -44,7 +42,6 @@ function renderSidebar(active="home"){
   ["profile","icon-nav-profile","Profile"],
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-friends","Trades"],
-  ["avatar","icon-nav-charactercustomizer","Avatar"],
   ["inventory","icon-nav-inventory","Inventory"],
   ["currency","icon-nav-robux","Currency"],
   ["games","icon-nav-forum","Games"],
@@ -522,52 +519,7 @@ async function settings(){
 }
 async function avatarPage(){
  const view=beginView();
- renderSidebar("avatar");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your avatar.</div>';return}
- app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1><a class="button" href="#catalog" data-page="catalog">Catalog</a></div>'+
-  '<div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Avatar</h2><div class="avatar-preview-placeholder" id="avatarPreview">'+avatar(me.username)+'</div>'+
-  '<p class="muted">Your equipped items are saved to your Pekora account. 3D avatar rendering is disabled.</p>'+
-  '<div id="avatarEquipped" class="avatar-equipped-list">Loading outfit...</div></section>'+
-  '<section class="avatar-wardrobe"><h2>Inventory</h2><div class="avatar-category-tabs" id="avatarCategories"></div><div id="avatarWardrobe" class="avatar-wardrobe-grid">Loading inventory...</div></section></div></div>';
- let wardrobe=[],activeCategory="Hats",equipped=new Set();
- try{
-  const [inventoryData,avatarData]=await Promise.all([api("/api/inventory"),api("/api/avatar")]);
-  if(!isActiveView(view))return;
-  wardrobe=inventoryData.items||[];
-  equipped=new Set((avatarData.equipped||[]).map(x=>x.id));
- }catch(e){const host=document.getElementById("avatarWardrobe");if(isActiveView(view)&&host)host.textContent=e.message;return}
- function renderEquipped(){
-  const host=document.getElementById("avatarEquipped");if(!host)return;
-  const worn=wardrobe.filter(x=>equipped.has(x.id));
-  host.innerHTML=worn.length?'<strong>Currently wearing</strong>'+worn.map(x=>'<div class="avatar-equipped-row">'+esc(x.name)+'</div>').join(""):'<span class="muted">Nothing equipped yet.</span>';
- }
- function renderWardrobe(){
-  const categories=document.getElementById("avatarCategories"),host=document.getElementById("avatarWardrobe");
-  if(!categories||!host)return;
-  categories.innerHTML=AVATAR_CATEGORIES.map(c=>'<button type="button" class="avatar-category '+(c===activeCategory?"active":"")+'" data-avatar-category="'+c+'">'+c+'</button>').join("");
-  const own=wardrobe.filter(x=>x.category===activeCategory);
-  host.innerHTML=own.length?own.map(x=>'<article class="avatar-wardrobe-item">'+
-   '<div class="avatar-wardrobe-image">'+itemPreview(x)+'</div>'+
-   '<div class="avatar-wardrobe-name">'+esc(x.name)+'</div>'+
-   '<button class="button '+(equipped.has(x.id)?"secondary":"")+'" type="button" data-avatar-toggle="'+esc(x.id)+'">'+(equipped.has(x.id)?"Remove":"Wear")+'</button>'+
-   '</article>').join(""):'<div class="avatar-wardrobe-empty">No '+esc(activeCategory.toLowerCase())+' in your inventory.</div>';
-  categories.querySelectorAll("[data-avatar-category]").forEach(b=>b.addEventListener("click",()=>{activeCategory=b.dataset.avatarCategory;renderWardrobe()}));
-  host.querySelectorAll("[data-avatar-toggle]").forEach(b=>b.addEventListener("click",async()=>{
-   const itemId=b.dataset.avatarToggle,action=equipped.has(itemId)?"remove":"wear";
-   b.disabled=true;
-   try{
-    await api("/api/avatar",{method:"PUT",body:JSON.stringify({itemId,action})});
-    if(!isActiveView(view))return;
-    if(action==="wear")equipped.add(itemId);else equipped.delete(itemId);
-    renderWardrobe();renderEquipped();
-   }catch(e){toast(e.message);b.disabled=false}
-  }));
- }
- renderWardrobe();renderEquipped();
-}
-async function friends(){
- const view=beginView();
- renderSidebar("friends");
+nderSidebar("friends");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view friends.</div>';return}
  app.innerHTML='<h1 class="page-title">Friends</h1><form id="addFriendForm" class="people-search"><input class="search-input" name="username" placeholder="Username" minlength="3" maxlength="20" required><button class="button" type="submit">Add Friend</button></form><div id="friendsMessage" class="muted"></div><div id="friendsContent">Loading...</div>';
  document.getElementById("addFriendForm").addEventListener("submit",async e=>{
@@ -859,7 +811,6 @@ async function render(name){
  else if(name==="inventory")await inventory();
  else if(name==="profile")await profile(query.get("username")||me?.username);
  else if(name==="item")await showItem(query.get("id"),false);
- else if(name==="avatar")await avatarPage();
  else if(name==="users"||name==="community")users();
  else if(name==="friends")await friends();
  else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
