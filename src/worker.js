@@ -103,11 +103,12 @@ async function isRateLimited(env, key) {
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare("SELECT attempts,window_started_at,blocked_until FROM auth_rate_limits WHERE rate_key=?").bind(key).first();
   if (!row) return false;
+  if (Number(row.blocked_until) > now) return true;
   if (row.window_started_at <= now - 900) {
     await env.DB.prepare("DELETE FROM auth_rate_limits WHERE rate_key=?").bind(key).run();
     return false;
   }
-  return Number(row.blocked_until) > now || Number(row.attempts) >= 10;
+  return Number(row.attempts) >= 10;
 }
 async function recordRateLimitFailure(env, key) {
   const now = Math.floor(Date.now() / 1000);
