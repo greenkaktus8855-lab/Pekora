@@ -146,6 +146,7 @@ class Thumbnail3DHandler {
     
     // Clears and disposes of everything in this instancer
     Dispose() {
+        this.isStopping = true;
         if (this.canvasParent && this.canvasParent.contains(this.renderer.domElement)) this.canvasParent.removeChild(this.renderer.domElement);
         if (this.directionalLight) this.scene.remove(this.directionalLight);
         if (this.orbitControls) this.orbitControls.dispose();
