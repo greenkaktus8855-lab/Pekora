@@ -900,7 +900,6 @@ async function route(request, env) {
       const data = await body(request), error = validItem(data);
       if (error) return fail(error);
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
-      if (!Number.isSafeInteger(stockLimit)||stockLimit<0||stockLimit>1000000||(data.is_limited===true&&stockLimit<1)) return fail("Limited items need a stock limit from 1 to 1,000,000. Set 0 for unlimited stock.");
       const itemId=id();
       const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
       const assetId = Number(data.asset_id || 0);
@@ -916,7 +915,6 @@ async function route(request, env) {
       const data=await body(request);
       if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid item update.");
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
-      if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
       const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
       const keepLegacyImage = String(merged.image_url||"") === String(current.image_url||"");
       const error=validItem(merged,keepLegacyImage); if(error)return fail(error);
