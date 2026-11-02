@@ -43,6 +43,7 @@ function renderSidebar(active="home"){
   ["home","icon-nav-home","Home"],
   ["profile","icon-nav-profile","Profile"],
   ["friends","icon-nav-friends","Friends"],
+  ["trades","icon-nav-friends","Trades"],
   ["avatar","icon-nav-charactercustomizer","Avatar"],
   ["inventory","icon-nav-inventory","Inventory"],
   ["currency","icon-nav-robux","Currency"],
@@ -380,14 +381,13 @@ async function profile(username=me?.username){
  if(!username){app.innerHTML='<div class="empty">Choose a user profile.</div>';return}
  app.innerHTML='<div class="empty">Loading profile...</div>';
  try{
-  const [d,inventoryData,avatarData]=await Promise.all([
+  const [d,inventoryData]=await Promise.all([
    api("/api/profile/"+encodeURIComponent(username)),
-   api("/api/profile/"+encodeURIComponent(username)+"/inventory"),
-   api("/api/profile/"+encodeURIComponent(username)+"/avatar")
+   api("/api/profile/"+encodeURIComponent(username)+"/inventory")
   ]);
   if(!isActiveView(view))return;
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
-  const profileAvatar=avatarData.render?'<openpekora-avatar-renderer data-render=\''+esc(JSON.stringify(avatarData.render))+'\'></openpekora-avatar-renderer>':avatar(p.username);
+  const profileAvatar=avatar(p.username);
   app.innerHTML='<div class="op-profile">'+
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(p.id)+'</strong></div><h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
@@ -435,10 +435,73 @@ async function currencyPage(){
   if(isActiveView(view)&&host)host.textContent=e.message;
  }
 }
-function gamesPage(){
- beginView();
+async function gamesPage(){
+ const view=beginView();
  renderSidebar("games");
- app.innerHTML='<div class="games-page"><h1 class="page-title">Games</h1><section class="info-panel games-coming-soon"><h2>Games are coming soon</h2><p class="muted">The Pekora game runtime and game servers are not connected yet. This page will be updated when a supported game service is available.</p></section></div>';
+ app.innerHTML='<div class="games-page"><h1 class="page-title">Games</h1><p class="muted">Games created by the Pekora team.</p><div id="gamesGrid" class="games-grid">Loading games...</div></div>';
+ try{
+  const data=await api("/api/games");
+  if(!isActiveView(view))return;
+  const host=document.getElementById("gamesGrid");
+  const games=data.games||[];
+  host.innerHTML=games.length?games.map(game=>'<article class="game-card">'+
+   '<div class="game-thumbnail">'+(game.thumbnail_url?'<img src="'+esc(game.thumbnail_url)+'" alt="'+esc(game.title)+'" loading="lazy">':'<div class="game-thumbnail-empty">PEKORA</div>')+'</div>'+
+   '<div class="game-card-body"><h2>'+esc(game.title)+'</h2><p>'+esc(game.description||"No description.")+'</p>'+
+   '<button class="game-locked-button" type="button" disabled aria-label="Game is locked"><span class="game-lock-icon" aria-hidden="true"></span> Locked</button></div></article>').join(""):'<div class="empty">No games have been added yet.</div>';
+ }catch(e){const host=document.getElementById("gamesGrid");if(host)host.textContent=e.message}
+}
+async function tradesPage(){
+ const view=beginView();
+ renderSidebar("trades");
+ if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to trade items.</div>';return}
+ app.innerHTML='<div class="trades-page"><h1 class="page-title">Trades</h1><section class="owner-section"><h2>Create a trade</h2><p class="muted">Choose items from your inventory and items from another player. Items are reserved while the offer is pending. Trades exchange items only and do not use real money.</p>'+
+ '<form id="tradeTargetForm" class="trade-target-form"><label>Player username<input name="username" minlength="3" maxlength="20" required placeholder="Username"></label><button class="button" type="submit">Load inventories</button></form><div id="tradeBuilder" class="trade-builder"></div><div id="tradeMessage" class="muted"></div></section>'+
+ '<section class="owner-section"><h2>Your trade offers</h2><div id="tradeList" class="trade-list">Loading trades...</div></section></div>';
+ async function loadTrades(){
+  const host=document.getElementById("tradeList");if(!host)return;
+  try{
+   const data=await api("/api/trades");
+   if(!isActiveView(view)||!host.isConnected)return;
+   const trades=data.trades||[];
+   host.innerHTML=trades.length?trades.map(t=>{
+    const incoming=t.recipient_id===me.id;
+    const items=(label,list)=>'<div class="trade-item-group"><strong>'+label+'</strong><div class="trade-item-list">'+(list.length?list.map(x=>'<span class="trade-item-chip">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="">':'')+esc(x.name)+'</span>').join(""):'<span class="muted">No items</span>')+'</div></div>';
+    return '<article class="trade-card"><div class="trade-card-heading"><strong>'+(incoming?'From '+esc(t.sender_name):'To '+esc(t.recipient_name))+'</strong><span class="trade-status trade-status-'+esc(t.status.toLowerCase())+'">'+esc(t.status)+'</span></div>'+
+     items(incoming?'They offer':'You offered',t.offeredItems||[])+items(incoming?'You offer':'They requested',t.requestedItems||[])+
+     (t.status==="PENDING"?(incoming?'<div class="trade-actions"><button class="primary" type="button" data-trade-action="accept" data-trade-id="'+esc(t.id)+'">Accept</button><button class="button secondary" type="button" data-trade-action="decline" data-trade-id="'+esc(t.id)+'">Decline</button></div>':'<div class="trade-actions"><button class="button secondary" type="button" data-trade-action="cancel" data-trade-id="'+esc(t.id)+'">Cancel offer</button></div>'):'')+
+     '</article>';
+   }).join(""):'<div class="empty">You do not have any trades yet.</div>';
+   host.querySelectorAll("[data-trade-action]").forEach(button=>button.addEventListener("click",async()=>{
+    button.disabled=true;
+    try{await api("/api/trades/"+encodeURIComponent(button.dataset.tradeId),{method:"POST",body:JSON.stringify({action:button.dataset.tradeAction})});toast("Trade updated");await loadTrades()}
+    catch(e){toast(e.message);button.disabled=false}
+   }));
+  }catch(e){host.textContent=e.message}
+ }
+ const targetForm=document.getElementById("tradeTargetForm");
+ targetForm.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const username=String(new FormData(targetForm).get("username")||"").trim();
+  const builder=document.getElementById("tradeBuilder"),message=document.getElementById("tradeMessage");
+  builder.textContent="Loading inventories...";message.textContent="";
+  try{
+   const [ownData,targetData]=await Promise.all([api("/api/inventory"),api("/api/profile/"+encodeURIComponent(username)+"/inventory")]);
+   if(!isActiveView(view))return;
+   const own=ownData.items||[],target=targetData.items||[];
+   if(!target.length)message.textContent="That player has no items available to trade.";
+   const checks=(items,prefix)=>items.map(item=>'<label class="trade-select-item"><input type="checkbox" value="'+esc(item.id)+'" data-trade-side="'+prefix+'"><span>'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="">':'')+'<span>'+esc(item.name)+'</span></span></label>').join("");
+   builder.innerHTML='<div class="trade-pick-columns"><div><h3>Your items</h3><div class="trade-pick-list">'+(own.length?checks(own,"offered"):'<p class="muted">Your inventory is empty.</p>')+'</div></div><div><h3>'+esc(username)+' items</h3><div class="trade-pick-list">'+(target.length?checks(target,"requested"):'<p class="muted">No items available.</p>')+'</div></div></div><button id="sendTradeOffer" class="primary" type="button">Send trade offer</button>';
+   document.getElementById("sendTradeOffer").addEventListener("click",async()=>{
+    const offeredIds=[...builder.querySelectorAll('[data-trade-side="offered"]:checked')].map(x=>x.value);
+    const requestedIds=[...builder.querySelectorAll('[data-trade-side="requested"]:checked')].map(x=>x.value);
+    if(!offeredIds.length&&!requestedIds.length){message.textContent="Select at least one item.";return}
+    const button=document.getElementById("sendTradeOffer");button.disabled=true;message.textContent="Sending offer...";
+    try{await api("/api/trades",{method:"POST",body:JSON.stringify({username,offeredIds,requestedIds})});message.textContent="Trade offer sent.";builder.innerHTML="";await loadTrades()}
+    catch(err){message.textContent=err.message;button.disabled=false}
+   });
+  }catch(err){builder.textContent="";message.textContent=err.message}
+ });
+ await loadTrades();
 }
 async function settings(){
  const view=beginView();
@@ -463,8 +526,8 @@ async function avatarPage(){
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your avatar.</div>';return}
  app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1><a class="button" href="#catalog" data-page="catalog">Catalog</a></div>'+
   '<div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Avatar</h2><div class="avatar-preview-placeholder" id="avatarPreview">'+avatar(me.username)+'</div>'+
-  '<p class="muted">Your equipped items are saved to your Pekora account.</p>'+
-  '<p class="muted" id="avatarRenderStatus">Preparing your 3D avatar...</p><div id="avatarEquipped" class="avatar-equipped-list">Loading outfit...</div></section>'+
+  '<p class="muted">Your equipped items are saved to your Pekora account. 3D avatar rendering is disabled.</p>'+
+  '<div id="avatarEquipped" class="avatar-equipped-list">Loading outfit...</div></section>'+
   '<section class="avatar-wardrobe"><h2>Inventory</h2><div class="avatar-category-tabs" id="avatarCategories"></div><div id="avatarWardrobe" class="avatar-wardrobe-grid">Loading inventory...</div></section></div></div>';
  let wardrobe=[],activeCategory="Hats",equipped=new Set();
  try{
@@ -472,27 +535,7 @@ async function avatarPage(){
   if(!isActiveView(view))return;
   wardrobe=inventoryData.items||[];
   equipped=new Set((avatarData.equipped||[]).map(x=>x.id));
-  if(avatarData.render)showAvatarRender(avatarData.render);
-  else await refreshAvatarRender();
  }catch(e){const host=document.getElementById("avatarWardrobe");if(isActiveView(view)&&host)host.textContent=e.message;return}
- function showAvatarRender(render){
-  const preview=document.getElementById("avatarPreview");
-  const status=document.getElementById("avatarRenderStatus");
-  if(preview)preview.innerHTML='<openpekora-avatar-renderer data-render=\''+esc(JSON.stringify(render))+'\'></openpekora-avatar-renderer>';
-  if(status)status.textContent="3D avatar is ready.";
- }
- async function refreshAvatarRender(){
-  const status=document.getElementById("avatarRenderStatus");
-  if(status)status.textContent="Rendering your avatar...";
-  try{
-   const result=await api("/api/avatar/render",{method:"POST"});
-   if(!isActiveView(view))return;
-   if(!result.render)throw new Error("The renderer did not return 3D avatar data.");
-   showAvatarRender(result.render);
-  }catch(error){
-   if(isActiveView(view)&&status?.isConnected)status.textContent=error.message;
-  }
- }
  function renderEquipped(){
   const host=document.getElementById("avatarEquipped");if(!host)return;
   const worn=wardrobe.filter(x=>equipped.has(x.id));
@@ -517,7 +560,6 @@ async function avatarPage(){
     if(!isActiveView(view))return;
     if(action==="wear")equipped.add(itemId);else equipped.delete(itemId);
     renderWardrobe();renderEquipped();
-    await refreshAvatarRender();
    }catch(e){toast(e.message);b.disabled=false}
   }));
  }
@@ -796,7 +838,8 @@ async function render(name){
  else if(name==="friends")await friends();
  else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
  else if(name==="currency")await currencyPage();
- else if(name==="games")gamesPage();
+ else if(name==="games")await gamesPage();
+ else if(name==="trades")await tradesPage();
  else if(name==="settings")await settings();
  else if(name==="owner")await owner();
  else home();
