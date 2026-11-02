@@ -119,7 +119,7 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_items_category_name ON items(category,name)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_inventory_user_purchased ON inventory(user_id,purchased_at DESC)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_auth_rate_window ON auth_rate_limits(window_started_at)"),
-        env.DB.prepare("DELETE FROM auth_rate_limits WHERE window_started_at < unixepoch()-86400")
+        env.DB.prepare("DELETE FROM auth_rate_limits WHERE window_started_at < CAST(strftime('%s','now') AS INTEGER)-86400")
       ]);
       // One-time public catalog cleanout requested for the November 2026 reset.
       // Inventory, purchases, users and balances are deliberately untouched.
