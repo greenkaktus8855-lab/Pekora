@@ -11,7 +11,7 @@ async function api(path,options={}){
  const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});
  let data={};try{data=await res.json()}catch{}
  if(!res.ok){
-  if(res.status===401&&me&&!["/api/login","/api/register"].includes(path))setUser(null);
+  if(res.status===401&&me&&!["/api/login","/api/register"].includes(path)){setUser(null);page("login");}
   throw new Error(data.error||"Something went wrong");
  }
  return data;
