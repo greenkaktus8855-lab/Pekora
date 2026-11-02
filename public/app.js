@@ -19,6 +19,7 @@ function waitForAvatarRenderer(){
  });
 }
 async function render3DAvatar(container,ownedItems){
+ container.classList.add("avatar-3d-view");
  container.innerHTML='<div class="avatar-3d-loading">Loading 3D avatar...</div>';
  const renderer=await waitForAvatarRenderer();
  if(!container.isConnected)return;
