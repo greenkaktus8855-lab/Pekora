@@ -498,3 +498,13 @@ model-viewer.pekora-model{display:block;width:100%;height:100%;min-height:150px;
 .owner-item-thumb .pekora-model-missing{min-height:76px;font-size:10px}
 .owner-item-subfields input[name="model_url"]{grid-column:1/-1}
 @media(max-width:767px){.item-detail-image model-viewer.pekora-model{min-height:220px}.item-detail-image .pekora-model-missing{min-height:220px}}
+
+
+/* Browser-based 3D avatar viewer */
+pekora-avatar-viewer{display:block;width:100%;min-height:300px;border:1px solid #c7d5df;border-radius:3px;touch-action:pan-y;cursor:grab;}
+pekora-avatar-viewer:active{cursor:grabbing}
+.op-profile-avatar-3d{width:300px;max-width:100%;height:300px;flex:0 0 300px;background:#eaf3fa;border:1px solid #c7d5df;overflow:hidden}
+.op-profile-avatar-3d pekora-avatar-viewer{height:300px;min-height:300px;border:0;border-radius:0}
+.op-profile-id{display:inline-flex;align-items:center;gap:8px;margin:0 0 8px;padding:4px 8px;background:#e8eef3;border:1px solid #cbd5dd;border-radius:2px;color:#5a5a5a;font-size:11px;font-weight:700;letter-spacing:.04em}
+.op-profile-id strong{color:#191919;font-size:12px;letter-spacing:0;font-weight:600;overflow-wrap:anywhere}
+@media(max-width:767px){.op-profile-avatar-3d{width:100%;height:300px;flex-basis:100%}}
