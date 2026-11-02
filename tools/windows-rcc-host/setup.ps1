@@ -57,7 +57,8 @@ $config = @{
 
 $configPath = Join-Path $RendererDir "config.json"
 if (-not (Test-Path $configPath)) {
-    $config | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $configPath
+    $configJson = $config | ConvertTo-Json -Depth 8
+    [System.IO.File]::WriteAllText($configPath, $configJson, [System.Text.UTF8Encoding]::new($false))
     Write-Host "Created local renderer config: $configPath" -ForegroundColor Green
 } else {
     Write-Host "Existing config.json found; not overwriting it." -ForegroundColor Yellow
