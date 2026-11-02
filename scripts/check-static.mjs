@@ -44,7 +44,14 @@ const checks = [
   ["old RCC renderer removed", !worker.includes("AVATAR_RENDERER_URL") && !app.includes("openpekora-avatar-renderer")],
   ["no old procedural avatar renderer", !app.includes("render3DAvatar") && !app.includes("avatar3d.js")],
   ["no fake wearable CSS", !/avatar-artwork|avatar-worn-chip|avatar-wearing-label/.test(css)],
-  ["no missing legacy loading GIF", !/\/img\/loading(?:_old)?\.gif/.test(fs.readFileSync(path.join(root,"public/openpekora-globals.css"),"utf8"))]
+  ["no missing legacy loading GIF", !/\/img\/loading(?:_old)?\.gif/.test(fs.readFileSync(path.join(root,"public/openpekora-globals.css"),"utf8"))],
+  ["public IDs are uniquely indexed", worker.includes("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_public_id") && worker.includes("action === \"set_public_id\"")],
+  ["owner can edit player IDs", app.includes("ownerPublicIdForm") && app.includes("set_public_id")],
+  ["Limited flags are preserved", !worker.includes("UPDATE items SET is_limited=0")],
+  ["Limited items have OpenPekora overlay", app.includes("CatalogOverlays/Limited.png") && css.includes(".limited-overlay") && css.includes("width:70px;height:24px")],
+  ["stock is capped in the purchase transaction", worker.includes("stock_sold=stock_sold+1") && worker.includes("stock_sold<stock_limit") && worker.includes("stockLimit < Number(current.stock_sold")],
+  ["Owner Panel can create and edit stock", app.includes("name=\"stock_limit\"") && app.includes("name=\"is_limited\"")]
+ ];
 ];
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"} ${name}`);
