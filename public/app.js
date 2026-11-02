@@ -8,7 +8,7 @@ async function api(path,options={}){const res=await fetch(path,{credentials:"sam
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
 function avatar(username=me?.username){const src=String(username||"").toLowerCase()==="koqumo"?"https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png":"https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/generic.svg";return '<img class="avatar-render" src="'+src+'" alt="User avatar" loading="lazy">' }
 const AVATAR_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
-const AVATAR_ATTACHMENTS=["HeadTop","Head","Torso","Root","LeftArm","RightArm","LeftLeg","RightLeg"];
+
 function renderSidebar(active="home"){
  if(!me){sidebar.classList.remove("visible","mobile-open");sidebar.innerHTML="";return}
  sidebar.classList.add("visible");
@@ -186,7 +186,7 @@ function drawCatalog(category,q){
  if(catalogSort==="price-low")list.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
  if(catalogSort==="price-high")list.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
  document.getElementById("catalogCount").textContent=list.length+" items";
- el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="catalog-asset-kind">'+(x.asset_kind==="MODEL_3D"?"3D wearable":x.asset_kind==="FACE_TEXTURE"?"Face texture":"Image preview only")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
+ el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="catalog-asset-kind">'+(x.asset_kind==="IMAGE_ONLY"?"Catalog item":"Original avatar service required")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
  el.querySelectorAll("[data-item-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();showItem(a.dataset.itemView)}));
 }async function buy(itemId){if(!me){page("login");return}try{const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});me.balance=d.balance;setUser(me);toast("Item purchased");catalog()}catch(e){toast(e.message)}}
@@ -340,18 +340,12 @@ async function owner(){
  if(!me||me.role!=="OWNER"){app.innerHTML='<div class="empty">Owner access required.</div>';return}
  app.innerHTML='<h1 class="page-title">Owner Panel</h1><div id="ownerStats" class="item-grid">Loading...</div>'+
  '<section class="owner-section"><h2>Owner Account</h2><p class="muted">The current password cannot be displayed because Pekora stores only a password hash. While signed in as OWNER, set a new password here.</p><form id="ownerPasswordForm" class="owner-item-form"><label>New password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><label>Confirm password<input name="confirmPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><button class="primary" type="submit">Set new owner password</button><span id="ownerPasswordMessage" class="muted"></span></form></section>'+
- '<section class="owner-section"><h2>Catalog Management</h2><p class="muted">Remove every item from the public catalog. Existing owners keep their inventory.</p><p class="muted">Wearable items need a real .glb 3D model. Upload it to public/assets/catalog/ and enter /assets/catalog/your-file.glb. Image-only entries are previews and cannot be worn.</p><button class="button secondary" id="clearPublicCatalog" type="button">Remove all items from catalog</button><form id="newItemForm" class="owner-item-form">'+
+ '<section class="owner-section"><h2>Catalog Management</h2><p class="muted">Remove every item from the public catalog. Existing owners keep their inventory.</p><p class="muted">This deployment currently supports local catalog entries with an image preview. The original Pekora asset catalogue and Avatar API are not connected, so these entries are not wearable.</p><button class="button secondary" id="clearPublicCatalog" type="button">Remove all items from catalog</button><form id="newItemForm" class="owner-item-form">'+
  '<label>Item name<input name="name" maxlength="80" required></label>'+
  '<label>Category<select name="category">'+AVATAR_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
  '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
  '<label>Preview image URL<input name="image_url" type="url" placeholder="https://..."></label>'+
- '<label>Asset type<select name="asset_kind"><option value="MODEL_3D">Wearable 3D (.glb)</option><option value="FACE_TEXTURE">Face texture</option><option value="IMAGE_ONLY">Image only</option></select></label>'+
- '<label>3D model URL<input name="model_url" type="text" placeholder="/assets/catalog/item.glb"></label>'+
- '<label>Attach to<select name="attachment">'+AVATAR_ATTACHMENTS.map(a=>'<option value="'+a+'">'+a+'</option>').join("")+'</select></label>'+
- '<label>Model scale<input name="model_scale" type="number" min="0.01" max="10" step="0.01" value="1"></label>'+
- '<details class="owner-model-adjust"><summary>Advanced model position and rotation</summary><div class="owner-model-adjust-grid">'+
- '<label>Offset X<input name="offset_x" type="number" step="0.01" value="0"></label><label>Offset Y<input name="offset_y" type="number" step="0.01" value="0"></label><label>Offset Z<input name="offset_z" type="number" step="0.01" value="0"></label>'+
- '<label>Rotation X<input name="rotation_x" type="number" step="1" value="0"></label><label>Rotation Y<input name="rotation_y" type="number" step="1" value="0"></label><label>Rotation Z<input name="rotation_z" type="number" step="1" value="0"></label></div></details>'+
+ 
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>';
@@ -385,16 +379,13 @@ async function owner(){
     '<div class="owner-item-thumb">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="">':'◇')+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
     '<div class="owner-item-subfields"><select name="category">'+AVATAR_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" value="'+esc(x.image_url||"")+'" placeholder="Preview image URL"></div>'+
-    '<div class="owner-item-model-fields"><select name="asset_kind"><option value="MODEL_3D" '+(x.asset_kind==="MODEL_3D"?"selected":"")+'>3D wearable</option><option value="FACE_TEXTURE" '+(x.asset_kind==="FACE_TEXTURE"?"selected":"")+'>Face texture</option><option value="IMAGE_ONLY" '+(x.asset_kind!=="MODEL_3D"&&x.asset_kind!=="FACE_TEXTURE"?"selected":"")+'>Image only</option></select><input name="model_url" type="text" value="'+esc(x.model_url||"")+'" placeholder="3D .glb model URL"><select name="attachment">'+AVATAR_ATTACHMENTS.map(a=>'<option value="'+a+'" '+(a===(x.attachment||"Head")?"selected":"")+'>'+a+'</option>').join("")+'</select><input name="model_scale" type="number" min="0.01" max="10" step="0.01" value="'+Number(x.model_scale||1)+'" title="Model scale"></div>'+
-    '<details class="owner-model-adjust"><summary>Model position and rotation</summary><div class="owner-model-adjust-grid">'+
-    '<label>X<input name="offset_x" type="number" step="0.01" value="'+Number(x.offset_x||0)+'"></label><label>Y<input name="offset_y" type="number" step="0.01" value="'+Number(x.offset_y||0)+'"></label><label>Z<input name="offset_z" type="number" step="0.01" value="'+Number(x.offset_z||0)+'"></label>'+
-    '<label>Rotate X<input name="rotation_x" type="number" value="'+Number(x.rotation_x||0)+'"></label><label>Rotate Y<input name="rotation_y" type="number" value="'+Number(x.rotation_y||0)+'"></label><label>Rotate Z<input name="rotation_z" type="number" value="'+Number(x.rotation_z||0)+'"></label></div></details>'+
+    
     '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?'For sale':'Removed from catalog')+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
-     await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description"),asset_kind:f.get("asset_kind"),model_url:f.get("model_url"),attachment:f.get("attachment"),model_scale:Number(f.get("model_scale")||1),offset_x:Number(f.get("offset_x")||0),offset_y:Number(f.get("offset_y")||0),offset_z:Number(f.get("offset_z")||0),rotation_x:Number(f.get("rotation_x")||0),rotation_y:Number(f.get("rotation_y")||0),rotation_z:Number(f.get("rotation_z")||0)})});
+     await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description"),asset_kind:"IMAGE_ONLY",model_url:""})});
      const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();toast("Item saved");
     }catch(err){toast(err.message)}
    }));
@@ -417,7 +408,7 @@ async function owner(){
   document.getElementById("newItemForm").addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
-    await api("/api/owner/items",{method:"POST",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description"),asset_kind:f.get("asset_kind"),model_url:f.get("model_url"),attachment:f.get("attachment"),model_scale:Number(f.get("model_scale")||1),offset_x:Number(f.get("offset_x")||0),offset_y:Number(f.get("offset_y")||0),offset_z:Number(f.get("offset_z")||0),rotation_x:Number(f.get("rotation_x")||0),rotation_y:Number(f.get("rotation_y")||0),rotation_z:Number(f.get("rotation_z")||0)})});
+    await api("/api/owner/items",{method:"POST",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description"),asset_kind:"IMAGE_ONLY",model_url:""})});
     e.target.reset();e.target.elements.price.value=50;msg.textContent="Item added.";const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();
    }catch(err){msg.textContent=err.message}
   });
