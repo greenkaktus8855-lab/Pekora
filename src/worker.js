@@ -510,10 +510,9 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const rendererBase = String(env.AVATAR_RENDERER_URL || "").trim();
-    const accessClientId = String(env.AVATAR_RENDERER_CLIENT_ID || "").trim();
-    const accessClientSecret = String(env.AVATAR_RENDERER_CLIENT_SECRET || "").trim();
-    if (!rendererBase || !accessClientId || !accessClientSecret) {
-      return json({error:"The secure renderer connection is not configured in Cloudflare yet."},503);
+    const rendererSecret = String(env.AVATAR_RENDERER_SECRET || "").trim();
+    if (!rendererBase || rendererSecret.length < 32) {
+      return json({error:"The renderer URL or shared renderer secret is not configured in Cloudflare Worker secrets."},503);
     }
     let rendererUrl;
     try {
@@ -544,8 +543,7 @@ async function route(request, env) {
         method:"POST",
         headers:{
           "content-type":"application/json",
-          "CF-Access-Client-Id":accessClientId,
-          "CF-Access-Client-Secret":accessClientSecret
+          "X-Pekora-Renderer-Secret":rendererSecret
         },
         body:JSON.stringify({userId:Number(mapping.render_id)})
       });
