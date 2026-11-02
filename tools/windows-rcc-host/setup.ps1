@@ -67,6 +67,7 @@ if (-not (Test-Path $configPath)) {
 Copy-Item (Join-Path $ToolDir "start-rcc.ps1") (Join-Path $HostRoot "start-rcc.ps1") -Force
 Copy-Item (Join-Path $ToolDir "start-renderer.ps1") (Join-Path $HostRoot "start-renderer.ps1") -Force
 Copy-Item (Join-Path $ToolDir "README.md") (Join-Path $HostRoot "README-Pekora-RCC.txt") -Force
+Copy-Item (Join-Path $ToolDir "RENDERER-CONNECTION.md") (Join-Path $HostRoot "RENDERER-CONNECTION.txt") -Force
 
 Write-Host ""
 Write-Host "Preparation complete." -ForegroundColor Green
