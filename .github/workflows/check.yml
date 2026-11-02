@@ -22,3 +22,5 @@ jobs:
         run: node --input-type=module --check < src/worker.js
       - name: Check static assets and critical safeguards
         run: node scripts/check-static.mjs
+      - name: Check SQLite transaction behavior
+        run: python3 scripts/check-sqlite.py
