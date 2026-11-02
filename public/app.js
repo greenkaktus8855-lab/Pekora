@@ -7,7 +7,15 @@ let activeView=0;
 const beginView=()=>++activeView;
 const isActiveView=view=>view===activeView;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-async function api(path,options={}){const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||"Something went wrong");return data}
+async function api(path,options={}){
+ const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});
+ let data={};try{data=await res.json()}catch{}
+ if(!res.ok){
+  if(res.status===401&&me&&!["/api/login","/api/register"].includes(path))setUser(null);
+  throw new Error(data.error||"Something went wrong");
+ }
+ return data;
+}
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
 function avatar(username=me?.username){
  const isKoqumo=String(username||"").toLowerCase()==="koqumo";
