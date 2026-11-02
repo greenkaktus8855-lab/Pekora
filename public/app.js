@@ -45,8 +45,8 @@ function renderSidebar(active="home"){
   ["friends","icon-nav-friends","Friends"],
   ["avatar","icon-nav-charactercustomizer","Avatar"],
   ["inventory","icon-nav-inventory","Inventory"],
-  ["currency","icon-nav-currency","Currency"],
-  ["games","icon-nav-games","Games"],
+  ["currency","icon-nav-robux","Currency"],
+  ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
  ];
  sidebar.innerHTML='<div class="sidebar-card">'+
