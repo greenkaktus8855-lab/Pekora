@@ -162,7 +162,7 @@ function itemBadgeMarkup(x){
 }
 function itemStockText(x){
  const stock=itemStockState(x);
- return stock.finite?stock.remaining+" left · "+stock.sold+"/"+stock.total+" sold":stock.sold+" sold · unlimited stock";
+ return stock.finite?stock.sold+"/"+stock.total+" sold":stock.sold+" sold · unlimited stock";
 }
 function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+itemBadgeMarkup(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+(Number(x.stock_limit)>0?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'</article>'}
 async function showItem(itemId,updateHistory=true){
@@ -204,7 +204,7 @@ async function showItem(itemId,updateHistory=true){
  const isOwned=ownedItemIds.has(item.id),stock=itemStockState(item);
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(stock.finite?'<div class="item-detail-stock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
   '</div></div>';
  if(!isOwned&&!stock.soldOut&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
  document.getElementById("copyItemLink")?.addEventListener("click",async()=>{const shareUrl=new URL("/item/"+encodeURIComponent(item.id),location.origin).href;try{await navigator.clipboard.writeText(shareUrl);toast("Item link copied")}catch{toast("Could not copy link. Copy it from the address bar.")}});
@@ -331,11 +331,19 @@ function drawCatalog(category,q){
  try{
   const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});
   if(!me||me.id!==userId)return;
-  me.balance=d.balance;ownedItemIds.add(itemId);ownershipLoaded=true;setUser(me);toast("Item purchased");
+  me.balance=d.balance;ownedItemIds.add(itemId);ownershipLoaded=true;
+  const purchasedItem=items.find(item=>item.id===itemId);
+  if(purchasedItem)purchasedItem.stock_sold=Number(purchasedItem.stock_sold||0)+1;
+  setUser(me);toast("Item purchased");
   if(isActiveView(view)){
    const currentDetailButton=document.getElementById("detailBuy");
-   if(currentDetailButton?.isConnected){currentDetailButton.disabled=true;currentDetailButton.textContent="Owned";currentDetailButton.classList.add("button","secondary")}
-   else catalog();
+   if(currentDetailButton?.isConnected){
+    currentDetailButton.disabled=true;currentDetailButton.textContent="Owned";currentDetailButton.classList.add("button","secondary");
+    const preview=document.getElementById("itemDetailPreview");
+    if(preview&&purchasedItem)preview.innerHTML=itemPreview(purchasedItem)+itemBadgeMarkup(purchasedItem);
+    const stockLine=document.getElementById("itemDetailStock");
+    if(stockLine&&purchasedItem)stockLine.textContent=itemStockText(purchasedItem);
+   }else catalog();
   }
  }catch(e){toast(e.message)}
  finally{
