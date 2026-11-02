@@ -149,7 +149,18 @@ function itemPreview(x,extraClass=""){
  }
  return x?.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name||"Item")+'" loading="lazy">':'◇';
 }
-function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div></article>'}
+function limitedBadge(x){
+ if(!Number(x?.is_limited))return "";
+ return '<span class="limited-item-badge"><img src="/limited-badge.svg" alt="Limited item"><span>LIMITED</span></span>';
+}
+function limitedStockInfo(x){
+ if(!Number(x?.is_limited))return "";
+ const limit=Number(x.stock_limit||0),sold=Number(x.stock_sold||0);
+ if(limit<=0)return '<div class="limited-stock-info">Limited item · Unlimited stock</div>';
+ const left=Math.max(0,limit-sold);
+ return '<div class="limited-stock-info"><span>'+left+' left</span><span>'+sold+' / '+limit+' sold</span></div>';
+}
+function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+limitedBadge(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+limitedStockInfo(x)+'</article>'}
 async function showItem(itemId,updateHistory=true){
  const view=beginView();
  const requestedUserId=me?.id||null;
@@ -188,8 +199,8 @@ async function showItem(itemId,updateHistory=true){
  if(!item){app.innerHTML='<div class="empty">Item not found. <a href="#catalog" data-page="catalog">Back to Catalog</a></div>';return}
  const isOwned=ownedItemIds.has(item.id);
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
-  '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div><p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
+  '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+limitedBadge(item)+'</div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+limitedStockInfo(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
   '</div></div>';
  if(!isOwned&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
 }
@@ -296,7 +307,7 @@ function drawCatalog(category,q){
  if(catalogSort==="price-low")list.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
  if(catalogSort==="price-high")list.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
  count.textContent=list.length+" items";
- el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
+ el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+limitedBadge(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+limitedStockInfo(x)+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
 
 }async function buy(itemId){
@@ -707,7 +718,7 @@ async function owner(){
   });
   function drawOwnerItems(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
-    '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
+    '<div class="owner-item-thumb">'+itemPreview(x)+limitedBadge(x)+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
     '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><label><input name="is_limited" type="checkbox" '+(x.is_limited?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" value="'+Number(x.stock_limit||0)+'" title="Stock limit (0 = unlimited)"><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"></div>'+
     
