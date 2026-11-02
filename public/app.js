@@ -441,13 +441,19 @@ async function owner(){
   if(!isActiveView(view))return;
   document.getElementById("ownerStats").innerHTML='<div class="info-panel"><h3>Users</h3><b>'+stats.users+'</b></div><div class="info-panel"><h3>Catalog Items</h3><b>'+stats.items+'</b></div><div class="info-panel"><h3>Purchases</h3><b>'+stats.purchases+'</b></div>';
   let ownerItems=data.items||[];
+  function updateOwnerItemCount(){
+   const count=document.querySelectorAll("#ownerStats .info-panel")[1]?.querySelector("b");
+   if(count)count.textContent=ownerItems.filter(item=>Number(item.is_for_sale)===1).length;
+  }
   document.getElementById("clearPublicCatalog").addEventListener("click",async()=>{
    if(!confirm("Remove ALL items from the public catalog? Existing user inventories and balances will not be changed."))return;
    const button=document.getElementById("clearPublicCatalog");button.disabled=true;button.textContent="Removing...";
    try{
     const result=await api("/api/owner/items",{method:"DELETE"});
-    const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();
-    document.getElementById("ownerStats").querySelectorAll(".info-panel")[1].querySelector("b").textContent=ownerItems.length;
+    if(!isActiveView(view))return;
+    const fresh=await api("/api/owner/items");
+    if(!isActiveView(view))return;
+    ownerItems=fresh.items||[];drawOwnerItems();updateOwnerItemCount();
     toast(result.hidden+" items removed from the public catalog");
    }catch(e){toast(e.message)}
    finally{button.disabled=false;button.textContent="Remove all items from catalog"}
@@ -464,17 +470,30 @@ async function owner(){
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
      await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description"),asset_kind:"IMAGE_ONLY",model_url:""})});
-     const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();toast("Item saved");
+     if(!isActiveView(view))return;
+     const fresh=await api("/api/owner/items");
+     if(!isActiveView(view))return;
+     ownerItems=fresh.items||[];drawOwnerItems();updateOwnerItemCount();toast("Item saved");
     }catch(err){toast(err.message)}
    }));
    document.querySelectorAll("[data-restore-item]").forEach(button=>button.addEventListener("click",async()=>{
-    try{await api("/api/owner/items/"+encodeURIComponent(button.dataset.restoreItem),{method:"PATCH",body:JSON.stringify({is_for_sale:true})});const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();toast("Item restored")}
-    catch(e){toast(e.message)}
+    try{
+     await api("/api/owner/items/"+encodeURIComponent(button.dataset.restoreItem),{method:"PATCH",body:JSON.stringify({is_for_sale:true})});
+     if(!isActiveView(view))return;
+     const fresh=await api("/api/owner/items");
+     if(!isActiveView(view))return;
+     ownerItems=fresh.items||[];drawOwnerItems();updateOwnerItemCount();toast("Item restored");
+    }catch(e){toast(e.message)}
    }));
    document.querySelectorAll("[data-remove-item]").forEach(button=>button.addEventListener("click",async()=>{
     if(!confirm("Remove this item from the public catalog? Existing owners will keep it."))return;
-    try{await api("/api/owner/items/"+encodeURIComponent(button.dataset.removeItem),{method:"DELETE"});const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();toast("Item removed from catalog")}
-    catch(e){toast(e.message)}
+    try{
+     await api("/api/owner/items/"+encodeURIComponent(button.dataset.removeItem),{method:"DELETE"});
+     if(!isActiveView(view))return;
+     const fresh=await api("/api/owner/items");
+     if(!isActiveView(view))return;
+     ownerItems=fresh.items||[];drawOwnerItems();updateOwnerItemCount();toast("Item removed from catalog");
+    }catch(e){toast(e.message)}
    }));
   }
   drawOwnerItems();
@@ -484,10 +503,14 @@ async function owner(){
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
     await api("/api/owner/items",{method:"POST",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description"),asset_kind:"IMAGE_ONLY",model_url:""})});
-    e.target.reset();e.target.elements.price.value=50;msg.textContent="Item added.";const fresh=await api("/api/owner/items");ownerItems=fresh.items||[];drawOwnerItems();
+    if(!isActiveView(view))return;
+    e.target.reset();e.target.elements.price.value=50;msg.textContent="Item added.";
+    const fresh=await api("/api/owner/items");
+    if(!isActiveView(view))return;
+    ownerItems=fresh.items||[];drawOwnerItems();updateOwnerItemCount();
    }catch(err){msg.textContent=err.message}
   });
- }catch(e){document.getElementById("ownerItems").textContent=e.message}
+ }catch(e){const host=document.getElementById("ownerItems");if(isActiveView(view)&&host)host.textContent=e.message}
 }
 
 function infoPage(type){
