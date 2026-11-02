@@ -87,6 +87,9 @@ async function ensureSiteSettings(env) {
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
+  if (path.startsWith("/api/") && path !== "/api/health" && !env.DB) {
+    return json({ error:"D1 binding DB is missing." },503);
+  }
   if (path.startsWith("/api/") && path !== "/api/health" && env.DB) {
     try { await ensureSiteSettings(env); }
     catch (error) {
