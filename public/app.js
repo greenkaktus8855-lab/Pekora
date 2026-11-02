@@ -308,14 +308,23 @@ async function loadProfileFriendAction(username){
 }
 
 async function settings(){
+ const view=beginView();
  renderSidebar("settings");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> first.</div>';return}
+ const username=me.username;
+ app.innerHTML='<div class="empty">Loading settings...</div>';
  let description="";
- try{const d=await api("/api/profile/"+encodeURIComponent(me.username));description=d.profile.description||""}catch{}
- app.innerHTML='<h1 class="page-title">Account Settings</h1><div class="form" style="max-width:600px;margin:0"><h2>Profile</h2><form id="settingsForm"><label>Username</label><input value="'+esc(me.username)+'" disabled><label>Profile description</label><textarea name="description" rows="5" maxlength="500">'+esc(description)+'</textarea><button class="primary" type="submit">Save changes</button><div id="settingsMessage" class="muted"></div></form></div>';
- document.getElementById("settingsForm").addEventListener("submit",async e=>{e.preventDefault();const description=new FormData(e.target).get("description");try{await api("/api/profile",{method:"PUT",body:JSON.stringify({description})});document.getElementById("settingsMessage").textContent="Profile saved."}catch(err){document.getElementById("settingsMessage").textContent=err.message}});
+ try{const d=await api("/api/profile/"+encodeURIComponent(username));description=d.profile.description||""}catch{}
+ if(!isActiveView(view))return;
+ app.innerHTML='<h1 class="page-title">Account Settings</h1><div class="form" style="max-width:600px;margin:0"><h2>Profile</h2><form id="settingsForm"><label>Username</label><input value="'+esc(username)+'" disabled><label>Profile description</label><textarea name="description" rows="5" maxlength="500">'+esc(description)+'</textarea><button class="primary" type="submit">Save changes</button><div id="settingsMessage" class="muted"></div></form></div>';
+ document.getElementById("settingsForm").addEventListener("submit",async e=>{
+  e.preventDefault();const description=new FormData(e.target).get("description"),message=document.getElementById("settingsMessage");
+  try{await api("/api/profile",{method:"PUT",body:JSON.stringify({description})});if(isActiveView(view)&&message?.isConnected)message.textContent="Profile saved."}
+  catch(err){if(isActiveView(view)&&message?.isConnected)message.textContent=err.message}
+ });
 }
 async function avatarPage(){
+ const view=beginView();
  renderSidebar("avatar");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your avatar.</div>';return}
  app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1><a class="button" href="#catalog" data-page="catalog">Catalog</a></div>'+
@@ -324,8 +333,8 @@ async function avatarPage(){
   '<p class="muted">The real avatar editor requires the Avatar API, Thumbnails API and RCC renderer. This page does not fake equipped items.</p></section>'+
   '<section class="avatar-wardrobe"><h2>Inventory</h2><div class="avatar-category-tabs" id="avatarCategories"></div><div id="avatarWardrobe" class="avatar-wardrobe-grid">Loading inventory...</div></section></div></div>';
  let wardrobe=[],activeCategory="Hats";
- try{const d=await api("/api/inventory");wardrobe=d.items||[]}
- catch(e){document.getElementById("avatarWardrobe").textContent=e.message;return}
+ try{const d=await api("/api/inventory");if(!isActiveView(view))return;wardrobe=d.items||[]}
+ catch(e){const host=document.getElementById("avatarWardrobe");if(isActiveView(view)&&host)host.textContent=e.message;return}
  function renderWardrobe(){
   document.getElementById("avatarCategories").innerHTML=AVATAR_CATEGORIES.map(c=>'<button type="button" class="avatar-category '+(c===activeCategory?"active":"")+'" data-avatar-category="'+c+'">'+c+'</button>').join("");
   const own=wardrobe.filter(x=>x.category===activeCategory);
@@ -339,33 +348,40 @@ async function avatarPage(){
  renderWardrobe();
 }
 async function friends(){
+ const view=beginView();
  renderSidebar("friends");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view friends.</div>';return}
  app.innerHTML='<h1 class="page-title">Friends</h1><form id="addFriendForm" class="people-search"><input class="search-input" name="username" placeholder="Username" minlength="3" maxlength="20" required><button class="button" type="submit">Add Friend</button></form><div id="friendsMessage" class="muted"></div><div id="friendsContent">Loading...</div>';
  document.getElementById("addFriendForm").addEventListener("submit",async e=>{
   e.preventDefault();const username=new FormData(e.target).get("username").trim();
-  try{await api("/api/friends/request",{method:"POST",body:JSON.stringify({username})});document.getElementById("friendsMessage").textContent="Friend request sent.";e.target.reset();loadFriendsList()}
-  catch(err){document.getElementById("friendsMessage").textContent=err.message}
+  try{
+   const result=await api("/api/friends/request",{method:"POST",body:JSON.stringify({username})});
+   if(!isActiveView(view))return;
+   document.getElementById("friendsMessage").textContent=result.status==="friends"?"You are now friends.":"Friend request sent.";
+   e.target.reset();loadFriendsList(view);
+  }catch(err){const message=document.getElementById("friendsMessage");if(isActiveView(view)&&message)message.textContent=err.message}
  });
- await loadFriendsList();
+ await loadFriendsList(view);
 }
-async function loadFriendsList(){
+async function loadFriendsList(view=activeView){
  const host=document.getElementById("friendsContent");if(!host)return;
  try{
   const d=await api("/api/friends");
-  const section=(title,list,kind)=>'<section class="friends-section"><h2>'+title+' ('+list.length+')</h2>'+(list.length?list.map(u=>'<article class="people-user"><div class="people-user-info"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role||"USER")+'</span></div><button class="button" type="button" data-friend-action="'+kind+'" data-friend-name="'+esc(u.username)+'">'+(kind==="accept"?"Accept":kind==="remove"?"Remove":"Cancel")+'</button></article>').join(""):'<div class="op-profile-empty">Nothing here yet.</div>')+'</section>';
+  if(!isActiveView(view)||!host.isConnected)return;
+  const section=(title,list,kind)=>'<section class="friends-section"><h2>'+title+' ('+list.length+')</h2>'+(list.length?list.map(u=>'<article class="people-user"><div class="people-user-info"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role||"USER")+'</span></div><button class="button" type="button" data-friend-action="'+kind+'" data-friend-name="'+esc(u.username)+'">'+(kind==="accept"?"Accept":title==="Sent Requests"?"Cancel":"Remove")+'</button></article>').join(""):'<div class="op-profile-empty">Nothing here yet.</div>')+'</section>';
   host.innerHTML=section("Friend Requests",d.incoming||[],"accept")+section("Friends",d.friends||[],"remove")+section("Sent Requests",d.outgoing||[],"remove");
   host.querySelectorAll("[data-friend-action]").forEach(b=>b.addEventListener("click",async()=>{
    const username=b.dataset.friendName;
    try{
     if(b.dataset.friendAction==="accept")await api("/api/friends/accept",{method:"POST",body:JSON.stringify({username})});
     else await api("/api/friends?username="+encodeURIComponent(username),{method:"DELETE"});
-    await loadFriendsList();
+    if(isActiveView(view))await loadFriendsList(view);
    }catch(e){toast(e.message)}
   }));
- }catch(e){host.textContent=e.message}
+ }catch(e){if(isActiveView(view)&&host.isConnected)host.textContent=e.message}
 }
 function users(){
+ const view=beginView();
  renderSidebar("users");
  app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Enter a username..." minlength="2" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type at least 2 characters to find users. Search results will appear below.</div><div id="userResults" class="people-results"></div>';
  const form=document.getElementById("peopleSearchForm");
@@ -381,17 +397,18 @@ function users(){
   hint.style.display="block";
   try{
    const d=await api("/api/search-users?q="+encodeURIComponent(q));
-   if(requestId!==latest)return;
+   if(requestId!==latest||!isActiveView(view))return;
    const found=Array.isArray(d.users)?d.users:[];
    hint.style.display="none";
    results.innerHTML=found.length?found.map(u=>'<article class="people-user"><div class="people-avatar">'+avatar(u.username)+'</div><div class="people-user-info"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role||"USER")+'</span></div><button class="button" type="button" data-profile="'+esc(u.username)+'">View Profile</button></article>').join(""):'<div class="empty">No users found for “'+esc(q)+'”.</div>';
-  }catch(e){if(requestId!==latest)return;hint.textContent="Could not load users: "+e.message;hint.style.display="block";results.innerHTML=""}
+  }catch(e){if(requestId!==latest||!isActiveView(view))return;hint.textContent="Could not load users: "+e.message;hint.style.display="block";results.innerHTML=""}
  }
  form.addEventListener("submit",e=>{e.preventDefault();runSearch()});
  input.addEventListener("input",()=>{if(input.value.trim().length===0){latest++;results.innerHTML="";hint.textContent="Type at least 2 characters to find users. Search results will appear below.";hint.style.display="block"}});
  if(location.hash.startsWith("#users?")){input.value=new URLSearchParams(location.hash.split("?")[1]).get("q")||"";if(input.value.length>=2)runSearch()}
 }
 async function owner(){
+ const view=beginView();
  renderSidebar("owner");
  if(!me||me.role!=="OWNER"){app.innerHTML='<div class="empty">Owner access required.</div>';return}
  app.innerHTML='<h1 class="page-title">Owner Panel</h1><div id="ownerStats" class="item-grid">Loading...</div>'+
@@ -412,11 +429,13 @@ async function owner(){
   message.textContent="Updating password...";
   try{
    await api("/api/owner/password",{method:"POST",body:JSON.stringify({password})});
+   if(!isActiveView(view))return;
    form.reset();message.textContent="Owner password changed. Save the new password somewhere safe.";
   }catch(error){message.textContent=error.message}
  });
  try{
   const [stats,data]=await Promise.all([api("/api/owner/stats"),api("/api/owner/items")]);
+  if(!isActiveView(view))return;
   document.getElementById("ownerStats").innerHTML='<div class="info-panel"><h3>Users</h3><b>'+stats.users+'</b></div><div class="info-panel"><h3>Catalog Items</h3><b>'+stats.items+'</b></div><div class="info-panel"><h3>Purchases</h3><b>'+stats.purchases+'</b></div>';
   let ownerItems=data.items||[];
   document.getElementById("clearPublicCatalog").addEventListener("click",async()=>{
@@ -457,11 +476,8 @@ async function owner(){
   }
   drawOwnerItems();
   const newItemForm=document.getElementById("newItemForm");
-  newItemForm.elements.category.addEventListener("change",()=>{
-   const defaults={Hats:"HeadTop",Hair:"Head",Faces:"Head",Shirts:"Torso",Pants:"Root",Accessories:"Head"};
-   newItemForm.elements.attachment.value=defaults[newItemForm.elements.category.value]||"Head";
-  });
-  document.getElementById("newItemForm").addEventListener("submit",async e=>{
+  if(!newItemForm)return;
+  newItemForm.addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
     await api("/api/owner/items",{method:"POST",body:JSON.stringify({name:f.get("name"),category:f.get("category"),price:Number(f.get("price")),image_url:f.get("image_url"),description:f.get("description"),asset_kind:"IMAGE_ONLY",model_url:""})});
@@ -472,11 +488,12 @@ async function owner(){
 }
 
 function infoPage(type){
+ beginView();
  renderSidebar("");
  const pages={
-  about:{title:"About Pekora",body:'<p>Pekora is an independent community revival project. It is not affiliated with or endorsed by Roblox Corporation.</p><p>This build includes account profiles, a virtual catalog, inventory, avatar outfit settings and friend requests.</p><p>Pekora currency is an in-site balance only. It has no real-world monetary value.</p>'},
+  about:{title:"About Pekora",body:'<p>Pekora is an independent community revival project. It is not affiliated with or endorsed by Roblox Corporation.</p><p>This build includes account profiles, a virtual catalog, inventory previews and friend requests. Original avatar editing is not connected in this deployment.</p><p>Pekora currency is an in-site balance only. It has no real-world monetary value.</p>'},
   terms:{title:"Terms of Use",body:'<p>Use Pekora respectfully and do not impersonate other users, abuse the service or attempt to access accounts that are not yours.</p><p>Do not upload images or descriptions that violate the rights or safety of other people. The project owner may remove catalog entries or accounts that abuse the service.</p><p>Virtual currency and catalog items are for use inside this website only. They cannot be exchanged for real money.</p>'},
-  privacy:{title:"Privacy",body:'<p>Pekora stores your username, a password hash, session information, profile description, avatar selections, virtual balance, inventory and friend requests so the service can work.</p><p>Passwords are not stored as plain text. Sign-in uses a secure session cookie. This build does not ask for an email address.</p><p>Do not reuse an important password and do not share your account credentials with anyone.</p>'}
+  privacy:{title:"Privacy",body:'<p>Pekora stores your username, a password hash, session information, profile description, virtual balance, inventory and friend requests so the service can work.</p><p>Passwords are not stored as plain text. Sign-in uses a secure session cookie. This build does not ask for an email address.</p><p>Do not reuse an important password and do not share your account credentials with anyone.</p>'}
  };
  const pageData=pages[type]||pages.about;
  app.innerHTML='<article class="info-page"><h1 class="page-title">'+pageData.title+'</h1>'+pageData.body+'<a class="button" href="#home" data-page="home">Back to Home</a></article>';
