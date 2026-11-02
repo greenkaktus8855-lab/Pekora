@@ -1,5 +1,5 @@
 {
-  "BaseUrl": "https://YOUR-PEKORA-WORKER-URL/",
+  "BaseUrl": "https://pekora.green-kaktus8855.workers.dev/",
   "RCCUrl": "http://127.0.0.1",
   "Debug": true,
   "Ports": {

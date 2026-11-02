@@ -103,6 +103,15 @@ function validItem(data, allowLegacyHttp = false) {
     }
     catch { return "Enter a valid image URL."; }
   }
+  const assetId = data.asset_id === undefined || data.asset_id === null || data.asset_id === "" ? 0 : Number(data.asset_id);
+  const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+  const suppliedAssetTypeId = Number(data.asset_type_id || 0);
+  const assetTypeId = suppliedAssetTypeId > 0
+    ? suppliedAssetTypeId
+    : (assetId ? (defaultAssetTypes[data.category] || 0) : 0);
+  if (!Number.isSafeInteger(assetId) || assetId < 0 || assetId > 2147483647) return "Roblox asset ID must be a positive whole number.";
+  if (!Number.isSafeInteger(assetTypeId) || assetTypeId < 0 || assetTypeId > 2147483647) return "Roblox asset type ID must be a positive whole number.";
+  if ((assetId > 0) !== (assetTypeId > 0)) return "Enter both a Roblox asset ID and its asset type ID.";
   const model = String(data.model_url ?? "").trim();
   if (model.length > 1000) return "3D model URL is too long.";
   if (model) {
@@ -125,6 +134,8 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_files (id TEXT PRIMARY KEY, model_data BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_render_users (render_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE, last_rendered_at INTEGER NOT NULL DEFAULT 0)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_render_files (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, file_name TEXT NOT NULL, file_data BLOB NOT NULL, content_type TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS moderation_warnings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, moderator_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), acknowledged INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_moderation_warnings_user ON moderation_warnings(user_id,created_at DESC)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS owner_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL REFERENCES users(id), target_user_id TEXT REFERENCES users(id) ON DELETE SET NULL, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
@@ -143,6 +154,12 @@ async function ensureSiteSettings(env) {
       const itemColumns = await env.DB.prepare("PRAGMA table_info(items)").all();
       if (!(itemColumns.results || []).some(column => column.name === "model_url")) {
         await env.DB.prepare("ALTER TABLE items ADD COLUMN model_url TEXT NOT NULL DEFAULT ''").run();
+      }
+      if (!(itemColumns.results || []).some(column => column.name === "asset_id")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN asset_id INTEGER NOT NULL DEFAULT 0").run();
+      }
+      if (!(itemColumns.results || []).some(column => column.name === "asset_type_id")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN asset_type_id INTEGER NOT NULL DEFAULT 0").run();
       }
       // One-time public catalog cleanout requested for the November 2026 reset.
       // Inventory, purchases, users and balances are deliberately untouched.
@@ -217,6 +234,12 @@ async function clearRateLimit(env, key) {
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
+  const avatarServiceRoute = path === "/v1.1/avatar-fetch" || path === "/v1/avatar-fetch" || path === "/Asset/BodyColors.ashx";
+  if (avatarServiceRoute && !env.DB) return json({error:"D1 binding DB is missing."},503);
+  if (avatarServiceRoute && env.DB) {
+    try { await ensureSiteSettings(env); }
+    catch (error) { console.error("[Pekora avatar setup] Database setup failed:",error); return json({error:"Avatar database setup failed."},503); }
+  }
   if (path.startsWith("/api/") && path !== "/api/health" && !env.DB) {
     return json({ error:"D1 binding DB is missing." },503);
   }
@@ -227,6 +250,51 @@ async function route(request, env) {
       return json({ error:"Catalog database setup failed. Check Worker logs." },503);
     }
   }
+  if (request.method === "GET" && (path === "/v1.1/avatar-fetch" || path === "/v1/avatar-fetch")) {
+    const renderId = Number(url.searchParams.get("userId"));
+    const placeId = Number(url.searchParams.get("placeId") || 0);
+    if (!Number.isSafeInteger(renderId) || renderId < 1 || !Number.isSafeInteger(placeId) || placeId < 0) return fail("Invalid avatar request.",400);
+    const target = await env.DB.prepare("SELECT u.id FROM avatar_render_users r JOIN users u ON u.id=r.user_id WHERE r.render_id=? AND u.is_banned=0").bind(renderId).first();
+    if (!target) return fail("Avatar not found.",404);
+    const colorId = 194;
+    const bodyColors = {
+      headColorId:colorId,leftArmColorId:colorId,leftLegColorId:colorId,rightArmColorId:colorId,rightLegColorId:colorId,torsoColorId:colorId,
+      HeadColor:colorId,LeftArmColor:colorId,LeftLegColor:colorId,RightArmColor:colorId,RightLegColor:colorId,TorsoColor:colorId
+    };
+    const wornAssets = await env.DB.prepare("SELECT i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND i.asset_id>0 AND i.asset_type_id>0 ORDER BY e.equipped_at DESC").bind(target.id).all();
+    const assetAndAssetTypeIds = (wornAssets.results || []).map(item=>({assetId:Number(item.asset_id),assetTypeId:Number(item.asset_type_id)}));
+    const scales = {height:1,Height:1,width:1,Width:1,head:1,Head:1,depth:1,Depth:1,proportion:0,Proportion:0,bodyType:0,BodyType:0};
+    const bodyColorsUrl = new URL("/Asset/BodyColors.ashx?userId="+renderId,request.url).toString();
+    return json({
+      resolvedAvatarType:"R15",
+      accessoryVersionIds:[],
+      equippedGearVersionIds:[],
+      assetAndAssetTypeIds,
+      backpackGearVersionIds:[],
+      animationAssetIds:{},
+      playerAvatarType:"R15",
+      scales,
+      bodyColorsUrl,
+      bodyColors,
+      emotes:[]
+    },200,{"cache-control":"no-store"});
+  }
+
+  if (request.method === "GET" && path === "/Asset/BodyColors.ashx") {
+    const renderId = Number(url.searchParams.get("userId"));
+    if (!Number.isSafeInteger(renderId) || renderId < 1) return fail("Invalid avatar request.",400);
+    const target = await env.DB.prepare("SELECT render_id FROM avatar_render_users WHERE render_id=?").bind(renderId).first();
+    if (!target) return fail("Avatar not found.",404);
+    const colorId = 194;
+    const xml = '<?xml version="1.0" encoding="utf-8"?>' +
+      '<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">' +
+      '<External>null</External><External>nil</External><Item class="BodyColors"><Properties>' +
+      '<int name="HeadColor">'+colorId+'</int><int name="LeftArmColor">'+colorId+'</int><int name="LeftLegColor">'+colorId+'</int>' +
+      '<string name="Name">Body Colors</string><int name="RightArmColor">'+colorId+'</int><int name="RightLegColor">'+colorId+'</int>' +
+      '<int name="TorsoColor">'+colorId+'</int><bool name="archivable">true</bool></Properties></Item></roblox>';
+    return new Response(xml,{headers:{"content-type":"application/xml; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});
+  }
+
   if (request.method === "GET" && path === "/api/health") {
     if (!env.DB) return json({ ok:false, site:"Pekora", database:false, schema:false, error:"D1 binding DB is missing." },503);
     try {
@@ -436,6 +504,125 @@ async function route(request, env) {
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
     return json({ profile:{id:profile.id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n} });
+  }
+
+  if (request.method === "POST" && path === "/api/avatar/render") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const rendererBase = String(env.AVATAR_RENDERER_URL || "").trim();
+    const accessClientId = String(env.AVATAR_RENDERER_CLIENT_ID || "").trim();
+    const accessClientSecret = String(env.AVATAR_RENDERER_CLIENT_SECRET || "").trim();
+    if (!rendererBase || !accessClientId || !accessClientSecret) {
+      return json({error:"The secure renderer connection is not configured in Cloudflare yet."},503);
+    }
+    let rendererUrl;
+    try {
+      const base = new URL(rendererBase);
+      if (base.protocol !== "https:" || base.username || base.password) throw new Error("Invalid renderer URL");
+      rendererUrl = new URL("/player/thumbnail-3d",base).toString();
+    } catch {
+      return json({error:"AVATAR_RENDERER_URL must be a valid HTTPS URL."},503);
+    }
+
+    await env.DB.prepare("INSERT OR IGNORE INTO avatar_render_users (user_id) VALUES (?)").bind(user.id).run();
+    const mapping = await env.DB.prepare("SELECT render_id,last_rendered_at FROM avatar_render_users WHERE user_id=?").bind(user.id).first();
+    if (!mapping) return json({error:"Could not allocate an avatar render ID."},503);
+    const now = Math.floor(Date.now()/1000);
+    if (Number(mapping.last_rendered_at || 0) > now - 4) {
+      const cached = await env.DB.prepare("SELECT avatar_json FROM profiles WHERE user_id=?").bind(user.id).first();
+      try {
+        const render = cached?.avatar_json ? JSON.parse(cached.avatar_json) : null;
+        if (render?.camera && render?.aabb && render?.obj && render?.mtl && Array.isArray(render?.textures)) return json({ok:true,cached:true,render});
+      } catch {}
+      return json({error:"Avatar renderer is busy. Wait a few seconds and try again."},429,{"retry-after":"4"});
+    }
+    await env.DB.prepare("UPDATE avatar_render_users SET last_rendered_at=? WHERE user_id=?").bind(now,user.id).run();
+
+    let upstream;
+    try {
+      upstream = await fetch(rendererUrl,{
+        method:"POST",
+        headers:{
+          "content-type":"application/json",
+          "CF-Access-Client-Id":accessClientId,
+          "CF-Access-Client-Secret":accessClientSecret
+        },
+        body:JSON.stringify({userId:Number(mapping.render_id)})
+      });
+    } catch (error) {
+      console.error("[Pekora avatar] Renderer request failed:",error);
+      return json({error:"Could not reach the private avatar renderer."},502);
+    }
+    const upstreamText = await upstream.text();
+    let upstreamData;
+    try { upstreamData = JSON.parse(upstreamText); }
+    catch { return json({error:"The avatar renderer returned an invalid response."},502); }
+    if (!upstream.ok || upstreamData?.success !== true) {
+      console.error("[Pekora avatar] Renderer rejected request:",upstream.status,upstreamData?.message);
+      return json({error:"The avatar renderer could not render this character."},502);
+    }
+
+    let source = upstreamData.data;
+    if (typeof source === "string") {
+      try { source = JSON.parse(source); }
+      catch { return json({error:"The renderer returned malformed 3D data."},502); }
+    }
+    const aabb = source?.aabb || source?.AABB;
+    const files = source?.files;
+    const camera = source?.camera;
+    if (!camera?.position || !camera?.direction || !aabb?.min || !aabb?.max || !files || typeof files !== "object") {
+      return json({error:"The renderer response is missing camera, bounds, or model files."},502);
+    }
+    const fileEntries = Object.entries(files).filter(([name,value]) =>
+      /^[A-Za-z0-9_.-]{1,120}$/.test(name) && value && typeof value.content === "string"
+    );
+    const objEntry = fileEntries.find(([name])=>name.toLowerCase()==="scene.obj");
+    const mtlEntry = fileEntries.find(([name])=>name.toLowerCase()==="scene.mtl");
+    const textureEntries = fileEntries.filter(([name])=>name.toLowerCase().includes("tex.png"));
+    if (!objEntry || !mtlEntry || textureEntries.length > 12) return json({error:"The renderer did not return a complete OBJ/MTL avatar."},502);
+
+    const storedFiles = [];
+    let totalBytes = 0;
+    for (const [fileName,fileValue] of [objEntry,mtlEntry,...textureEntries]) {
+      const encoded = fileValue.content.replace(/\s/g,"");
+      if (!encoded || encoded.length > 1400000 || encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+        return json({error:"A 3D avatar file has an invalid or oversized payload."},413);
+      }
+      let binary;
+      try { binary = atob(encoded); }
+      catch { return json({error:"A 3D avatar file could not be decoded."},502); }
+      const bytes = new Uint8Array(binary.length);
+      for (let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+      totalBytes += bytes.byteLength;
+      if (bytes.byteLength > 1000000 || totalBytes > 4000000) return json({error:"The 3D avatar files exceed the storage limit."},413);
+      const fileId = id();
+      const contentType = fileName.toLowerCase().endsWith(".png") ? "image/png" : (fileName.toLowerCase()==="scene.obj" ? "text/plain; charset=utf-8" : "text/plain; charset=utf-8");
+      const fileUrl = new URL("/api/avatar-assets/"+fileId+"/"+encodeURIComponent(fileName),request.url).toString();
+      storedFiles.push({id:fileId,fileName,bytes,contentType,url:fileUrl});
+    }
+    const objFile = storedFiles.find(file=>file.fileName.toLowerCase()==="scene.obj");
+    const mtlFile = storedFiles.find(file=>file.fileName.toLowerCase()==="scene.mtl");
+    const textures = storedFiles.filter(file=>file.fileName.toLowerCase().includes("tex.png")).map(file=>file.url);
+    const render = {camera,aabb,mtl:mtlFile.url,obj:objFile.url,textures};
+    const statements = [
+      env.DB.prepare("DELETE FROM avatar_render_files WHERE user_id=?").bind(user.id),
+      ...storedFiles.map(file=>env.DB.prepare("INSERT INTO avatar_render_files (id,user_id,file_name,file_data,content_type) VALUES (?,?,?,?,?)").bind(file.id,user.id,file.fileName,file.bytes,file.contentType)),
+      env.DB.prepare("INSERT INTO profiles (user_id,avatar_json) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET avatar_json=excluded.avatar_json").bind(user.id,JSON.stringify(render))
+    ];
+    await env.DB.batch(statements);
+    return json({ok:true,render});
+  }
+
+  const avatarAssetMatch = path.match(/^\/api\/avatar-assets\/([A-Za-z0-9-]+)\/([A-Za-z0-9_.-]{1,120})$/);
+  if (request.method === "GET" && avatarAssetMatch) {
+    const file = await env.DB.prepare("SELECT file_data,content_type FROM avatar_render_files WHERE id=? AND file_name=?").bind(avatarAssetMatch[1],avatarAssetMatch[2]).first();
+    if (!file?.file_data) return fail("Avatar file not found.",404);
+    return new Response(file.file_data,{headers:{
+      "content-type":file.content_type || "application/octet-stream",
+      "cache-control":"public, max-age=31536000, immutable",
+      "x-content-type-options":"nosniff",
+      "access-control-allow-origin":"*"
+    }});
   }
 
   if (path === "/api/avatar" && request.method === "GET") {
@@ -738,7 +925,7 @@ async function route(request, env) {
     if (!user) return fail("Please sign in.",401);
     if (user.role !== "OWNER") return fail("Owner access required.",403);
     if (path === "/api/owner/items" && request.method === "GET") {
-      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,model_url,is_limited,is_for_sale,created_at,CASE WHEN category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items ORDER BY created_at DESC,name").all();
+      const rows = await env.DB.prepare("SELECT id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_limited,is_for_sale,created_at,CASE WHEN category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items ORDER BY created_at DESC,name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
@@ -750,7 +937,11 @@ async function route(request, env) {
       if (error) return fail(error);
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
       const itemId=id();
-      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,is_for_sale) VALUES (?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),data.is_for_sale===false?0:1).run();
+      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+      const assetId = Number(data.asset_id || 0);
+      const assetTypeId = Number(data.asset_type_id || (assetId ? (defaultAssetTypes[data.category] || 0) : 0));
+      if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID (for example neck, back, front, shoulder or waist).");
+      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_for_sale) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,data.is_for_sale===false?0:1).run();
       return json({ok:true,id:itemId},201);
     }
     const match=path.match(/^\/api\/owner\/items\/([A-Za-z0-9_-]{1,80})$/i);
@@ -760,10 +951,14 @@ async function route(request, env) {
       const data=await body(request);
       if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid item update.");
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
-      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
+      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
       const keepLegacyImage = String(merged.image_url||"") === String(current.image_url||"");
       const error=validItem(merged,keepLegacyImage); if(error)return fail(error);
-      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),merged.is_for_sale,match[1]).run();
+      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+      const assetId = Number(merged.asset_id || 0);
+      const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
+      if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_for_sale,match[1]).run();
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
@@ -798,7 +993,7 @@ async function route(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/")) {
+    if (url.pathname.startsWith("/api/") || url.pathname === "/v1.1/avatar-fetch" || url.pathname === "/v1/avatar-fetch" || url.pathname === "/Asset/BodyColors.ashx") {
       try { return await route(request,env); }
       catch (error) {
         if (error instanceof RequestBodyTooLarge) return fail("Request body must be 16 KB or smaller.",413);
@@ -815,7 +1010,7 @@ export default {
     headers.set("X-Frame-Options","DENY");
     headers.set("Referrer-Policy","strict-origin-when-cross-origin");
     headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
-    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
+    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
     return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   }
 };

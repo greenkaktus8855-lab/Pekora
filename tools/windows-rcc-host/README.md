@@ -1,24 +1,27 @@
 # Windows RCC host for Pekora
 
-This is a local, temporary host setup for the **upstream OpenPekora game-renderer**. It does not replace the renderer with a custom avatar viewer.
+This helper runs the upstream OpenPekora game-renderer and RCC locally on a Windows PC. It does not replace the renderer with a custom avatar viewer.
 
-## Important status
+## Current integration
 
-The upstream renderer is a separate Node.js service and calls RCC over SOAP. The upstream `game-renderer/config.json` is not present in the repository, so the setup script creates it locally.
+The Pekora Worker now includes:
 
-The upstream renderer's `PlayerController` requests this Pekora endpoint:
+- `GET /v1.1/avatar-fetch` and `GET /Asset/BodyColors.ashx` in the JSON/XML formats expected by the upstream RCC avatar script
+- stable numeric render IDs mapped to Pekora accounts
+- a private Worker-to-renderer request protected by Cloudflare Access service-token headers
+- storage and delivery of the renderer's OBJ, MTL and texture files
+- avatar editor refreshes after equipping or removing an item
+- optional Roblox asset ID and asset type ID fields on Owner Panel catalog entries, used when the avatar is assembled
 
-`{BaseUrl}/v1.1/avatar-fetch?placeId=0&userId={userId}`
-
-That endpoint is not currently implemented in this Pekora Worker. Therefore this setup can prepare and start the two Windows processes and verify the renderer health route, but **actual avatar rendering will not work until the Pekora avatar-fetch endpoint and the authenticated remote connection are implemented**. Do not treat a healthy `/` response as proof that avatar rendering works.
+The avatar renderer only receives Roblox catalog assets that have both numeric fields configured. Existing GLB preview files are for catalog previews and are not automatically converted into RCC wearable assets.
 
 ## Requirements
 
 - Windows 10/11 x64
 - Git for Windows
-- Node.js 22 LTS (npm included)
+- Node.js **22 LTS** (the upstream uWebSockets.js native module does not support Node.js 26)
+- Windows Security enabled
 - Enough free disk space for the upstream repository and npm dependencies
-- Windows Defender enabled
 
 ## Install
 
@@ -31,9 +34,9 @@ That endpoint is not currently implemented in this Pekora Worker. Therefore this
    .\setup.ps1
    ```
 
-4. Read the upstream repository's notices and scan the RCC executable with Windows Security before running it.
+4. Read the upstream repository notices and scan the RCC executable with Windows Security before running it.
 
-The script clones the upstream OpenPekora repository into `C:\Pekora-RCC-Host\OpenPekora`, creates a local-only renderer config, and copies the start scripts. It does not open firewall ports or configure public access.
+The script clones OpenPekora into `C:\Pekora-RCC-Host\OpenPekora`, creates `game-renderer/config.json`, and copies the start scripts. The generated config points at the Pekora Worker.
 
 ## Start
 
@@ -53,20 +56,26 @@ Set-Location C:\Pekora-RCC-Host
 .\start-renderer.ps1
 ```
 
-The renderer health check is:
+The renderer start script patches the upstream listener to bind only to `127.0.0.1` before building. Its local health check is:
 
 `http://127.0.0.1:3001/`
 
 Expected response: `PEKAPEKA OK!`
 
+A successful health response only proves that the HTTP process is listening. It does not prove that RCC can fetch every asset or render an avatar.
+
+## Connect Cloudflare
+
+Follow [RENDERER-CONNECTION.md](./RENDERER-CONNECTION.md). Only the HTTP renderer on port 3001 is routed through an authenticated Cloudflare Tunnel. **Never tunnel or port-forward RCC SOAP port 64989.**
+
 ## Security
 
-- Keep RCC on `127.0.0.1:64989`; never port-forward it.
-- Do not expose renderer port `3001` directly to the internet. The upstream service has no authentication middleware on these routes.
-- Do not paste Cloudflare Tunnel tokens, API keys, passwords, or other secrets into chat or commit them to Git.
-- Public access must be added later through an authenticated gateway and a Cloudflare Tunnel. The Worker must authenticate to that gateway.
-- The PC must remain on and connected to the internet while it is hosting renders.
+- Keep RCC on localhost; never port-forward port 64989.
+- Do not expose renderer port 3001 without Cloudflare Access. The upstream renderer does not implement its own authentication.
+- The start script binds the renderer to loopback so it is not directly available to other devices on the LAN.
+- Keep Cloudflare Tunnel tokens, Access service-token secrets, passwords and API keys out of Git and chat.
+- The PC must remain on and connected to the internet while it hosts renders.
 
 ## Upstream notes
 
-The upstream `game-renderer` package declares **AGPL-3.0-only**. Keep its license and notices with the upstream checkout. The RCC binaries in the upstream repository are third-party executable files; review their provenance and scan them before execution. This helper does not redistribute or modify those binaries.
+The upstream `game-renderer` package declares **AGPL-3.0-only**. Keep its license and notices with the upstream checkout. The RCC binaries are third-party executable files; review their provenance and scan them before execution. This helper does not redistribute or modify those binaries.

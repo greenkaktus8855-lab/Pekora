@@ -1,0 +1,44 @@
+name: Syntax checks
+
+on:
+  push:
+    branches: [main, real-3d-avatar-pipeline]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check Worker JavaScript
+        run: node --check src/worker.js
+
+      - name: Check frontend JavaScript
+        run: node --check public/app.js
+
+      - name: Check PowerShell scripts and JSON config
+        shell: pwsh
+        run: |
+          $files = @(
+            "tools/windows-rcc-host/setup.ps1",
+            "tools/windows-rcc-host/start-rcc.ps1",
+            "tools/windows-rcc-host/start-renderer.ps1"
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              exit 1
+            }
+          }
+          Get-Content "tools/windows-rcc-host/config.example.json" -Raw | ConvertFrom-Json | Out-Null

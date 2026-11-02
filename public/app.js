@@ -464,7 +464,7 @@ async function avatarPage(){
  app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1><a class="button" href="#catalog" data-page="catalog">Catalog</a></div>'+
   '<div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Avatar</h2><div class="avatar-preview-placeholder" id="avatarPreview">'+avatar(me.username)+'</div>'+
   '<p class="muted">Your equipped items are saved to your Pekora account.</p>'+
-  '<p class="muted">The original OpenPekora 3D preview needs its avatar-rendering service.</p><div id="avatarEquipped" class="avatar-equipped-list">Loading outfit...</div></section>'+
+  '<p class="muted" id="avatarRenderStatus">Preparing your 3D avatar...</p><div id="avatarEquipped" class="avatar-equipped-list">Loading outfit...</div></section>'+
   '<section class="avatar-wardrobe"><h2>Inventory</h2><div class="avatar-category-tabs" id="avatarCategories"></div><div id="avatarWardrobe" class="avatar-wardrobe-grid">Loading inventory...</div></section></div></div>';
  let wardrobe=[],activeCategory="Hats",equipped=new Set();
  try{
@@ -472,8 +472,27 @@ async function avatarPage(){
   if(!isActiveView(view))return;
   wardrobe=inventoryData.items||[];
   equipped=new Set((avatarData.equipped||[]).map(x=>x.id));
-  if(avatarData.render){const preview=document.getElementById("avatarPreview");if(preview)preview.innerHTML='<openpekora-avatar-renderer data-render=\''+esc(JSON.stringify(avatarData.render))+'\'></openpekora-avatar-renderer>';}
+  if(avatarData.render)showAvatarRender(avatarData.render);
+  else await refreshAvatarRender();
  }catch(e){const host=document.getElementById("avatarWardrobe");if(isActiveView(view)&&host)host.textContent=e.message;return}
+ function showAvatarRender(render){
+  const preview=document.getElementById("avatarPreview");
+  const status=document.getElementById("avatarRenderStatus");
+  if(preview)preview.innerHTML='<openpekora-avatar-renderer data-render=\''+esc(JSON.stringify(render))+'\'></openpekora-avatar-renderer>';
+  if(status)status.textContent="3D avatar is ready.";
+ }
+ async function refreshAvatarRender(){
+  const status=document.getElementById("avatarRenderStatus");
+  if(status)status.textContent="Rendering your avatar...";
+  try{
+   const result=await api("/api/avatar/render",{method:"POST"});
+   if(!isActiveView(view))return;
+   if(!result.render)throw new Error("The renderer did not return 3D avatar data.");
+   showAvatarRender(result.render);
+  }catch(error){
+   if(isActiveView(view)&&status?.isConnected)status.textContent=error.message;
+  }
+ }
  function renderEquipped(){
   const host=document.getElementById("avatarEquipped");if(!host)return;
   const worn=wardrobe.filter(x=>equipped.has(x.id));
@@ -498,6 +517,7 @@ async function avatarPage(){
     if(!isActiveView(view))return;
     if(action==="wear")equipped.add(itemId);else equipped.delete(itemId);
     renderWardrobe();renderEquipped();
+    await refreshAvatarRender();
    }catch(e){toast(e.message);b.disabled=false}
   }));
  }
@@ -591,7 +611,9 @@ async function owner(){
  '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
  '<label>3D model file (.glb, max 1 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
  '<label>Or existing 3D model URL<input name="model_url" type="url" maxlength="1000" placeholder="https://...model.glb"></label>'+
- 
+ '<label>Roblox asset ID<input name="asset_id" type="number" min="0" max="2147483647" placeholder="Numeric catalog asset ID"></label>'+
+ '<label>Roblox asset type ID<input name="asset_type_id" type="number" min="0" max="2147483647" placeholder="For accessories only"></label>'+
+ '<p class="muted">Asset IDs are used by the RCC avatar renderer. Known types are filled automatically for Hats, Hair, Faces, Shirts and Pants. Accessories need their exact type ID.</p>'+
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>'+
@@ -680,14 +702,14 @@ async function owner(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
     '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
-    '<div class="owner-item-subfields"><select name="category">'+AVATAR_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"></div>'+
+    '<div class="owner-item-subfields"><select name="category">'+AVATAR_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><input name="asset_id" type="number" min="0" max="2147483647" value="'+Number(x.asset_id||0)+'" placeholder="Roblox asset ID"><input name="asset_type_id" type="number" min="0" max="2147483647" value="'+Number(x.asset_type_id||0)+'" placeholder="Roblox asset type ID"></div>'+
     
     '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?'For sale':'Removed from catalog')+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
-     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||"")};
+     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||"")};
      await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(updated)});
      if(!isActiveView(view))return;
      ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated}:item);
@@ -720,7 +742,7 @@ async function owner(){
   newItemForm.addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
-    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||"")};
+    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||"")};
     const modelFile=f.get("model_file");
     if(modelFile instanceof File && modelFile.size){
      msg.textContent="Uploading 3D model...";
