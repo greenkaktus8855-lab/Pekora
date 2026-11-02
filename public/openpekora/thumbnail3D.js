@@ -1,6 +1,6 @@
 const wait = seconds => new Promise(resolve => setTimeout(resolve, seconds * 1000));
 
-export class Thumbnail3DHandler {
+class Thumbnail3DHandler {
     // Public
     /** @type {Thumbnail3D|null} */
     thumbJson = null;
@@ -176,3 +176,4 @@ export class Thumbnail3DHandler {
         this.isLoadingThumbnail = false;
     }
 }
+window.Thumbnail3DHandler = Thumbnail3DHandler;
