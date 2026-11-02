@@ -75,7 +75,13 @@ document.addEventListener("click",e=>{
  const item=e.target.closest("[data-item-view]");
  if(item){e.preventDefault();showItem(item.dataset.itemView)}
 });
-document.getElementById("globalSearchForm").addEventListener("submit",e=>{e.preventDefault();const q=document.getElementById("globalSearch").value.trim();page("users");setTimeout(()=>{const input=document.getElementById("userSearch");if(input){input.value=q;input.form?.dispatchEvent(new Event("submit",{cancelable:true,bubbles:true}))}},0)});
+document.getElementById("globalSearchForm").addEventListener("submit",e=>{
+ e.preventDefault();
+ const q=document.getElementById("globalSearch").value.trim().slice(0,20);
+ const target="#users?q="+encodeURIComponent(q);
+ history.pushState({page:"users",query:q},"",target);
+ render("users");
+});
 
 document.getElementById("mobileMenu")?.addEventListener("click",()=>sidebar.classList.toggle("mobile-open"));
 function home(){
@@ -128,6 +134,8 @@ async function loadHomeInventory(){
 function itemCard(x){return '<article class="item-card"><div class="item-image">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div></article>'}
 async function showItem(itemId,updateHistory=true){
  const view=beginView();
+ sidebar.classList.remove("mobile-open");
+ renderSidebar("catalog");
  if(updateHistory)history.pushState({page:"item",itemId},"","#item?id="+encodeURIComponent(itemId||""));
  let item=items.find(x=>x.id===itemId);
  if(!item){
@@ -139,7 +147,7 @@ async function showItem(itemId,updateHistory=true){
    if(!isActiveView(view))return;
    items=catalogData.items||[];
    ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
-   item=items.find(x=>x.id===itemId);
+   item=items.find(x=>x.id===itemId)||(inventoryData.items||[]).find(x=>x.id===itemId);
   }catch(error){
    if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(error.message)+'</div>';
    return;
@@ -456,7 +464,10 @@ function users(){
    :"Press Search to find matching Pekora users.";
   hint.style.display="block";
  });
- if(location.hash.startsWith("#users?")){input.value=new URLSearchParams(location.hash.split("?")[1]).get("q")||"";if(input.value.length>=2)runSearch()}
+ if(location.hash.startsWith("#users?")){
+  input.value=new URLSearchParams(location.hash.split("?")[1]).get("q")||"";
+  if(input.value.length>=2)runSearch();
+ }
 }
 async function owner(){
  const view=beginView();
