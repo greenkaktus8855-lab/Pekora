@@ -45,9 +45,15 @@ async function body(request) {
 const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:u.balance, createdAt:u.created_at });
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 function validItem(data) {
-  if (!data || typeof data.name !== "string" || !data.name.trim() || data.name.trim().length > 80) return "Item name must be 1–80 characters.";
+  if (!data || typeof data !== "object" || Array.isArray(data)) return "Invalid item details.";
+  if (typeof data.name !== "string" || !data.name.trim() || data.name.trim().length > 80) return "Item name must be 1–80 characters.";
   if (!ITEM_CATEGORIES.includes(data.category)) return "Choose a valid item category.";
-  if (!Number.isInteger(Number(data.price)) || Number(data.price) < 0 || Number(data.price) > 1000000) return "Price must be between 0 and 1,000,000 P$.";
+  const rawPrice = data.price;
+  if ((typeof rawPrice !== "number" && typeof rawPrice !== "string") ||
+      (typeof rawPrice === "string" && !/^\d+$/.test(rawPrice.trim())) ||
+      !Number.isSafeInteger(Number(rawPrice)) || Number(rawPrice) < 0 || Number(rawPrice) > 1000000) {
+    return "Price must be between 0 and 1,000,000 P$.";
+  }
   if (typeof (data.description ?? "") !== "string" || (data.description ?? "").length > 500) return "Description must be 500 characters or less.";
 
   const image = String(data.image_url ?? "").trim();
