@@ -254,7 +254,7 @@ function drawCatalog(category,q){
  count.textContent=list.length+" items";
  el.innerHTML=list.length?list.map(x=>'<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="catalog-asset-kind">'+(x.asset_kind==="IMAGE_ONLY"?"Catalog item":"Original avatar service required")+'</div><div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>').join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
- el.querySelectorAll("[data-item-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();showItem(a.dataset.itemView)}));
+
 }async function buy(itemId){
  if(!me){page("login");return}
  const view=activeView,userId=me.id;
