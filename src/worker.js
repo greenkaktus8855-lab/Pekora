@@ -312,6 +312,28 @@ async function route(request, env) {
     return json({ok:true});
   }
 
+  if (path === "/api/owner/recover" && request.method === "POST") {
+    const data = await body(request);
+    const recoverySecret = env.OWNER_BOOTSTRAP_SECRET;
+    if (typeof recoverySecret !== "string" || recoverySecret.length < 20 ||
+        typeof data?.secret !== "string" ||
+        await digest(data.secret) !== await digest(recoverySecret)) {
+      return fail("Invalid owner recovery secret.",403);
+    }
+    if (typeof data?.password !== "string" || data.password.length < 12 || data.password.length > 128) {
+      return fail("New owner password must be 12–128 characters.");
+    }
+    const owner = await env.DB.prepare("SELECT id FROM users WHERE username='PekoraAdmin' COLLATE NOCASE AND role='OWNER'").first();
+    if (!owner) return fail("PekoraAdmin OWNER account was not found.",404);
+    const salt = randomToken();
+    const hash = await passwordHash(data.password,salt);
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET password_hash=?,password_salt=? WHERE id=? AND role='OWNER'").bind(hash,salt,owner.id),
+      env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(owner.id)
+    ]);
+    return json({ok:true,message:"PekoraAdmin password reset. All previous sessions were signed out."});
+  }
+
   if (path === "/api/owner/password" && request.method === "POST") {
     const user = await requireUser(request,env);
     if (!user || user.role !== "OWNER") return fail("Owner access required.",403);
