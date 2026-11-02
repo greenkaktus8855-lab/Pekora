@@ -297,7 +297,7 @@ async function announceLimitedItem(item, env, siteOrigin) {
 
 async function announceMissingLimitedItems(env, siteOrigin) {
   if (!env.DISCORD_LIMITED_WEBHOOK) return {sent:0,skipped:true};
-  const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.price,i.image_url,i.stock_limit FROM items i LEFT JOIN discord_limited_announcements a ON a.item_id=i.id WHERE i.is_limited=1 AND i.is_for_sale=1 AND a.item_id IS NULL ORDER BY i.created_at ASC LIMIT 50").all();
+  const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.price,i.image_url,i.stock_limit FROM items i LEFT JOIN discord_limited_announcements a ON a.item_id=i.id WHERE i.is_limited=1 AND a.item_id IS NULL ORDER BY i.created_at ASC LIMIT 50").all();
   let sent=0;
   for (const item of rows.results || []) {
     const result=await announceLimitedItem(item,env,siteOrigin);
