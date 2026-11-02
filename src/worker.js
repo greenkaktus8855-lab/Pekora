@@ -104,13 +104,24 @@ async function ensureWearableSchema(env) {
         "ALTER TABLE items ADD COLUMN offset_z REAL NOT NULL DEFAULT 0",
         "ALTER TABLE items ADD COLUMN rotation_x REAL NOT NULL DEFAULT 0",
         "ALTER TABLE items ADD COLUMN rotation_y REAL NOT NULL DEFAULT 0",
-        "ALTER TABLE items ADD COLUMN rotation_z REAL NOT NULL DEFAULT 0"
+        "ALTER TABLE items ADD COLUMN rotation_z REAL NOT NULL DEFAULT 0",
+        "CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"
       ];
       for (const statement of statements) {
         try { await env.DB.prepare(statement).run(); }
         catch (error) {
           if (!/duplicate column name/i.test(String(error?.message || error))) throw error;
         }
+      }
+
+      // One-time public catalog cleanout requested for the November 2026 reset.
+      // Inventory, purchases, users and balances are deliberately untouched.
+      const cleanout = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='catalog_cleanout_2026_11_02'").first();
+      if (!cleanout) {
+        await env.DB.batch([
+          env.DB.prepare("UPDATE items SET is_for_sale=0 WHERE is_for_sale=1"),
+          env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('catalog_cleanout_2026_11_02','done')")
+        ]);
       }
     })();
   }
