@@ -127,17 +127,6 @@ async function loadHomeDashboard(view=activeView){
  }
 }
 
-async function loadHomeInventory(){
- const el=document.getElementById("homeInventory");
- if(!el)return;
- try{
-  const d=await api("/api/inventory");
-  el.className="section-content";
-  el.innerHTML=d.items.length
-   ? '<div class="item-grid">'+d.items.slice(0,4).map(itemCard).join("")+'</div>'
-   : '<p class="empty-line">You have no items yet. <a href="#catalog" data-page="catalog">Visit the Catalog</a>.</p>';
- }catch(e){el.textContent=e.message}
-}
 function itemCard(x){return '<article class="item-card"><div class="item-image">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'">':'◇')+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div></article>'}
 async function showItem(itemId,updateHistory=true){
  const view=beginView();
@@ -209,7 +198,7 @@ async function catalog(){
       '<div class="catalog-legend"><strong>About</strong><p>Items purchased here belong to your Pekora account.</p></div>'+
      '</div></aside>'+
      '<section class="catalog-results">'+
-      '<div class="catalog-results-header"><div><h2 id="catalogCategoryTitle">Featured Items on Pekora</h2><p id="catalogCount" class="muted"></p></div><label class="catalog-sort-label">Sort By: <select id="catalogSort" class="catalog-sort"><option value="relevance">Relevance</option><option value="newest">Recently updated</option><option value="price-low">Price (Low to High)</option><option value="price-high">Price (High to Low)</option></select></label></div>'+
+      '<div class="catalog-results-header"><div><h2 id="catalogCategoryTitle">Featured Items on Pekora</h2><p id="catalogCount" class="muted"></p></div><label class="catalog-sort-label">Sort By: <select id="catalogSort" class="catalog-sort"><option value="relevance">Relevance</option><option value="newest">Recently added</option><option value="price-low">Price (Low to High)</option><option value="price-high">Price (High to Low)</option></select></label></div>'+
       '<div id="catalogGrid" class="item-grid">Loading catalog...</div>'+
      '</section>'+
     '</div>'+
