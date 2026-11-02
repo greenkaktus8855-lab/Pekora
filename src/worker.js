@@ -161,6 +161,10 @@ async function route(request, env) {
   }
 
   if (request.method === "POST" && path === "/api/register") {
+    const key = await rateLimitKey(request,"register");
+    if (await isRateLimited(env,key)) return json({error:"Too many registration attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
+    const blocked = await recordRateLimitFailure(env,key);
+    if (blocked) return json({error:"Too many registration attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
     const data = await body(request);
     if (!data || typeof data.username !== "string" || typeof data.password !== "string") return fail("Enter a username and password.");
     const username = data.username.trim();
