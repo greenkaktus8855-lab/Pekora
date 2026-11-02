@@ -111,7 +111,7 @@ function validItem(data, allowLegacyHttp = false) {
       if (u.protocol !== "https:") return "3D model URL must use HTTPS.";
     } catch { return "Enter a valid 3D model URL."; }
   }
-  if (data.category === "Accessories" && data.is_for_sale !== false && !model) {
+  if (data.category === "Accessories" && data.is_for_sale !== false && data.is_for_sale !== 0 && !model) {
     return "Accessories need a real HTTPS 3D model URL before they can be listed for sale.";
   }
   return null;
