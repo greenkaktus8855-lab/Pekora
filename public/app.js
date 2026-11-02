@@ -544,7 +544,7 @@ async function loadFriendsList(view=activeView){
 function users(){
  const view=beginView();
  renderSidebar("users");
- app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community by username or User ID and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type at least 1 character to find users. Search results will appear below.</div><div id="userResults" class="people-results"></div>';
+ app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community by username or User ID and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type a username or numeric User ID to find a player.</div><div id="userResults" class="people-results"></div>';
  const form=document.getElementById("peopleSearchForm");
  const input=document.getElementById("userSearch");
  const results=document.getElementById("userResults");
@@ -681,7 +681,7 @@ async function owner(){
   try{
    const d=await api("/api/owner/users?q="+encodeURIComponent(q));
    if(!isActiveView(view))return;
-   userResults.innerHTML=d.users.length?d.users.map(u=>'<button type="button" class="owner-user-result" data-owner-user-id="'+esc(u.id)+'"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role)+' · '+Number(u.balance).toLocaleString()+' P$ · '+(u.is_banned?'BANNED':'Active')+'</span></button>').join(""):'<p class="muted">No matching users.</p>';
+   userResults.innerHTML=d.users.length?d.users.map(u=>'<button type="button" class="owner-user-result" data-owner-user-id="'+esc(u.id)+'"><strong>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</strong><span>ID '+esc(u.public_id)+' · '+esc(u.role)+' · '+Number(u.balance).toLocaleString()+' P$ · '+(u.is_banned?'BANNED':'Active')+'</span></button>').join(""):'<p class="muted">No matching users.</p>';
    userResults.querySelectorAll("[data-owner-user-id]").forEach(b=>b.addEventListener("click",()=>loadOwnerUser(b.dataset.ownerUserId)));
    userDetails.innerHTML="";
   }catch(err){userResults.textContent=err.message}
