@@ -126,21 +126,26 @@ async function route(request, env) {
     const salt = randomToken();
     const hash = await passwordHash(data.password, salt);
     const userId = id();
+    const token = randomToken();
     try {
       await env.DB.batch([
         env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,balance) VALUES (?,?,?,?,100)").bind(userId, username, hash, salt),
-        env.DB.prepare("INSERT INTO profiles (user_id) VALUES (?)").bind(userId)
+        env.DB.prepare("INSERT INTO profiles (user_id) VALUES (?)").bind(userId),
+        env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token), userId)
       ]);
-    } catch { return fail("Could not create the account. Try another username.", 409); }
-    const token = randomToken();
-    await env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token), userId).run();
+    } catch (error) {
+      const existing = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first().catch(() => null);
+      if (existing) return fail("That username is already taken.", 409);
+      console.error("[Pekora register] Account creation failed:", error);
+      return fail("Account creation failed. Please try again.", 503);
+    }
     const user = await env.DB.prepare("SELECT id,username,role,balance,created_at,is_banned FROM users WHERE id=?").bind(userId).first();
     return json({ user:publicUser(user) }, 201, { "set-cookie":cookie("pekora_session",token,60*60*24*30) });
   }
 
   if (request.method === "POST" && path === "/api/login") {
     const data = await body(request);
-    if (!data || typeof data.username !== "string" || typeof data.password !== "string" || data.password.length < 8 || data.password.length > 128) return fail("Enter a valid username and a password of 8–128 characters.");
+    if (!data || typeof data.username !== "string" || !/^[A-Za-z0-9_]{3,20}$/.test(data.username.trim()) || typeof data.password !== "string" || data.password.length < 8 || data.password.length > 128) return fail("Enter a valid username and a password of 8–128 characters.");
     const user = await env.DB.prepare("SELECT * FROM users WHERE username=? COLLATE NOCASE").bind(data.username.trim()).first();
     if (!user || user.is_banned || await passwordHash(data.password, user.password_salt) !== user.password_hash) return fail("Incorrect username or password.", 401);
     const token = randomToken();
@@ -169,12 +174,21 @@ async function route(request, env) {
     if (typeof data.password !== "string" || data.password.length < 12 || data.password.length > 128) return fail("Owner password must be at least 12 characters.");
     const username = "PekoraAdmin";
     const salt = randomToken(), hash = await passwordHash(data.password,salt), userId=id();
-    await env.DB.batch([
-      env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,role,balance) VALUES (?,?,?,?, 'OWNER',1000)").bind(userId,username,hash,salt),
-      env.DB.prepare("INSERT INTO profiles (user_id) VALUES (?)").bind(userId)
-    ]);
     const token = randomToken();
-    await env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token),userId).run();
+    try {
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,role,balance) VALUES (?,?,?,?, 'OWNER',1000)").bind(userId,username,hash,salt),
+        env.DB.prepare("INSERT INTO profiles (user_id) VALUES (?)").bind(userId),
+        env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token),userId)
+      ]);
+    } catch (error) {
+      const existingOwner = await env.DB.prepare("SELECT id FROM users WHERE role='OWNER'").first().catch(() => null);
+      if (existingOwner) return fail("An owner account has already been created.",409);
+      const usernameTaken = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first().catch(() => null);
+      if (usernameTaken) return fail("The PekoraAdmin username is already in use.",409);
+      console.error("[Pekora bootstrap] Owner creation failed:", error);
+      return fail("Owner setup failed. Please check Worker logs.",503);
+    }
     const user = await env.DB.prepare("SELECT id,username,role,balance,created_at FROM users WHERE id=?").bind(userId).first();
     return json({ user:publicUser(user) },201,{"set-cookie":cookie("pekora_session",token,60*60*24*30)});
   }
@@ -267,6 +281,7 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const username = (url.searchParams.get("username")||"").trim();
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.");
     const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!target) return fail("User not found.",404);
     if (target.id === user.id) return json({status:"self"});
@@ -282,6 +297,7 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const data = await body(request), username = String(data?.username||"").trim();
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.");
     const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!target) return fail("User not found.",404);
     if (target.id === user.id) return fail("You cannot add yourself.");
@@ -305,6 +321,7 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const data = await body(request), username = String(data?.username||"").trim();
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.");
     const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!target) return fail("User not found.",404);
     const pending = await env.DB.prepare("SELECT user_id FROM friends WHERE user_id=? AND friend_id=? AND status='PENDING'").bind(target.id,user.id).first();
@@ -320,6 +337,7 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const username = String(url.searchParams.get("username")||"").trim();
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.");
     const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first();
     if (!target) return fail("User not found.",404);
     await env.DB.batch([
@@ -383,6 +401,7 @@ async function route(request, env) {
     if (path === "/api/owner/items" && request.method === "POST") {
       const data = await body(request), error = validItem(data);
       if (error) return fail(error);
+      if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
       const itemId=id();
       await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,is_for_sale) VALUES (?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),data.is_for_sale===false?0:1).run();
       return json({ok:true,id:itemId},201);
@@ -391,7 +410,10 @@ async function route(request, env) {
     if (match && request.method === "PATCH") {
       const current=await env.DB.prepare("SELECT * FROM items WHERE id=?").bind(match[1]).first();
       if (!current) return fail("Item not found.",404);
-      const data=await body(request), merged={name:data?.name??current.name,description:data?.description??current.description,category:data?.category??current.category,price:data?.price??current.price,image_url:data?.image_url??current.image_url,is_for_sale:data?.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
+      const data=await body(request);
+      if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid item update.");
+      if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
+      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0)};
       const error=validItem(merged); if(error)return fail(error);
       await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),merged.is_for_sale,match[1]).run();
       return json({ok:true});
@@ -417,7 +439,7 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/search-users") {
     const q = (url.searchParams.get("q") || "").trim().slice(0,20);
     if (q.length < 2) return json({users:[]});
-    const rows = await env.DB.prepare("SELECT username,role FROM users WHERE username LIKE ? AND is_banned=0 ORDER BY username LIMIT 20").bind("%"+q+"%").all();
+    const rows = await env.DB.prepare("SELECT username,role FROM users WHERE instr(lower(username),lower(?))>0 AND is_banned=0 ORDER BY username LIMIT 20").bind(q).all();
     return json({users:rows.results || []});
   }
 
