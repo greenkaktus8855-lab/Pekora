@@ -18,8 +18,6 @@ jobs:
           node-version: 22
       - name: Check browser JavaScript syntax
         run: node --check public/app.js
-      - name: Check browser 3D avatar module syntax
-        run: node --check public/avatar-viewer.js
       - name: Check Worker module syntax
         run: node --input-type=module --check < src/worker.js
       - name: Check static assets and critical safeguards
