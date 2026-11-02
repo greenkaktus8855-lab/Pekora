@@ -125,6 +125,10 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_files (id TEXT PRIMARY KEY, model_data BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS moderation_warnings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, moderator_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), acknowledged INTEGER NOT NULL DEFAULT 0)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_moderation_warnings_user ON moderation_warnings(user_id,created_at DESC)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS owner_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL REFERENCES users(id), target_user_id TEXT REFERENCES users(id) ON DELETE SET NULL, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_owner_audit_target ON owner_audit_log(target_user_id,created_at DESC)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS equipped_items (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, category TEXT NOT NULL, equipped_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,item_id))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_equipped_items_user ON equipped_items(user_id,category)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_friends_friend_status ON friends(friend_id,status)"),
@@ -662,6 +666,71 @@ async function route(request, env) {
       "x-content-type-options":"nosniff",
       "access-control-allow-origin":"*"
     }});
+  }
+
+  if (path.startsWith("/api/owner/users")) {
+    const actor = await requireUser(request,env);
+    if (!actor) return fail("Please sign in.",401);
+    if (actor.role !== "OWNER") return fail("Owner access required.",403);
+
+    if (path === "/api/owner/users" && request.method === "GET") {
+      const q = (url.searchParams.get("q") || "").trim().slice(0,32);
+      if (q.length < 2) return json({users:[]});
+      const rows = await env.DB.prepare(`SELECT id,username,role,balance,created_at,is_banned FROM users
+        WHERE instr(lower(username),lower(?))>0 OR id=? ORDER BY username LIMIT 30`).bind(q,q).all();
+      return json({users:rows.results||[]});
+    }
+
+    const userMatch = path.match(/^\/api\/owner\/users\/([A-Za-z0-9-]+)$/);
+    if (!userMatch) return fail("User not found.",404);
+    const targetId = userMatch[1];
+    const target = await env.DB.prepare("SELECT id,username,role,balance,created_at,is_banned FROM users WHERE id=?").bind(targetId).first();
+    if (!target) return fail("User not found.",404);
+
+    if (request.method === "GET") {
+      const [warnings,logs] = await Promise.all([
+        env.DB.prepare("SELECT id,reason,created_at,acknowledged FROM moderation_warnings WHERE user_id=? ORDER BY created_at DESC LIMIT 20").bind(targetId).all(),
+        env.DB.prepare("SELECT action,details,created_at FROM owner_audit_log WHERE target_user_id=? ORDER BY created_at DESC LIMIT 20").bind(targetId).all()
+      ]);
+      return json({user:target,warnings:warnings.results||[],logs:logs.results||[]});
+    }
+
+    if (request.method !== "POST") return fail("Unsupported user management action.",405);
+    if (target.role === "OWNER") return fail("Owner accounts cannot be modified from user management.",403);
+    const data = await body(request);
+    const action = String(data?.action||"");
+    const details = String(data?.reason||"").trim().slice(0,500);
+    if (action === "credit") {
+      const amount = Number(data?.amount);
+      if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) return fail("Enter an amount from 1 to 1,000,000 P$.");
+      const result = await env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND balance<=1000000000-?").bind(amount,targetId,amount).run();
+      if (!result?.meta?.changes) return fail("Could not add currency. The balance limit may have been reached.",409);
+      await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"CURRENCY_CREDIT",amount+" P$"+(details?" — "+details:"")).run();
+    } else if (action === "warn") {
+      if (details.length < 3) return fail("Enter a warning reason (at least 3 characters).");
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO moderation_warnings (id,user_id,moderator_id,reason) VALUES (?,?,?,?)").bind(id(),targetId,actor.id,details),
+        env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"WARNING",details)
+      ]);
+    } else if (action === "ban" || action === "unban") {
+      if (action === "ban" && details.length < 3) return fail("Enter a ban reason (at least 3 characters).");
+      await env.DB.batch([
+        env.DB.prepare("UPDATE users SET is_banned=? WHERE id=?").bind(action==="ban"?1:0,targetId),
+        ...(action==="ban"?[env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(targetId)]:[]),
+        env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,action.toUpperCase(),details)
+      ]);
+    } else {
+      return fail("Unknown user management action.");
+    }
+    const updated = await env.DB.prepare("SELECT id,username,role,balance,created_at,is_banned FROM users WHERE id=?").bind(targetId).first();
+    return json({ok:true,user:updated});
+  }
+
+  if (path === "/api/account/warnings" && request.method === "GET") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const rows = await env.DB.prepare("SELECT id,reason,created_at,acknowledged FROM moderation_warnings WHERE user_id=? ORDER BY created_at DESC LIMIT 20").bind(user.id).all();
+    return json({warnings:rows.results||[]});
   }
 
   if (path.startsWith("/api/owner/items")) {
