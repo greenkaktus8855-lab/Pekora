@@ -145,17 +145,25 @@ async function showItem(itemId,updateHistory=true){
  let item=items.find(x=>x.id===itemId);
  if(!item||(me&&!ownershipLoaded)){
   try{
-   const [catalogData,inventoryData]=await Promise.all([
+   const [catalogResult,inventoryResult]=await Promise.allSettled([
     item?Promise.resolve({items}):api("/api/catalog"),
     me?api("/api/inventory"):Promise.resolve({items:[]})
    ]);
    if(!isActiveView(view)||(me?.id||null)!==requestedUserId)return;
+   if(catalogResult.status!=="fulfilled")throw catalogResult.reason;
+   const catalogData=catalogResult.value;
+   const inventoryData=inventoryResult.status==="fulfilled"?inventoryResult.value:{items:[]};
    if(!item){
     items=catalogData.items||[];
     item=items.find(x=>x.id===itemId);
    }
-   ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
-   ownershipLoaded=true;
+   if(me&&inventoryResult.status!=="fulfilled"){
+    ownedItemIds=new Set();
+    ownershipLoaded=false;
+   }else{
+    ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
+    ownershipLoaded=true;
+   }
    item=item||(inventoryData.items||[]).find(x=>x.id===itemId);
   }catch(error){
    if(isActiveView(view))app.innerHTML='<div class="empty">Could not verify item and inventory: '+esc(error.message)+'</div>';
@@ -167,9 +175,9 @@ async function showItem(itemId,updateHistory=true){
  const isOwned=ownedItemIds.has(item.id);
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'">':'<span>No preview available</span>')+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div><p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div><p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
   '</div></div>';
- document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
+ if(!isOwned&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
 }
 
 
