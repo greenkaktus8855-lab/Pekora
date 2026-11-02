@@ -105,7 +105,7 @@ function home(){
  const view=beginView();
  renderSidebar("home");
  if(!me){
-  app.innerHTML='<div class="op-guest"><h1>Welcome to Pekora</h1><p>Join the community and explore the catalog.</p><a class="button" href="#login" data-page="login">Login</a><a class="button" href="#register" data-page="register">Sign Up</a></div>';
+  app.innerHTML='<div class="op-guest"><h1>Welcome to Sakura</h1><p>Join the community and explore the catalog.</p><a class="button" href="#login" data-page="login">Login</a><a class="button" href="#register" data-page="register">Sign Up</a></div>';
   return;
  }
  const name=esc(me.username);
@@ -150,7 +150,7 @@ function itemPreview(x,extraClass=""){
  }
  return x?.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name||"Item")+'" loading="lazy">':'◇';
 }
-const LIMITED_OVERLAY_URL="https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/CatalogOverlays/Limited.png";
+const LIMITED_OVERLAY_URL="https://raw.githubusercontent.com/Blue7366/OpenSakura/main/frontend/public/img/CatalogOverlays/Limited.png";
 function itemStockState(x){
  const total=Math.max(0,Number(x?.stock_limit||0)),sold=Math.max(0,Number(x?.stock_sold||0));
  return {limited:Number(x?.is_limited)===1,total,sold,finite:total>0,remaining:Math.max(0,total-sold),soldOut:total>0&&sold>=total};
@@ -241,10 +241,10 @@ async function catalog(){
        '<a href="#" data-category="Faces">Faces</a><a href="#" data-category="Shirts">Shirts</a>'+
        '<a href="#" data-category="Pants">Pants</a><a href="#" data-category="Accessories">Accessories</a>'+
       '</nav>'+
-      '<div class="catalog-legend"><strong>About</strong><p>Items purchased here belong to your Pekora account.</p></div>'+
+      '<div class="catalog-legend"><strong>About</strong><p>Items purchased here belong to your Sakura account.</p></div>'+
      '</div></aside>'+
      '<section class="catalog-results">'+
-      '<div class="catalog-results-header"><div><h2 id="catalogCategoryTitle">Featured Items on Pekora</h2><p id="catalogCount" class="muted"></p></div><label class="catalog-sort-label">Sort By: <select id="catalogSort" class="catalog-sort"><option value="relevance">Relevance</option><option value="newest">Recently added</option><option value="price-low">Price (Low to High)</option><option value="price-high">Price (High to Low)</option></select></label></div>'+
+      '<div class="catalog-results-header"><div><h2 id="catalogCategoryTitle">Featured Items on Sakura</h2><p id="catalogCount" class="muted"></p></div><label class="catalog-sort-label">Sort By: <select id="catalogSort" class="catalog-sort"><option value="relevance">Relevance</option><option value="newest">Recently added</option><option value="price-low">Price (Low to High)</option><option value="price-high">Price (High to Low)</option></select></label></div>'+
       '<div id="catalogGrid" class="item-grid">Loading catalog...</div>'+
      '</section>'+
     '</div>'+
@@ -265,7 +265,7 @@ async function catalog(){
    }catch(error){
     if(!isActiveView(view)||(me?.id||null)!==requestedUserId)return;
     ownershipLoaded=false;
-    console.warn("[Pekora catalog] Inventory state unavailable:",error);
+    console.warn("[Sakura catalog] Inventory state unavailable:",error);
    }
   }
   drawCatalog("All","");
@@ -285,7 +285,7 @@ async function catalog(){
  function chooseCategory(category){
   document.querySelectorAll("[data-category]").forEach(x=>x.classList.toggle("active",x.dataset.category===category));
   select.value=category;
-  document.getElementById("catalogCategoryTitle").textContent=category==="All"?"Featured Items on Pekora":category;
+  document.getElementById("catalogCategoryTitle").textContent=category==="All"?"Featured Items on Sakura":category;
   drawCatalog(category,search.value);
  }
  document.getElementById("catalogSearchForm").addEventListener("submit",e=>{
@@ -356,7 +356,7 @@ function auth(kind){
  const view=beginView();
  renderSidebar("");
  const reg=kind==="register";
- app.innerHTML='<div class="form"><h2>'+(reg?"Create your Pekora account":"Log in to Pekora")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="1" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="8" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error"></div></form><p class="muted">'+(reg?'Already have an account? <a href="#login" data-page="login">Log in</a>':'New to Pekora? <a href="#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="#owner-recovery" data-page="owner-recovery">Recover PekoraAdmin account</a></p>')+'</div>';
+ app.innerHTML='<div class="form"><h2>'+(reg?"Create your Sakura account":"Log in to Sakura")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="1" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="8" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error"></div></form><p class="muted">'+(reg?'Already have an account? <a href="#login" data-page="login">Log in</a>':'New to Sakura? <a href="#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="#owner-recovery" data-page="owner-recovery">Recover PekoraAdmin account</a></p>')+'</div>';
  document.getElementById("authForm").addEventListener("submit",async e=>{
   e.preventDefault();const f=new FormData(e.target);
   try{
@@ -372,7 +372,7 @@ function auth(kind){
 async function ownerRecoveryPage(){
  const view=beginView();
  renderSidebar("");
- app.innerHTML='<div class="form"><h2>Recover Pekora OWNER account</h2><p class="muted">Use the Worker secret OWNER_BOOTSTRAP_SECRET from your Cloudflare settings. This resets the PekoraAdmin password and signs out previous sessions.</p><form id="ownerRecoveryForm"><label>Worker recovery secret<input name="secret" type="password" maxlength="512" required autocomplete="off"></label><label>New password<input name="password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><label>Confirm new password<input name="confirmPassword" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><button class="primary" type="submit">Reset owner password</button><div id="ownerRecoveryMessage" class="error" role="status"></div></form><p class="muted"><a href="#login" data-page="login">Back to login</a></p></div>';
+ app.innerHTML='<div class="form"><h2>Recover Sakura OWNER account</h2><p class="muted">Use the Worker secret OWNER_BOOTSTRAP_SECRET from your Cloudflare settings. This resets the PekoraAdmin password and signs out previous sessions.</p><form id="ownerRecoveryForm"><label>Worker recovery secret<input name="secret" type="password" maxlength="512" required autocomplete="off"></label><label>New password<input name="password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><label>Confirm new password<input name="confirmPassword" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><button class="primary" type="submit">Reset owner password</button><div id="ownerRecoveryMessage" class="error" role="status"></div></form><p class="muted"><a href="#login" data-page="login">Back to login</a></p></div>';
  document.getElementById("ownerRecoveryForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const form=e.currentTarget,values=new FormData(form),secret=String(values.get("secret")||""),password=String(values.get("password")||""),confirmPassword=String(values.get("confirmPassword")||""),message=document.getElementById("ownerRecoveryMessage");
@@ -419,7 +419,7 @@ async function profile(identifier=me?.username,byId=false){
   const profileAvatar=avatar(p.username);
   app.innerHTML='<div class="op-profile">'+
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
-    '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link">pekora.mopcblox.online/#profile?id='+esc(publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
+    '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span></div>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
@@ -451,8 +451,8 @@ async function loadProfileFriendAction(username){
 async function currencyPage(){
  const view=beginView();
  renderSidebar("currency");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your Pekora balance.</div>';return}
- app.innerHTML='<div class="currency-page"><h1 class="page-title">Pekora Currency</h1><section class="info-panel currency-balance-panel"><h2>Your balance</h2><strong class="currency-balance-value">'+Number(me.balance||0).toLocaleString()+' P$</strong><p class="muted">P$ is a virtual balance used only on this Pekora website. It has no real-world monetary value and cannot be purchased or withdrawn here.</p></section><section class="owner-section"><h2>Recent purchases</h2><div id="currencyHistory" class="currency-history">Loading purchase history...</div></section><a class="button" href="#catalog" data-page="catalog">Browse Catalog</a></div>';
+ if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your Sakura balance.</div>';return}
+ app.innerHTML='<div class="currency-page"><h1 class="page-title">Sakura Currency</h1><section class="info-panel currency-balance-panel"><h2>Your balance</h2><strong class="currency-balance-value">'+Number(me.balance||0).toLocaleString()+' P$</strong><p class="muted">P$ is a virtual balance used only on this Sakura website. It has no real-world monetary value and cannot be purchased or withdrawn here.</p></section><section class="owner-section"><h2>Recent purchases</h2><div id="currencyHistory" class="currency-history">Loading purchase history...</div></section><a class="button" href="#catalog" data-page="catalog">Browse Catalog</a></div>';
  try{
   const d=await api("/api/currency/history");
   const host=document.getElementById("currencyHistory");
@@ -467,14 +467,14 @@ async function currencyPage(){
 async function gamesPage(){
  const view=beginView();
  renderSidebar("games");
- app.innerHTML='<div class="games-page"><h1 class="page-title">Games</h1><p class="muted">Games created by the Pekora team.</p><div id="gamesGrid" class="games-grid">Loading games...</div></div>';
+ app.innerHTML='<div class="games-page"><h1 class="page-title">Games</h1><p class="muted">Games created by the Sakura team.</p><div id="gamesGrid" class="games-grid">Loading games...</div></div>';
  try{
   const data=await api("/api/games");
   if(!isActiveView(view))return;
   const host=document.getElementById("gamesGrid");
   const games=data.games||[];
   host.innerHTML=games.length?games.map(game=>'<article class="game-card">'+
-   '<div class="game-thumbnail">'+(game.thumbnail_url?'<img src="'+esc(game.thumbnail_url)+'" alt="'+esc(game.title)+'" loading="lazy">':'<div class="game-thumbnail-empty">PEKORA</div>')+'</div>'+
+   '<div class="game-thumbnail">'+(game.thumbnail_url?'<img src="'+esc(game.thumbnail_url)+'" alt="'+esc(game.title)+'" loading="lazy">':'<div class="game-thumbnail-empty">SAKURA</div>')+'</div>'+
    '<div class="game-card-body"><h2>'+esc(game.title)+'</h2><p>'+esc(game.description||"No description.")+'</p>'+
    '<button class="game-locked-button" type="button" disabled aria-label="Game is locked"><span class="game-lock-icon" aria-hidden="true"></span> Locked</button></div></article>').join(""):'<div class="empty">No games have been added yet.</div>';
  }catch(e){const host=document.getElementById("gamesGrid");if(host)host.textContent=e.message}
@@ -576,7 +576,7 @@ async function loadFriendsList(view=activeView){
 function users(){
  const view=beginView();
  renderSidebar("users");
- app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community by username or User ID and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type a username or numeric User ID to find a player.</div><div id="userResults" class="people-results"></div>';
+ app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Sakura community by username or User ID and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type a username or numeric User ID to find a player.</div><div id="userResults" class="people-results"></div>';
  const form=document.getElementById("peopleSearchForm");
  const input=document.getElementById("userSearch");
  const results=document.getElementById("userResults");
@@ -586,7 +586,7 @@ function users(){
   const requestId=++latest;
   const q=input.value.trim().slice(0,32);
   if(q.length<1){results.innerHTML="";hint.textContent="Type at least 1 character to find users. Search results will appear below.";hint.style.display="block";return}
-  hint.textContent="Searching Pekora users...";
+  hint.textContent="Searching Sakura users...";
   hint.style.display="block";
   try{
    const d=await api("/api/search-users?q="+encodeURIComponent(q));
@@ -607,7 +607,7 @@ function users(){
   results.innerHTML="";
   hint.textContent=input.value.trim().length<1
    ?"Type at least 1 character to find users. Search results will appear below."
-   :"Press Search to find matching Pekora users.";
+   :"Press Search to find matching Sakura users.";
   hint.style.display="block";
  });
  if(location.hash.startsWith("#users?")){
@@ -620,7 +620,7 @@ async function owner(){
  renderSidebar("owner");
  if(!me||me.role!=="OWNER"){app.innerHTML='<div class="empty">Owner access required.</div>';return}
  app.innerHTML='<h1 class="page-title">Owner Panel</h1><div id="ownerStats" class="item-grid">Loading...</div>'+
- '<section class="owner-section"><h2>Owner Account</h2><p class="muted">The current password cannot be displayed because Pekora stores only a password hash. While signed in as OWNER, set a new password here.</p><form id="ownerPasswordForm" class="owner-item-form"><label>New password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><label>Confirm password<input name="confirmPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><button class="primary" type="submit">Set new owner password</button><span id="ownerPasswordMessage" class="muted"></span></form></section>'+
+ '<section class="owner-section"><h2>Owner Account</h2><p class="muted">The current password cannot be displayed because Sakura stores only a password hash. While signed in as OWNER, set a new password here.</p><form id="ownerPasswordForm" class="owner-item-form"><label>New password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><label>Confirm password<input name="confirmPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><button class="primary" type="submit">Set new owner password</button><span id="ownerPasswordMessage" class="muted"></span></form></section>'+
  '<section class="owner-section"><h2>Catalog Management</h2><p class="muted">Remove every item from the public catalog. Existing owners keep their inventory.</p><p class="muted">Accessories use real GLB/GLTF 3D models. Add a secure HTTPS model URL to enable the interactive preview. Accessories cannot be listed for sale without a model.</p><button class="button secondary" id="clearPublicCatalog" type="button">Remove all items from catalog</button><form id="newItemForm" class="owner-item-form">'+
  '<label>Item name<input name="name" maxlength="80" required></label>'+
  '<label>Category<select name="category">'+ITEM_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
@@ -636,7 +636,7 @@ async function owner(){
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>'+
- '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Pekora currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="1" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
+ '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Sakura currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="1" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
  const userSearch=document.getElementById("ownerUserSearch");
  const userResults=document.getElementById("ownerUserResults");
  const userDetails=document.getElementById("ownerUserDetails");
@@ -674,7 +674,7 @@ async function owner(){
    const u=d.user;
    userDetails.innerHTML='<div class="owner-user-card"><h3>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h3><div class="muted">User ID: '+esc(u.public_id)+'</div><p>Role: '+esc(u.role)+' · Balance: '+Number(u.balance).toLocaleString()+' P$ · Status: '+(u.is_banned?'BANNED':'Active')+' · Verified: '+(u.is_verified?'Yes':'No')+'</p>'+
     (u.role==="OWNER"?'<p class="muted">OWNER accounts cannot be modified.</p>':
-    '<div class="owner-user-actions"><form id="ownerCreditForm" class="owner-item-form"><h4>Give Pekora currency</h4><label>Amount (P$)<input name="amount" type="number" min="1" max="1000000" required></label><label>Note (optional)<input name="reason" maxlength="500"></label><button class="primary" type="submit">Give currency</button></form>'+
+    '<div class="owner-user-actions"><form id="ownerCreditForm" class="owner-item-form"><h4>Give Sakura currency</h4><label>Amount (P$)<input name="amount" type="number" min="1" max="1000000" required></label><label>Note (optional)<input name="reason" maxlength="500"></label><button class="primary" type="submit">Give currency</button></form>'+
     '<form id="ownerWarnForm" class="owner-item-form"><h4>Issue warning</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button class="primary" type="submit">Send warning</button></form>'+
     (u.is_banned?'<button type="button" class="button" id="ownerUnban">Unban account</button>':'<form id="ownerBanForm" class="owner-item-form"><h4>Ban account</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button type="submit" class="button secondary">Ban account</button></form>')+'</div>')+
     (u.role==="OWNER"?"":'<form id="ownerVerifyForm" class="owner-item-form owner-verify-form"><h4>Verified badge</h4><p class="muted">'+(u.is_verified?'This user has a verified badge.':'This user is not verified.')+'</p><button class="primary" type="submit">'+(u.is_verified?'Remove verified badge':'Give verified badge')+'</button></form>')+
@@ -835,9 +835,9 @@ function infoPage(type){
  beginView();
  renderSidebar("");
  const pages={
-  about:{title:"About Pekora",body:'<p>Pekora is an independent community revival project. It is not affiliated with or endorsed by Roblox Corporation.</p><p>This build includes account profiles, a virtual catalog, inventory previews and friend requests. Original avatar editing is not connected in this deployment.</p><p>Pekora currency is an in-site balance only. It has no real-world monetary value.</p>'},
-  terms:{title:"Terms of Use",body:'<p>Use Pekora respectfully and do not impersonate other users, abuse the service or attempt to access accounts that are not yours.</p><p>Do not use preview image URLs or descriptions that violate the rights or safety of other people. The project owner may remove catalog entries or accounts that abuse the service.</p><p>Virtual currency and catalog items are for use inside this website only. They cannot be exchanged for real money.</p>'},
-  privacy:{title:"Privacy",body:'<p>Pekora stores your username, a password hash, session information, profile description, virtual balance, inventory, friend requests and in-site catalog and purchase records so the service can work.</p><p>Passwords are not stored as plain text. Sign-in uses a secure session cookie. This build does not ask for an email address.</p><p>For abuse prevention, the service temporarily stores hashed network-address identifiers and attempt counters for sign-in, registration and owner recovery. Ten attempts in the 15-minute window trigger a 15-minute cooldown. Expired per-address counters reset when that address is used again, and stale rows are removed during Worker setup.</p><p>Do not reuse an important password and do not share your account credentials with anyone.</p>'}
+  about:{title:"About Sakura",body:'<p>Sakura is an independent community revival project. It is not affiliated with or endorsed by Roblox Corporation.</p><p>This build includes account profiles, a virtual catalog, inventory previews and friend requests. Original avatar editing is not connected in this deployment.</p><p>Sakura currency is an in-site balance only. It has no real-world monetary value.</p>'},
+  terms:{title:"Terms of Use",body:'<p>Use Sakura respectfully and do not impersonate other users, abuse the service or attempt to access accounts that are not yours.</p><p>Do not use preview image URLs or descriptions that violate the rights or safety of other people. The project owner may remove catalog entries or accounts that abuse the service.</p><p>Virtual currency and catalog items are for use inside this website only. They cannot be exchanged for real money.</p>'},
+  privacy:{title:"Privacy",body:'<p>Sakura stores your username, a password hash, session information, profile description, virtual balance, inventory, friend requests and in-site catalog and purchase records so the service can work.</p><p>Passwords are not stored as plain text. Sign-in uses a secure session cookie. This build does not ask for an email address.</p><p>For abuse prevention, the service temporarily stores hashed network-address identifiers and attempt counters for sign-in, registration and owner recovery. Ten attempts in the 15-minute window trigger a 15-minute cooldown. Expired per-address counters reset when that address is used again, and stale rows are removed during Worker setup.</p><p>Do not reuse an important password and do not share your account credentials with anyone.</p>'}
  };
  const pageData=pages[type]||pages.about;
  app.innerHTML='<article class="info-page"><h1 class="page-title">'+pageData.title+'</h1>'+pageData.body+'<a class="button" href="#home" data-page="home">Back to Home</a></article>';
