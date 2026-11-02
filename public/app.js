@@ -375,15 +375,17 @@ async function profile(username=me?.username){
  if(!username){app.innerHTML='<div class="empty">Choose a user profile.</div>';return}
  app.innerHTML='<div class="empty">Loading profile...</div>';
  try{
-  const [d,inventoryData]=await Promise.all([
+  const [d,inventoryData,avatarData]=await Promise.all([
    api("/api/profile/"+encodeURIComponent(username)),
-   api("/api/profile/"+encodeURIComponent(username)+"/inventory")
+   api("/api/profile/"+encodeURIComponent(username)+"/inventory"),
+   api("/api/profile/"+encodeURIComponent(username)+"/avatar")
   ]);
   if(!isActiveView(view))return;
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
+  const equipped=avatarData.equipped||[];
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header"><div class="op-profile-avatar">'+avatar(p.username)+'</div><div class="op-profile-info">'+
-    '<h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div><div class="op-profile-id">ID: <strong>'+esc(p.id)+'</strong></div>'+
+   '<div class="op-profile-header"><div class="op-profile-avatar op-profile-avatar-3d"><pekora-avatar-viewer class="profile-avatar-viewer" height="300px" items=\''+esc(JSON.stringify(equipped))+'\'></pekora-avatar-viewer></div><div class="op-profile-info">'+
+    '<div class="op-profile-id">USER ID <strong>'+esc(p.id)+'</strong></div><h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span></div>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
@@ -455,9 +457,9 @@ async function avatarPage(){
  renderSidebar("avatar");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your avatar.</div>';return}
  app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1><a class="button" href="#catalog" data-page="catalog">Catalog</a></div>'+
-  '<div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Avatar</h2><div class="avatar-original-thumbnail">'+avatar(me.username)+'</div>'+
+  '<div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Avatar</h2><pekora-avatar-viewer id="myAvatarViewer" height="390px" items="[]"></pekora-avatar-viewer>'+
   '<p class="muted">Your equipped items are saved to your Pekora account.</p>'+
-  '<p class="muted">The 3D avatar preview is not available until an RCC rendering service is connected.</p><div id="avatarEquipped" class="avatar-equipped-list">Loading outfit...</div></section>'+
+  '<p class="muted">Drag to rotate. Scroll to zoom. Equipped 3D models appear on your avatar.</p><div id="avatarEquipped" class="avatar-equipped-list">Loading outfit...</div></section>'+
   '<section class="avatar-wardrobe"><h2>Inventory</h2><div class="avatar-category-tabs" id="avatarCategories"></div><div id="avatarWardrobe" class="avatar-wardrobe-grid">Loading inventory...</div></section></div></div>';
  let wardrobe=[],activeCategory="Hats",equipped=new Set();
  try{
@@ -465,6 +467,7 @@ async function avatarPage(){
   if(!isActiveView(view))return;
   wardrobe=inventoryData.items||[];
   equipped=new Set((avatarData.equipped||[]).map(x=>x.id));
+  document.getElementById("myAvatarViewer")?.setAttribute("items",JSON.stringify(avatarData.equipped||[]));
  }catch(e){const host=document.getElementById("avatarWardrobe");if(isActiveView(view)&&host)host.textContent=e.message;return}
  function renderEquipped(){
   const host=document.getElementById("avatarEquipped");if(!host)return;
@@ -489,6 +492,8 @@ async function avatarPage(){
     await api("/api/avatar",{method:"PUT",body:JSON.stringify({itemId,action})});
     if(!isActiveView(view))return;
     if(action==="wear")equipped.add(itemId);else equipped.delete(itemId);
+    const currentEquipped=wardrobe.filter(x=>equipped.has(x.id));
+    document.getElementById("myAvatarViewer")?.setAttribute("items",JSON.stringify(currentEquipped));
     renderWardrobe();renderEquipped();
    }catch(e){toast(e.message);b.disabled=false}
   }));
