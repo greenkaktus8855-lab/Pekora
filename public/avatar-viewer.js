@@ -1,5 +1,5 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+import * as THREE from "https://esm.sh/three@0.160.0";
+import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
 
 class PekoraAvatarViewer extends HTMLElement {
   static get observedAttributes() { return ["items"]; }
@@ -13,6 +13,7 @@ class PekoraAvatarViewer extends HTMLElement {
     this.style.position = "relative";
     this.style.background = "linear-gradient(#eaf3fa,#dce8f1)";
     this.style.overflow = "hidden";
+    try {
     this._scene = new THREE.Scene();
     this._scene.background = new THREE.Color(0xeaf3fa);
     this._camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
@@ -52,6 +53,10 @@ class PekoraAvatarViewer extends HTMLElement {
     this._render = () => {if(!this.isConnected)return;this._renderer.render(this._scene,this._camera);this._raf=requestAnimationFrame(this._render)};
     this._render();
     this._loadItems();
+    } catch (error) {
+      console.error("[Pekora avatar] 3D viewer failed:", error);
+      this.innerHTML = '<div style="padding:24px;color:#333;font:14px Arial;background:#f3f6f8">3D preview could not start. Check WebGL support and browser console.</div>';
+    }
   }
   _part(w,h,d,x,y,z,color,round=0) {
     const geometry = new THREE.BoxGeometry(w,h,d);
