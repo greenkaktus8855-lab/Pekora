@@ -2,6 +2,8 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
 
 class PekoraAvatarViewer extends HTMLElement {
+  static get observedAttributes() { return ["items"]; }
+  attributeChangedCallback(name, oldValue, newValue) { if (name === "items" && this._started && oldValue !== newValue) this._loadItems(); }
   connectedCallback() {
     if (this._started) return;
     this._started = true;
@@ -14,7 +16,7 @@ class PekoraAvatarViewer extends HTMLElement {
     this._scene = new THREE.Scene();
     this._scene.background = new THREE.Color(0xeaf3fa);
     this._camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
-    this._camera.position.set(4.4, 3.1, 6.2);
+    this._camera.position.set(4.4, 3.1, 6.2); this._camera.lookAt(0,1.2,0);
     this._renderer = new THREE.WebGLRenderer({antialias:true, alpha:false});
     this._renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
     this._renderer.shadowMap.enabled = true;
@@ -32,6 +34,7 @@ class PekoraAvatarViewer extends HTMLElement {
     this._avatar = new THREE.Group(); this._scene.add(this._avatar);
     this._buildBody();
     this._loader = new GLTFLoader();
+    this._accessoryGroup = new THREE.Group(); this._avatar.add(this._accessoryGroup);
     this._rotation = 0;
     this._drag = false;
     this._lastX = 0;
@@ -77,6 +80,11 @@ class PekoraAvatarViewer extends HTMLElement {
     ground.rotation.x=-Math.PI/2;ground.position.y=-.02;this._avatar.add(ground);
   }
   async _loadItems() {
+    if (!this._loader || !this._accessoryGroup) return;
+    while (this._accessoryGroup.children.length) {
+      const child=this._accessoryGroup.children.pop();
+      child.traverse?.(o=>{o.geometry?.dispose();if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());else o.material?.dispose();});
+    }
     let items=[];try{items=JSON.parse(this.getAttribute("items")||"[]")}catch{}
     const supported=items.filter(x=>x&&typeof x.model_url==="string"&&/^https:\/\//.test(x.model_url));
     for (const item of supported) {
@@ -92,7 +100,7 @@ class PekoraAvatarViewer extends HTMLElement {
         const category=String(item.category||"").toLowerCase();
         if(category==="hats"||category==="hair") model.position.y+=2.72;
         else model.position.y+=2.1;
-        this._avatar.add(model);
+        this._accessoryGroup.add(model);
       } catch(error) {
         console.warn("[Pekora avatar] Could not load equipped 3D item:",item.name,error);
       }
