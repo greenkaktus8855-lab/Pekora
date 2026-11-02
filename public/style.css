@@ -350,9 +350,6 @@ button,input,textarea,select{font:inherit}
 .op-profile-info p{font-size:14px;margin:12px 0;color:#191919;white-space:pre-wrap}
 .op-profile-stats{display:flex;gap:20px;font-size:13px;color:#757575}
 .op-profile-stats b{color:#191919;font-size:15px}
-.op-profile-tabs{display:flex;gap:0;border-bottom:1px solid #c3c3c3;margin:0 0 16px}
-.op-profile-tabs a{display:block;padding:8px 18px;color:#191919;font-size:16px;text-decoration:none}
-.op-profile-tabs a.active{color:#00a2ff;border-bottom:2px solid #00a2ff;font-weight:600}
 .op-profile-section{margin:0 0 20px}
 .op-profile-section h2{font-size:22px;font-weight:700;margin:0 0 8px;padding-bottom:5px;border-bottom:1px solid #c3c3c3}
 .op-profile-items{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
