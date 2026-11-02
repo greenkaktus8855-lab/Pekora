@@ -444,6 +444,17 @@ async function route(request, env) {
       if (relation?.status === "PENDING") return fail("Friend request already sent.",409);
       throw error;
     }
+    // Recheck after inserting so simultaneous reciprocal requests become an accepted friendship.
+    const reciprocal = await env.DB.prepare("SELECT user_id FROM friends WHERE user_id=? AND friend_id=? AND status='PENDING'").bind(target.id,user.id).first();
+    if (reciprocal) {
+      const results = await env.DB.batch([
+        env.DB.prepare("UPDATE friends SET status='ACCEPTED' WHERE user_id=? AND friend_id=? AND status='PENDING'").bind(target.id,user.id),
+        env.DB.prepare("INSERT OR REPLACE INTO friends (user_id,friend_id,status) SELECT ?,?,'ACCEPTED' WHERE changes()=1").bind(user.id,target.id)
+      ]);
+      if (results?.[0]?.meta?.changes) return json({ok:true,status:"friends"});
+      const relation = await env.DB.prepare("SELECT status FROM friends WHERE user_id=? AND friend_id=?").bind(user.id,target.id).first();
+      if (relation?.status === "ACCEPTED") return json({ok:true,status:"friends"});
+    }
     return json({ok:true,status:"outgoing"},201);
   }
 
