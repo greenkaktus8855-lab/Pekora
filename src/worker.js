@@ -578,29 +578,27 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     if (user.role !== "OWNER") return fail("Owner access required.",403);
-    if (!env.MODELS || typeof env.MODELS.put !== "function") return fail("3D storage is not configured yet. Create the Pekora R2 bucket and bind it as MODELS.",503);
     const length = Number(request.headers.get("content-length") || 0);
-    const maxBytes = 15 * 1024 * 1024;
-    if (length > maxBytes) return fail("GLB file must be 15 MB or smaller.",413);
+    const maxBytes = 1024 * 1024;
+    if (length > maxBytes) return fail("GLB file must be 1 MB or smaller for database storage.",413);
     const contentType = (request.headers.get("content-type") || "").toLowerCase();
     if (!["model/gltf-binary","application/octet-stream"].includes(contentType)) return fail("Upload a .glb file.",415);
     const bytes = await request.arrayBuffer();
-    if (!bytes.byteLength || bytes.byteLength > maxBytes) return fail("GLB file must be between 1 byte and 15 MB.",413);
+    if (!bytes.byteLength || bytes.byteLength > maxBytes) return fail("GLB file must be between 1 byte and 1 MB.",413);
     const view = new DataView(bytes);
     if (bytes.byteLength < 12 || view.getUint32(0,true) !== 0x46546c67 || view.getUint32(4,true) !== 2 || view.getUint32(8,true) !== bytes.byteLength) {
       return fail("This file is not a valid binary glTF 2.0 (.glb).",415);
     }
-    const key = "items/" + crypto.randomUUID() + ".glb";
-    await env.MODELS.put(key,bytes,{httpMetadata:{contentType:"model/gltf-binary",cacheControl:"public, max-age=31536000, immutable"}});
-    return json({ok:true,key,url:new URL("/api/models/"+key,request.url).toString()},201);
+    const modelId = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO model_files (id,model_data,created_at) VALUES (?,?,datetime('now'))").bind(modelId,bytes).run();
+    return json({ok:true,url:new URL("/api/models/"+modelId+".glb",request.url).toString()},201);
   }
 
-  const modelMatch = path.match(/^\/api\/models\/(items\/[A-Za-z0-9-]+\.glb)$/);
+  const modelMatch = path.match(/^\/api\/models\/([A-Za-z0-9-]+\.glb)$/);
   if (modelMatch && request.method === "GET") {
-    if (!env.MODELS || typeof env.MODELS.get !== "function") return fail("3D storage is unavailable.",503);
-    const object = await env.MODELS.get(modelMatch[1]);
-    if (!object) return fail("3D model not found.",404);
-    return new Response(object.body,{headers:{
+    const model = await env.DB.prepare("SELECT model_data FROM model_files WHERE id=?").bind(modelMatch[1].slice(0,-4)).first();
+    if (!model?.model_data) return fail("3D model not found.",404);
+    return new Response(model.model_data,{headers:{
       "content-type":"model/gltf-binary",
       "cache-control":"public, max-age=31536000, immutable",
       "x-content-type-options":"nosniff",
