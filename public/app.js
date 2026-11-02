@@ -560,7 +560,7 @@ async function owner(){
  '<label>Category<select name="category">'+AVATAR_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
  '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
  '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
- '<label>3D model file (.glb, max 15 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
+ '<label>3D model file (.glb, max 1 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
  '<label>Or existing 3D model URL<input name="model_url" type="url" maxlength="1000" placeholder="https://...model.glb"></label>'+
  
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
@@ -651,7 +651,7 @@ async function owner(){
      if(!upload.ok)throw new Error(uploaded.error||"3D model upload failed.");
      data.model_url=uploaded.url;
     }
-    if(data.category==="Accessories"&&!data.model_url)throw new Error("Upload a GLB model before listing an accessory.");
+    if(data.category==="Accessories"&&!data.model_url)throw new Error("Upload a GLB model (max 1 MB) before listing an accessory.");
     msg.textContent="Saving item...";
     const result=await api("/api/owner/items",{method:"POST",body:JSON.stringify(data)});
     if(!isActiveView(view))return;
