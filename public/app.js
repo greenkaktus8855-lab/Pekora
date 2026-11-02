@@ -378,7 +378,7 @@ async function owner(){
  renderSidebar("owner");
  if(!me||me.role!=="OWNER"){app.innerHTML='<div class="empty">Owner access required.</div>';return}
  app.innerHTML='<h1 class="page-title">Owner Panel</h1><div id="ownerStats" class="item-grid">Loading...</div>'+
- '<section class="owner-section"><h2>Catalog Management</h2><p class="muted">Remove every item from the public catalog. Existing owners keep their inventory.</p><button class="button secondary" id="clearPublicCatalog" type="button">Remove all items from catalog</button><form id="newItemForm" class="owner-item-form">'+
+ '<section class="owner-section"><h2>Catalog Management</h2><p class="muted">Remove every item from the public catalog. Existing owners keep their inventory.</p><p class="muted">Wearable items need a real .glb 3D model. Upload it to public/assets/catalog/ and enter /assets/catalog/your-file.glb. Image-only entries are previews and cannot be worn.</p><button class="button secondary" id="clearPublicCatalog" type="button">Remove all items from catalog</button><form id="newItemForm" class="owner-item-form">'+
  '<label>Item name<input name="name" maxlength="80" required></label>'+
  '<label>Category<select name="category">'+AVATAR_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
  '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
@@ -413,7 +413,7 @@ async function owner(){
     '<div class="owner-item-thumb">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="">':'◇')+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
     '<div class="owner-item-subfields"><select name="category">'+AVATAR_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" value="'+esc(x.image_url||"")+'" placeholder="Preview image URL"></div>'+
-    '<div class="owner-item-model-fields"><select name="asset_kind"><option value="MODEL_3D" '+(x.asset_kind==="MODEL_3D"?"selected":"")+'>3D wearable</option><option value="FACE_TEXTURE" '+(x.asset_kind==="FACE_TEXTURE"?"selected":"")+'>Face texture</option><option value="IMAGE_ONLY" '+(x.asset_kind!=="MODEL_3D"&&x.asset_kind!=="FACE_TEXTURE"?"selected":"")+'>Image only</option></select><input name="model_url" type="url" value="'+esc(x.model_url||"")+'" placeholder="3D .glb model URL"><select name="attachment">'+AVATAR_ATTACHMENTS.map(a=>'<option value="'+a+'" '+(a===(x.attachment||"Head")?"selected":"")+'>'+a+'</option>').join("")+'</select><input name="model_scale" type="number" min="0.01" max="10" step="0.01" value="'+Number(x.model_scale||1)+'" title="Model scale"></div>'+
+    '<div class="owner-item-model-fields"><select name="asset_kind"><option value="MODEL_3D" '+(x.asset_kind==="MODEL_3D"?"selected":"")+'>3D wearable</option><option value="FACE_TEXTURE" '+(x.asset_kind==="FACE_TEXTURE"?"selected":"")+'>Face texture</option><option value="IMAGE_ONLY" '+(x.asset_kind!=="MODEL_3D"&&x.asset_kind!=="FACE_TEXTURE"?"selected":"")+'>Image only</option></select><input name="model_url" type="text" value="'+esc(x.model_url||"")+'" placeholder="3D .glb model URL"><select name="attachment">'+AVATAR_ATTACHMENTS.map(a=>'<option value="'+a+'" '+(a===(x.attachment||"Head")?"selected":"")+'>'+a+'</option>').join("")+'</select><input name="model_scale" type="number" min="0.01" max="10" step="0.01" value="'+Number(x.model_scale||1)+'" title="Model scale"></div>'+
     '<details class="owner-model-adjust"><summary>Model position and rotation</summary><div class="owner-model-adjust-grid">'+
     '<label>X<input name="offset_x" type="number" step="0.01" value="'+Number(x.offset_x||0)+'"></label><label>Y<input name="offset_y" type="number" step="0.01" value="'+Number(x.offset_y||0)+'"></label><label>Z<input name="offset_z" type="number" step="0.01" value="'+Number(x.offset_z||0)+'"></label>'+
     '<label>Rotate X<input name="rotation_x" type="number" value="'+Number(x.rotation_x||0)+'"></label><label>Rotate Y<input name="rotation_y" type="number" value="'+Number(x.rotation_y||0)+'"></label><label>Rotate Z<input name="rotation_z" type="number" value="'+Number(x.rotation_z||0)+'"></label></div></details>'+
@@ -437,6 +437,11 @@ async function owner(){
    }));
   }
   drawOwnerItems();
+  const newItemForm=document.getElementById("newItemForm");
+  newItemForm.elements.category.addEventListener("change",()=>{
+   const defaults={Hats:"HeadTop",Hair:"Head",Faces:"Head",Shirts:"Torso",Pants:"Root",Accessories:"Head"};
+   newItemForm.elements.attachment.value=defaults[newItemForm.elements.category.value]||"Head";
+  });
   document.getElementById("newItemForm").addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
