@@ -14,4 +14,4 @@ database_id = "46cf2725-2ea1-4da3-9e9e-ffe30f6674f0"
 migrations_dir = "migrations"
 
 [vars]
-SITE_NAME = "Pekora"
+SITE_NAME = "Sakura"
