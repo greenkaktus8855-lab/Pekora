@@ -49,7 +49,7 @@ function renderSidebar(active="home"){
   ["settings","icon-nav-settings","Settings"]
  ];
  sidebar.innerHTML='<div class="sidebar-card">'+
-  '<a class="side-user" href="#profile" data-page="profile"><span class="side-avatar">'+avatar()+'</span><span><span class="side-username">'+esc(me.username)+'</span><span class="side-role">Account</span></span></a>'+
+  '<a class="side-user" href="/#profile?id='+encodeURIComponent(me.publicId||"")+'" data-page="profile"><span class="side-avatar">'+avatar()+'</span><span><span class="side-username">'+esc(me.username)+(me.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</span><span class="side-role">Account</span></span></a>'+
   '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span></a>').join("")+
   '<div class="side-separator"></div>'+
   (me.role==="OWNER"?'<a href="#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':'')+
@@ -65,7 +65,7 @@ function setUser(user){
  }
  me=user;
  accountArea.innerHTML=user
-  ? '<a class="account-name" href="#profile" data-page="profile">'+esc(user.username)+'</a><button id="logoutBtn" type="button">Log out</button>'
+  ? '<a class="account-name" href="/#profile?id='+encodeURIComponent(user.publicId||"")+'" data-page="profile">'+esc(user.username)+(user.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</a><button id="logoutBtn" type="button">Log out</button>'
   : '<button id="loginBtn" type="button">Login</button><button id="registerBtn" type="button">Sign Up</button>';
  currency.textContent=user?Number(user.balance||0).toLocaleString()+" P$":"";
  document.getElementById("logoutBtn")?.addEventListener("click",logout);
@@ -75,7 +75,7 @@ function setUser(user){
  renderSidebar(currentPage==="item"?"catalog":currentPage);
 }
 async function refreshMe(){try{const d=await api("/api/me");setUser(d.user)}catch{setUser(null)}}
-function page(name){const base=location.pathname.startsWith("/item/")?"/":"";history.pushState({page:name},"",base+"#"+name);render(name)}
+function page(name){const base=location.pathname.startsWith("/item/")?"/":"";const target=name==="profile"&&me?.publicId?"profile?id="+encodeURIComponent(me.publicId):name;history.pushState({page:name},"",base+"#"+target);render(target)}
 function currentRoute(){const match=location.pathname.match(new RegExp("^/item/([A-Za-z0-9_-]{1,80})/?$"));return match?"item?id="+encodeURIComponent(match[1]):(location.hash.slice(1)||"home")}
 window.addEventListener("popstate",()=>render(currentRoute()));
 document.addEventListener("click",e=>{
@@ -94,7 +94,7 @@ document.addEventListener("click",e=>{
 });
 document.getElementById("globalSearchForm").addEventListener("submit",e=>{
  e.preventDefault();
- const q=document.getElementById("globalSearch").value.trim().slice(0,20);
+ const q=document.getElementById("globalSearch").value.trim().slice(0,32);
  const target="#users?q="+encodeURIComponent(q);
  history.pushState({page:"users",query:q},"","/"+target);
  render("users");
@@ -375,22 +375,26 @@ async function inventory(){
   grid.innerHTML=d.items.length?d.items.map(itemCard).join(""):'<div class="empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
  }catch(e){if(isActiveView(view)&&grid?.isConnected)grid.textContent=e.message}
 }
-async function profile(username=me?.username){
+async function profile(identifier=me?.username,byId=false){
  const view=beginView();
  renderSidebar("profile");
- if(!username){app.innerHTML='<div class="empty">Choose a user profile.</div>';return}
+ if(!identifier){app.innerHTML='<div class="empty">Choose a user profile.</div>';return}
  app.innerHTML='<div class="empty">Loading profile...</div>';
  try{
+  const profilePath=byId?"/api/profile/id/"+encodeURIComponent(identifier):"/api/profile/"+encodeURIComponent(identifier);
+  const inventoryPath=byId?profilePath+"/inventory":profilePath+"/inventory";
   const [d,inventoryData]=await Promise.all([
-   api("/api/profile/"+encodeURIComponent(username)),
-   api("/api/profile/"+encodeURIComponent(username)+"/inventory")
+   api(profilePath),
+   api(inventoryPath)
   ]);
   if(!isActiveView(view))return;
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
+  const publicId=p.publicId??p.id,profileUrl="/#profile?id="+encodeURIComponent(publicId);
+  if(!byId&&publicId){history.replaceState({page:"profile",publicId},"",profileUrl)}
   const profileAvatar=avatar(p.username);
   app.innerHTML='<div class="op-profile">'+
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
-    '<div class="op-profile-id">USER ID <strong>'+esc(p.id)+'</strong></div><h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
+    '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link">Profile link</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span></div>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
@@ -540,7 +544,7 @@ async function loadFriendsList(view=activeView){
 function users(){
  const view=beginView();
  renderSidebar("users");
- app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Enter a username..." minlength="1" maxlength="20" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type at least 1 character to find users. Search results will appear below.</div><div id="userResults" class="people-results"></div>';
+ app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Pekora community by username or User ID and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type at least 1 character to find users. Search results will appear below.</div><div id="userResults" class="people-results"></div>';
  const form=document.getElementById("peopleSearchForm");
  const input=document.getElementById("userSearch");
  const results=document.getElementById("userResults");
@@ -548,7 +552,7 @@ function users(){
  let latest=0;
  async function runSearch(){
   const requestId=++latest;
-  const q=input.value.trim();
+  const q=input.value.trim().slice(0,32);
   if(q.length<1){results.innerHTML="";hint.textContent="Type at least 1 character to find users. Search results will appear below.";hint.style.display="block";return}
   hint.textContent="Searching Pekora users...";
   hint.style.display="block";
@@ -557,12 +561,12 @@ function users(){
    if(requestId!==latest||!isActiveView(view))return;
    const found=Array.isArray(d.users)?d.users:[];
    hint.style.display="none";
-   results.innerHTML=found.length?found.map(u=>'<article class="people-user"><div class="people-avatar">'+avatar(u.username)+'</div><div class="people-user-info"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role||"USER")+'</span></div><button class="button" type="button" data-profile="'+esc(u.username)+'">View Profile</button></article>').join(""):'<div class="empty">No users found for “'+esc(q)+'”.</div>';
+   results.innerHTML=found.length?found.map(u=>'<article class="people-user"><div class="people-avatar">'+avatar(u.username)+'</div><div class="people-user-info"><strong>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</strong><span>'+esc(u.role||"USER")+' · ID '+esc(u.public_id)+'</span></div><button class="button" type="button" data-profile="'+esc(u.username)+'">View Profile</button></article>').join(""):'<div class="empty">No users found for “'+esc(q)+'”.</div>';
   }catch(e){if(requestId!==latest||!isActiveView(view))return;hint.textContent="Could not load users: "+e.message;hint.style.display="block";results.innerHTML=""}
  }
  form.addEventListener("submit",e=>{
   e.preventDefault();
-  const q=input.value.trim().slice(0,20);
+  const q=input.value.trim().slice(0,32);
   history.replaceState({page:"users",query:q},"","#users?q="+encodeURIComponent(q));
   runSearch();
  });
@@ -634,17 +638,26 @@ async function owner(){
    const d=await api("/api/owner/users/"+encodeURIComponent(userId));
    if(!isActiveView(view))return;
    const u=d.user;
-   userDetails.innerHTML='<div class="owner-user-card"><h3>'+esc(u.username)+'</h3><div class="muted">ID: '+esc(u.id)+'</div><p>Role: '+esc(u.role)+' · Balance: '+Number(u.balance).toLocaleString()+' P$ · Status: '+(u.is_banned?'BANNED':'Active')+'</p>'+
+   userDetails.innerHTML='<div class="owner-user-card"><h3>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h3><div class="muted">User ID: '+esc(u.public_id)+'</div><p>Role: '+esc(u.role)+' · Balance: '+Number(u.balance).toLocaleString()+' P$ · Status: '+(u.is_banned?'BANNED':'Active')+' · Verified: '+(u.is_verified?'Yes':'No')+'</p>'+
     (u.role==="OWNER"?'<p class="muted">OWNER accounts cannot be modified.</p>':
     '<div class="owner-user-actions"><form id="ownerCreditForm" class="owner-item-form"><h4>Give Pekora currency</h4><label>Amount (P$)<input name="amount" type="number" min="1" max="1000000" required></label><label>Note (optional)<input name="reason" maxlength="500"></label><button class="primary" type="submit">Give currency</button></form>'+
     '<form id="ownerWarnForm" class="owner-item-form"><h4>Issue warning</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button class="primary" type="submit">Send warning</button></form>'+
     (u.is_banned?'<button type="button" class="button" id="ownerUnban">Unban account</button>':'<form id="ownerBanForm" class="owner-item-form"><h4>Ban account</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button type="submit" class="button secondary">Ban account</button></form>')+'</div>')+
+    (u.role==="OWNER"?"":'<form id="ownerVerifyForm" class="owner-item-form owner-verify-form"><h4>Verified badge</h4><p class="muted">'+(u.is_verified?'This user has a verified badge.':'This user is not verified.')+'</p><button class="primary" type="submit">'+(u.is_verified?'Remove verified badge':'Give verified badge')+'</button></form>')+
     '<h4>Warnings</h4>'+(d.warnings.length?'<ul>'+d.warnings.map(x=>'<li>'+esc(x.reason)+' <span class="muted">('+new Date(x.created_at+"Z").toLocaleString()+')</span></li>').join("")+'</ul>':'<p class="muted">No warnings.</p>')+
     '<h4>Moderation history</h4>'+(d.logs.length?'<ul>'+d.logs.map(x=>'<li><strong>'+esc(x.action)+'</strong> '+esc(x.details)+' <span class="muted">('+new Date(x.created_at+"Z").toLocaleString()+')</span></li>').join("")+'</ul>':'<p class="muted">No actions recorded.</p>')+'</div>';
    document.getElementById("ownerCreditForm")?.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(e.currentTarget);
     try{await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:"credit",amount:Number(f.get("amount")),reason:String(f.get("reason")||"")})});toast("Currency granted");await loadOwnerUser(userId);await refreshMe();}
     catch(err){toast(err.message)}
+   });
+   document.getElementById("ownerVerifyForm")?.addEventListener("submit",async e=>{
+    e.preventDefault();
+    try{
+     await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:u.is_verified?"unverify":"verify"})});
+     toast(u.is_verified?"Verified badge removed":"Verified badge granted");
+     await loadOwnerUser(userId);
+    }catch(err){toast(err.message)}
    });
    document.getElementById("ownerWarnForm")?.addEventListener("submit",async e=>{
     e.preventDefault();const reason=String(new FormData(e.currentTarget).get("reason")||"");
