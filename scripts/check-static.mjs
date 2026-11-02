@@ -26,6 +26,9 @@ for (const file of files) {
 const app = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 const worker = fs.readFileSync(path.join(root, "src/worker.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "public/style.css"), "utf8");
+const globals = fs.readFileSync(path.join(root, "public/openpekora-globals.css"), "utf8");
+const index = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
+const wrangler = fs.readFileSync(path.join(root, "wrangler.toml"), "utf8");
 const checks = [
   ["API body limit", worker.includes("const maxBytes = 16 * 1024")],
   ["HTTPS-only new catalog images", worker.includes("Image URL must use HTTPS.")],
@@ -53,7 +56,11 @@ const checks = [
   ["Owner Panel can create and edit stock", app.includes("name=\"stock_limit\"") && app.includes("name=\"is_limited\"")],
   ["trade creation rejects non-Limited items", worker.includes("i.is_limited=1") && worker.includes("You can only offer Limited items")],
   ["trade acceptance rechecks Limited status", worker.includes("Only Limited items can be traded") && worker.includes("i.is_limited=1")],
-  ["trade picker only displays Limited items", app.includes("own.filter(item=>Number(item.is_limited)===1)") && app.includes("target.filter(item=>Number(item.is_limited)===1)")]
+  ["trade picker only displays Limited items", app.includes("own.filter(item=>Number(item.is_limited)===1)") && app.includes("target.filter(item=>Number(item.is_limited)===1)")],
+  ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-wordmark") && wrangler.includes('SITE_NAME = "Sakura"')],
+  ["Sakura cache versions are refreshed", index.includes("20261102-sakura-fix-2") && index.includes("app.js?v=20261102-sakura-fix-2")],
+  ["Sakura theme primary accents are violet", globals.includes("rgb(166, 77, 255)") && globals.includes("rgba(106,27,177,1)") && !globals.includes("rgb(0, 162, 255)") && !globals.includes("rgba(8,79,192,1)")]
+
 ];
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"} ${name}`);
@@ -61,4 +68,4 @@ if (missing.length) {
   console.error("Missing local assets:\\n" + missing.join("\\n"));
 }
 if (checks.some(([, ok]) => !ok) || missing.length) process.exit(1);
-console.log("Pekora static checks passed.");
+console.log("Sakura static checks passed.");
