@@ -467,3 +467,47 @@ button,input,textarea,select{font:inherit}
 .info-page{max-width:760px;margin:8px auto;padding:22px;background:#fff;box-shadow:0 1px 4px rgba(25,25,25,.3)}
 .info-page p{font-size:15px;line-height:1.65;margin:0 0 14px}
 .info-page .button{margin-top:8px}
+
+
+/* Real wearable catalog and 3D avatar preview */
+.avatar-3d-view{
+ position:relative;width:100%;height:330px;min-height:300px;overflow:hidden;
+ background:linear-gradient(180deg,#f7f9fb 0%,#e9eef2 100%);
+ border:1px solid #d5dce2;
+}
+.avatar-3d-view canvas{display:block;width:100%;height:100%;min-height:300px}
+.avatar-3d-loading,.avatar-3d-error{
+ display:flex;align-items:center;justify-content:center;min-height:300px;
+ padding:18px;color:#5f6b75;text-align:center;font-size:13px;
+}
+.avatar-3d-error{color:#a33;background:#fff5f5}
+.avatar-3d-warning{
+ position:absolute;left:8px;right:8px;bottom:8px;padding:6px 8px;
+ background:rgba(255,248,224,.96);color:#765b12;font-size:11px;
+ border:1px solid #ead9a1;pointer-events:none;
+}
+.avatar-preview-panel #avatarPreview{width:100%;min-height:330px}
+.avatar-preview-only-label{display:inline-block;padding:5px 7px;color:#666;background:#eee;font-size:11px}
+.catalog-asset-kind{margin:3px 0;color:#61717c;font-size:11px;line-height:1.25}
+.item-detail-image:has(canvas){padding:0;overflow:hidden;min-height:360px}
+.item-detail-image .avatar-3d-view{height:380px;min-height:360px;border:0}
+.owner-item-model-fields{
+ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:7px 0;
+}
+.owner-item-model-fields input,.owner-item-model-fields select{min-width:0;width:100%}
+.owner-model-adjust{
+ grid-column:1/-1;margin:4px 0 8px;padding:7px 9px;
+ background:#f8f8f8;border:1px solid #ddd;font-size:12px;
+}
+.owner-model-adjust summary{cursor:pointer;color:#0055b3;font-weight:600}
+.owner-model-adjust-grid{
+ display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-top:8px;
+}
+.owner-model-adjust-grid label{display:flex;flex-direction:column;gap:3px;color:#555;font-size:11px}
+.owner-model-adjust-grid input{width:100%;min-width:0}
+@media(max-width:767px){
+ .avatar-3d-view,.avatar-3d-view canvas,.avatar-3d-loading,.avatar-3d-error{min-height:280px;height:280px}
+ .owner-item-model-fields{grid-template-columns:1fr 1fr}
+ .owner-model-adjust-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .item-detail-image .avatar-3d-view{height:320px;min-height:300px}
+}
