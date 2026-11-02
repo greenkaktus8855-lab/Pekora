@@ -511,3 +511,30 @@ button,input,textarea,select{font:inherit}
  .owner-model-adjust-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
  .item-detail-image .avatar-3d-view{height:320px;min-height:300px}
 }
+
+
+/* Shared 3D avatar views on dashboard and profiles */
+.op-home-avatar-view{
+ width:112px;height:122px;overflow:hidden;background:#f1f4f6;
+}
+.op-home-avatar-view.avatar-3d-view{
+ width:112px;height:122px;min-height:122px;border:0;
+}
+.op-home-avatar-view.avatar-3d-view canvas{height:122px;min-height:122px}
+.op-profile-avatar{
+ width:170px;height:220px;min-height:220px;flex:0 0 170px;
+ background:linear-gradient(180deg,#f7f9fb,#e9eef2);
+ box-shadow:0 1px 4px rgba(25,25,25,.3);overflow:hidden;
+}
+.op-profile-avatar.avatar-3d-view{
+ width:170px;height:220px;min-height:220px;border:0;
+}
+.op-profile-avatar.avatar-3d-view canvas{width:100%;height:220px;min-height:220px}
+@media(max-width:767px){
+ .op-home-avatar-view,.op-home-avatar-view.avatar-3d-view,
+ .op-home-avatar-view.avatar-3d-view canvas{width:90px;height:100px;min-height:100px}
+ .op-profile-avatar,.op-profile-avatar.avatar-3d-view{
+  width:104px;height:150px;min-height:150px;flex-basis:104px;
+ }
+ .op-profile-avatar.avatar-3d-view canvas{height:150px;min-height:150px}
+}
