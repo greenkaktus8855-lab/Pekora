@@ -455,6 +455,8 @@ async function route(request, env) {
       const relation = await env.DB.prepare("SELECT status FROM friends WHERE user_id=? AND friend_id=?").bind(user.id,target.id).first();
       if (relation?.status === "ACCEPTED") return json({ok:true,status:"friends"});
     }
+    const currentRelation = await env.DB.prepare("SELECT status FROM friends WHERE user_id=? AND friend_id=?").bind(user.id,target.id).first();
+    if (currentRelation?.status === "ACCEPTED") return json({ok:true,status:"friends"});
     return json({ok:true,status:"outgoing"},201);
   }
 
