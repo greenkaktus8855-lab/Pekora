@@ -9,34 +9,6 @@ function toast(message){const el=document.getElementById("toast");el.textContent
 function avatar(username=me?.username){const src=String(username||"").toLowerCase()==="koqumo"?"https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png":"https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/generic.svg";return '<img class="avatar-render" src="'+src+'" alt="User avatar" loading="lazy">' }
 const AVATAR_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 const AVATAR_ATTACHMENTS=["HeadTop","Head","Torso","Root","LeftArm","RightArm","LeftLeg","RightLeg"];
-function waitForAvatarRenderer(){
- if(window.PekoraAvatar3D)return Promise.resolve(window.PekoraAvatar3D);
- return new Promise(resolve=>{
-  let finished=false;
-  const done=()=>{if(finished)return;finished=true;resolve(window.PekoraAvatar3D||null)};
-  window.addEventListener("pekora-avatar3d-ready",done,{once:true});
-  setTimeout(done,10000);
- });
-}
-async function render3DAvatar(container,ownedItems){
- container.classList.add("avatar-3d-view");
- container.innerHTML='<div class="avatar-3d-loading">Loading 3D avatar...</div>';
- const renderer=await waitForAvatarRenderer();
- if(!container.isConnected)return;
- if(!renderer){
-  container.innerHTML='<div class="avatar-3d-error">3D renderer did not load. Check the browser connection and refresh the page.</div>';
-  return;
- }
- try{await renderer.render(container,ownedItems||[])}
- catch(error){console.error("[Pekora avatar]",error);container.innerHTML='<div class="avatar-3d-error">Could not render this avatar. Check the 3D model files.</div>'}
-}
-function avatarArtwork(username,config={},owned=[]){
- const src=String(username||"").toLowerCase()==="koqumo"?"https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png":"https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/generic.svg";
- const worn=AVATAR_CATEGORIES.map(category=>{const item=owned.find(x=>x.id===config?.[category]);return item?{category,name:item.name,image_url:item.image_url}:null}).filter(Boolean);
- return '<div class="avatar-artwork"><div class="avatar-artwork-image"><img src="'+src+'" alt="'+esc(username)+' avatar" loading="lazy"></div><div class="avatar-artwork-items">'+(worn.length?worn.map(x=>'<span class="avatar-worn-chip">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="" loading="lazy">':'')+'<b>'+esc(x.category)+'</b>'+esc(x.name)+'</span>').join(""):'<span class="avatar-worn-empty">Default avatar</span>')+'</div></div>';
-}
-
-
 function renderSidebar(active="home"){
  if(!me){sidebar.classList.remove("visible","mobile-open");sidebar.innerHTML="";return}
  sidebar.classList.add("visible");
@@ -83,7 +55,7 @@ function home(){
  }
  const name=esc(me.username);
  app.innerHTML='<div class="op-dashboard">'+
-  '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile"><div id="homeAvatar3d" class="op-home-avatar-view"></div></a><div><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><p class="home-balance">'+Number(me.balance||0).toLocaleString()+' P$</p></div></div>'+
+  '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile">'+avatar(me.username)+'</a><div><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><p class="home-balance">'+Number(me.balance||0).toLocaleString()+' P$</p></div></div>'+
   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Items</h3><a href="#inventory" data-page="inventory">See All</a></div><div id="homeItems" class="op-section-content"><div class="op-empty">Loading inventory...</div></div></section>'+
   '</div>';
@@ -99,10 +71,7 @@ async function loadHomeDashboard(){
    api("/api/friends")
   ]);
   if(!document.getElementById("homeFriends"))return;
-  const owned=inventoryData.items||[],profile=profileData.profile;
-  const homeAvatar=document.getElementById("homeAvatar3d");
-  const homeWorn=AVATAR_CATEGORIES.map(category=>owned.find(x=>x.id===profile.avatar?.[category])).filter(Boolean);
-  if(homeAvatar)await render3DAvatar(homeAvatar,homeWorn);
+  const owned=inventoryData.items||[];
   const friends=friendsData.friends||[];
   document.getElementById("homeFriendCount").textContent=friends.length;
   friendsHost.innerHTML=friends.length?'<div class="op-home-friends">'+friends.slice(0,12).map(u=>'<a href="#profile" class="op-home-friend" data-profile="'+esc(u.username)+'">'+avatar(u.username)+'<span>'+esc(u.username)+'</span></a>').join("")+'</div>':'<div class="op-empty">You have no friends to display yet.</div>';
@@ -133,11 +102,6 @@ function showItem(itemId){
   '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div><p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(item.id)?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'</div>'+
   '</div></div>';
  document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
- if(item.asset_kind==="MODEL_3D"||item.asset_kind==="FACE_TEXTURE"){
-  const preview=document.getElementById("itemDetailPreview");
-  const worn=[item];
-  render3DAvatar(preview,worn);
- }
 }
 
 
@@ -249,7 +213,7 @@ async function profile(username=me?.username){
   ]);
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header"><div id="profileAvatar3d" class="op-profile-avatar"></div><div class="op-profile-info">'+
+   '<div class="op-profile-header"><div class="op-profile-avatar">'+avatar(p.username)+'</div><div class="op-profile-info">'+
     '<h1>'+esc(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+Number(p.balance||0).toLocaleString()+'</b> P$</span></div>'+
@@ -260,8 +224,6 @@ async function profile(username=me?.username){
     '<div class="op-profile-section"><h2>Inventory</h2>'+
      (owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+
     '</div></section></div>';
-  const profileWorn=AVATAR_CATEGORIES.map(category=>owned.find(x=>x.id===p.avatar?.[category])).filter(Boolean);
-  await render3DAvatar(document.getElementById("profileAvatar3d"),profileWorn);
   app.querySelectorAll("[data-profile-tab]").forEach(tab=>tab.addEventListener("click",e=>{
    e.preventDefault();
    app.querySelectorAll("[data-profile-tab]").forEach(x=>x.classList.toggle("active",x===tab));
@@ -299,41 +261,27 @@ async function settings(){
 }
 async function avatarPage(){
  renderSidebar("avatar");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to edit your avatar.</div>';return}
- app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar Editor</h1><a class="button" href="#catalog" data-page="catalog">Get More Items</a></div><div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Preview</h2><div id="avatarPreview"></div><p class="muted">Your avatar settings are saved to your Pekora account.</p><button class="button secondary" id="clearAvatar" type="button">Reset Avatar</button></section><section class="avatar-wardrobe"><h2>My Wardrobe</h2><div class="avatar-category-tabs" id="avatarCategories"></div><div id="avatarWardrobe" class="avatar-wardrobe-grid">Loading inventory...</div></section></div></div>';
- let wardrobe=[],equipped={},activeCategory="Hats";
- try{
-  const [a,i]=await Promise.all([api("/api/avatar"),api("/api/inventory")]);
-  equipped=a.avatar||{};wardrobe=i.items||[];
- }catch(e){document.getElementById("avatarWardrobe").textContent=e.message;return}
- async function renderAvatar(){
-  const container=document.getElementById("avatarPreview");
-  if(!container)return;
-  const worn=AVATAR_CATEGORIES.map(category=>wardrobe.find(x=>x.id===equipped[category])).filter(Boolean);
-  await render3DAvatar(container,worn);
- }
+ if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your avatar.</div>';return}
+ app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1><a class="button" href="#catalog" data-page="catalog">Catalog</a></div>'+
+  '<div class="avatar-editor-layout"><section class="avatar-preview-panel"><h2>Avatar</h2><div class="avatar-original-thumbnail">'+avatar(me.username)+'</div>'+
+  '<p class="muted">Original OpenPekora avatar rendering is not connected in this deployment.</p>'+
+  '<p class="muted">The real avatar editor requires the Avatar API, Thumbnails API and RCC renderer. This page does not fake equipped items.</p></section>'+
+  '<section class="avatar-wardrobe"><h2>Inventory</h2><div class="avatar-category-tabs" id="avatarCategories"></div><div id="avatarWardrobe" class="avatar-wardrobe-grid">Loading inventory...</div></section></div></div>';
+ let wardrobe=[],activeCategory="Hats";
+ try{const d=await api("/api/inventory");wardrobe=d.items||[]}
+ catch(e){document.getElementById("avatarWardrobe").textContent=e.message;return}
  function renderWardrobe(){
   document.getElementById("avatarCategories").innerHTML=AVATAR_CATEGORIES.map(c=>'<button type="button" class="avatar-category '+(c===activeCategory?"active":"")+'" data-avatar-category="'+c+'">'+c+'</button>').join("");
-  const own=wardrobe.filter(x=>x.category===activeCategory),selected=equipped[activeCategory];
+  const own=wardrobe.filter(x=>x.category===activeCategory);
   document.getElementById("avatarWardrobe").innerHTML=own.length?own.map(x=>'<article class="avatar-wardrobe-item">'+
    '<div class="avatar-wardrobe-image">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name)+'" loading="lazy">':'<span>'+esc(x.category)+'</span>')+'</div>'+
    '<div class="avatar-wardrobe-name">'+esc(x.name)+'</div>'+
-   (selected===x.id&&x.asset_kind!=="IMAGE_ONLY"?'<span class="avatar-wearing-label">Wearing</span>':(x.asset_kind==="MODEL_3D"||x.asset_kind==="FACE_TEXTURE")?'<button type="button" class="button" data-wear-item="'+esc(x.id)+'">Wear</button>':'<span class="avatar-preview-only-label">Preview only — not wearable</span>')+
-   '</article>').join(""):'<div class="avatar-wardrobe-empty">You do not own any '+esc(activeCategory.toLowerCase())+' yet. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+   '<span class="avatar-preview-only-label">Inventory item — avatar service unavailable</span>'+
+   '</article>').join(""):'<div class="avatar-wardrobe-empty">No '+esc(activeCategory.toLowerCase())+' in your inventory.</div>';
   document.querySelectorAll("[data-avatar-category]").forEach(b=>b.addEventListener("click",()=>{activeCategory=b.dataset.avatarCategory;renderWardrobe()}));
-  document.querySelectorAll("[data-wear-item]").forEach(b=>b.addEventListener("click",()=>wearAvatarItem(b.dataset.wearItem)));
  }
- async function wearAvatarItem(itemId){
-  try{const d=await api("/api/avatar",{method:"PUT",body:JSON.stringify({equipped:{[activeCategory]:itemId}})});equipped=d.avatar||equipped;await renderAvatar();renderWardrobe();toast("Avatar updated")}
-  catch(e){toast(e.message)}
- }
- document.getElementById("clearAvatar").addEventListener("click",async()=>{
-  try{const cleared=Object.fromEntries(AVATAR_CATEGORIES.map(c=>[c,null]));const d=await api("/api/avatar",{method:"PUT",body:JSON.stringify({equipped:cleared})});equipped=d.avatar||{};await renderAvatar();renderWardrobe();toast("Avatar reset")}
-  catch(e){toast(e.message)}
- });
- renderWardrobe();await renderAvatar();
+ renderWardrobe();
 }
-function comingSoon(name){renderSidebar(name.toLowerCase());app.innerHTML='<h1 class="page-title">'+esc(name)+'</h1><div class="section-box muted-box">'+esc(name)+' features are not available yet.</div>'}
 async function friends(){
  renderSidebar("friends");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view friends.</div>';return}
