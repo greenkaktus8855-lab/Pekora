@@ -9,7 +9,23 @@ const isActiveView=view=>view===activeView;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function api(path,options={}){const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||"Something went wrong");return data}
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
-function avatar(username=me?.username){const src=String(username||"").toLowerCase()==="koqumo"?"https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png":"https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/generic.svg";return '<img class="avatar-render" src="'+src+'" alt="User avatar" loading="lazy">' }
+function avatar(username=me?.username){
+ const isKoqumo=String(username||"").toLowerCase()==="koqumo";
+ if(!isKoqumo)return '<span class="avatar-render avatar-placeholder" role="img" aria-label="Avatar thumbnail unavailable"><span class="icon-nav-profile"></span></span>';
+ return '<img class="avatar-render avatar-real" src="https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png" alt="User avatar" loading="lazy">';
+}
+document.addEventListener("error",event=>{
+ const image=event.target;
+ if(!image.classList?.contains("avatar-real"))return;
+ const placeholder=document.createElement("span");
+ placeholder.className="avatar-render avatar-placeholder";
+ placeholder.setAttribute("role","img");
+ placeholder.setAttribute("aria-label","Avatar thumbnail unavailable");
+ const icon=document.createElement("span");
+ icon.className="icon-nav-profile";
+ placeholder.append(icon);
+ image.replaceWith(placeholder);
+},true);
 const AVATAR_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 
 function renderSidebar(active="home"){
