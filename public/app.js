@@ -1269,7 +1269,7 @@ async function avatarPage(){
     button.addEventListener("click",()=>copyToClipboard(button.dataset.copyAvatarId,"Item ID copied"));
    });
    document.getElementById("copyAvatarItemIds")?.addEventListener("click",()=>{
-    const ids=equipped.map(item=>Number(item.asset_id||0)).filter(id=>Number.isSafeInteger(id)&&id>0);
+    const ids=equipped.map(item=>Number(item.asset_id||0)>0?String(item.asset_id):String(item.id||"")).filter(Boolean);
     if(!ids.length){toast("No Roblox asset IDs on equipped items.");return;}
     copyToClipboard(ids.join(", "),"All avatar asset IDs copied");
    });
