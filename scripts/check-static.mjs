@@ -30,6 +30,9 @@ const globals = fs.readFileSync(path.join(root, "public/openpekora-globals.css")
 const components = fs.readFileSync(path.join(root, "public/openpekora-components.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
 const wrangler = fs.readFileSync(path.join(root, "wrangler.toml"), "utf8");
+const rccLauncher = fs.readFileSync(path.join(root, "scripts/start-rcc-2020.ps1"), "utf8");
+const secureRendererLauncher = fs.readFileSync(path.join(root, "scripts/start-renderer-secure.ps1"), "utf8");
+const legacyRccLauncher = fs.readFileSync(path.join(root, "tools/windows-rcc-host/start-rcc-fixed.ps1"), "utf8");
 const checks = [
   ["API body limit", worker.includes("const maxBytes = 16 * 1024")],
   ["HTTPS-only new catalog images", worker.includes("Image URL must use HTTPS.")],
@@ -68,7 +71,7 @@ const checks = [
   ["trade picker only displays Limited or Off Sale items", app.includes("items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1)") && app.includes("ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target)")],
   ["Sakura Home panels use dark surfaces", components.includes("#app .sakura-home-card{") && components.includes("background:#15151c!important") && components.includes("background:#202027!important")],
   ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
-  ["Sakura app cache version is refreshed", index.includes("app.js?v=20261103-sakura-avatar-2") && index.includes("openpekora-components.css?v=20261103-sakura-home-avatar-2")],
+  ["Sakura app cache version is refreshed", index.includes("app.js?v=20261103-sakura-avatar-3") && index.includes("openpekora-components.css?v=20261103-sakura-home-avatar-2")],
   ["Sakura theme primary accents are violet", globals.includes("rgb(166, 77, 255)") && globals.includes("rgba(106,27,177,1)") && !globals.includes("rgb(0, 162, 255)") && !globals.includes("rgba(8,79,192,1)")],
   ["promo codes can grant currency and multiple catalog items", worker.includes("CREATE TABLE IF NOT EXISTS promo_code_items") && worker.includes("reward_currency") && app.includes("ownerPromoItems")],
   ["promo codes enforce use limits and expiry", worker.includes("max_uses IS NULL") && worker.includes("expires_at") && app.includes('name="max_uses"') && app.includes('type="datetime-local"')],
@@ -77,6 +80,10 @@ const checks = [
   ["Premium and OBC require accounts older than three days", worker.includes("Date.now() - createdAtMs <= 3 * 24 * 60 * 60 * 1000") && worker.includes("datetime(u.created_at)<datetime('now','-3 days')") && app.includes("canUseAdvancedMemberships") && app.includes("OBC and Premium unlock")],
   ["avatar editor, wardrobe and profile thumbnails are restored", app.includes("async function avatarPage()") && app.includes("avatarSkinTones") && app.includes("op-profile-render-image") && app.includes("else if(name===\"avatar\")await avatarPage()") && worker.includes("/api/avatar/thumbnail/") && worker.includes("/v1.1/avatar-fetch") && worker.includes("equipped_items") && wrangler.includes("/v1.1/*")],
   ["skin tone and advanced body colors persist in D1", worker.includes("CREATE TABLE IF NOT EXISTS avatar_settings") && worker.includes("body_colors") && worker.includes("AVATAR_COLOR_IDS")],
+  ["OpenPekora full body color palette is available", app.includes("const bodyPalette=") && app.includes("data-avatar-part-tone") && worker.includes("AVATAR_COLOR_IDS = new Set([")],
+  ["RCCService uses the OpenPekora 2020 port map", rccLauncher.includes("1621, 2621, 3621, 4621") && rccLauncher.includes("127.0.0.1") && rccLauncher.includes("New-NetFirewallRule")],
+  ["Renderer is secret-protected and loopback-only", secureRendererLauncher.includes("timingSafeEqual") && secureRendererLauncher.includes("x-pekora-renderer-secret") && secureRendererLauncher.includes("127.0.0.1")],
+  ["Legacy RCC launcher delegates to the corrected setup", legacyRccLauncher.includes("scripts\\start-rcc-2020.ps1") && !legacyRccLauncher.includes("$port = 64989")],
   ["avatar render cache invalidates when appearance changes", worker.includes("bodyColors:settings.bodyColors") && worker.includes("rigType:settings.rigType") && worker.includes("scales:settings.scales")],
 
 ];
