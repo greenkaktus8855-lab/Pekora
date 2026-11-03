@@ -13,5 +13,9 @@ database_name = "pekora-db"
 database_id = "46cf2725-2ea1-4da3-9e9e-ffe30f6674f0"
 migrations_dir = "migrations"
 
+[triggers]
+# Fire at 00:00 Europe/Kyiv across standard time and daylight saving time.
+crons = ["0 21 * * *", "0 22 * * *"]
+
 [vars]
 SITE_NAME = "Sakura"
