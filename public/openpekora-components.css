@@ -1,58 +1,150 @@
 /*
- * OpenPekora component styling port for Sakura.
- * Adapted from Blue7366/OpenPekora:
- * - frontend/components/myDashboard/index.js
- * - frontend/components/navSidebar/index.js
- * - frontend/components/userProfile/styles/card.js
- * - frontend/components/userProfile/components/profileHeader.js
- * - frontend/components/horizontalTabs/index.js
- * This file restores OpenPekora's simple square sections, rows and form layout.
- * Sakura's existing dark-violet palette and button colors are intentionally retained.
+ * Sakura component layer restored to the classic OpenPekora layout.
+ * Source references: Blue7366/OpenPekora frontend components and
+ * frontend/styles/roblox/icons.css. Functional markup and Sakura theme kept.
  */
 
 :root{
   --op-surface:#15151c;
-  --op-surface-alt:#202027;
-  --op-border:#30303b;
-  --op-copy:#f1eef7;
+  --op-surface-raised:#1b1b23;
+  --op-surface-muted:#202027;
+  --op-line:#34343f;
+  --op-text:#f1eef7;
   --op-muted:#aaa5b5;
-  --op-violet:#a64dff;
-  --op-violet-soft:#251a33;
+  --op-link:#c18aff;
+  --op-accent:#a64dff;
+  --op-violet:#6b2eb5;
+  --op-violet-soft:#30203f;
 }
 
-/* OpenPekora dashboard: title rows followed by plain section-content panels */
+/* OpenPekora's classic page width and typography */
+#app{
+  width:100%;
+  max-width:970px;
+  min-width:0;
+  margin:0 auto;
+  padding:0;
+  color:var(--op-text);
+  font-family:'Source Sans Pro',Arial,sans-serif;
+  font-size:14px;
+  line-height:1.4;
+}
+#app :where(h1,h2,h3,h4,h5,h6,p,span,small,label,strong,em,li,td,th){
+  text-shadow:none!important;
+}
+#app .page-title{
+  margin:0 0 12px;
+  padding:0;
+  color:var(--op-text)!important;
+  font-size:32px;
+  font-weight:700;
+  line-height:1.4;
+}
+#app .page-subtitle{
+  margin:-5px 0 16px;
+  color:var(--op-muted)!important;
+  font-size:14px;
+}
+#app .muted,
+#app .page-subtitle,
+#app .inventory-sell-intro,
+#app .item-stock-text,
+#app .item-detail-stock,
+#app .op-profile-meta,
+#app .op-profile-id,
+#app .people-user-info span{
+  color:var(--op-muted)!important;
+}
+#app a:not(.button):not(.primary):not(.trade-select-item){
+  color:var(--op-link)!important;
+  text-decoration:none;
+}
+#app a:not(.button):not(.primary):not(.trade-select-item):hover{
+  color:var(--op-link)!important;
+  text-decoration:underline;
+}
+
+/* Original dashboard sections: heading above a simple content panel */
 #app .op-dashboard{
   width:100%;
   max-width:970px;
   margin:0 auto;
   padding-top:12px;
 }
+#app .op-home-header{
+  display:flex;
+  align-items:center;
+  min-height:150px;
+  margin:0 0 12px;
+  gap:20px;
+}
+#app .op-home-avatar,
+#app .home-avatar{
+  display:block;
+  width:150px;
+  height:150px;
+  flex:0 0 150px;
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  border:0;
+  border-radius:50%;
+  background:var(--op-surface-muted)!important;
+  box-shadow:0 1px 4px rgba(0,0,0,.35)!important;
+}
+#app .op-home-avatar img,
+#app .home-avatar img{
+  display:block;
+  width:100%;
+  height:100%;
+  border:0;
+  border-radius:50%;
+  object-fit:cover;
+}
+#app .op-home-header h1,
+#app .op-home-header h1 a{
+  margin:0;
+  color:var(--op-text)!important;
+  font-size:36px;
+  font-weight:800;
+  line-height:1;
+}
+#app .home-balances{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  margin-top:8px;
+}
 #app .op-dashboard-section{
-  margin:0 0 18px;
   min-width:0;
+  margin:0 0 18px;
 }
 #app .op-section-heading{
   display:flex;
-  justify-content:space-between;
   align-items:center;
-  padding:0 0 5px;
+  justify-content:space-between;
   margin:0;
+  padding:0 0 5px;
   border:0;
 }
 #app .op-section-heading h3{
   margin:0;
+  color:var(--op-text)!important;
   font-size:24px;
   font-weight:700;
   line-height:1.4;
 }
-#app .op-section-content{
-  background:var(--op-surface)!important;
+#app .op-section-content,
+#app .section-content{
+  min-height:72px;
+  margin:0 0 18px;
+  padding:15px;
   border:0!important;
   border-radius:0!important;
+  background:var(--op-surface)!important;
+  color:var(--op-text)!important;
   box-shadow:0 1px 4px rgba(0,0,0,.35)!important;
-  padding:15px!important;
-  margin:0 0 18px!important;
-  min-height:72px;
   text-align:left;
   font-size:16px;
   font-weight:400;
@@ -60,19 +152,61 @@
 }
 #app .op-empty,
 #app .empty,
-#app .op-profile-empty{
-  background:var(--op-surface-alt)!important;
-  color:var(--op-muted)!important;
+#app .op-profile-empty,
+#app .section-content-off{
+  margin:0;
+  padding:15px;
   border:0!important;
   border-radius:0!important;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-muted)!important;
   box-shadow:none!important;
-  padding:15px;
   text-align:center;
   font-size:16px;
+  font-weight:400;
   line-height:1.4;
 }
+#app .op-home-friends{
+  display:flex;
+  align-items:flex-start;
+  flex-wrap:wrap;
+  gap:14px;
+}
+#app .op-home-friend{
+  display:flex;
+  flex:0 0 74px;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  overflow:hidden;
+  color:var(--op-link)!important;
+  font-size:12px;
+  text-decoration:none;
+}
+#app .op-home-friend img{
+  display:block;
+  width:54px;
+  height:54px;
+  border-radius:50%;
+  background:var(--op-surface-muted);
+  object-fit:cover;
+}
+#app .op-home-friend span{
+  width:100%;
+  overflow:hidden;
+  color:inherit;
+  text-align:center;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+#app .op-home-items{
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:10px;
+}
+#app .op-home-items .item-image{max-width:105px}
 
-/* OpenPekora profile structure and headings */
+/* Profile: the original OpenPekora portrait, metadata and relationship rows */
 #app .op-profile{
   width:100%;
   max-width:970px;
@@ -82,36 +216,38 @@
   display:flex;
   align-items:flex-start;
   gap:20px;
-  padding:12px 0 18px;
   margin:0;
+  padding:12px 0 18px;
 }
 #app .op-profile-avatar{
   width:128px;
   height:128px;
   flex:0 0 128px;
   overflow:hidden;
-  border:1px solid var(--op-border)!important;
+  border:1px solid var(--op-line)!important;
   border-radius:50%!important;
-  background:var(--op-surface-alt)!important;
+  background:var(--op-surface-muted)!important;
   box-shadow:none!important;
 }
 #app .op-profile-avatar img{
   display:block;
   width:100%;
   height:100%;
-  object-fit:cover;
   border-radius:50%;
+  object-fit:cover;
 }
 #app .op-profile-info{min-width:0}
 #app .op-profile-info h1{
   margin:0;
   padding:5px 0;
+  color:var(--op-text)!important;
   font-size:32px;
   font-weight:800;
   line-height:1.1;
 }
 #app .op-profile-info p{
   margin:8px 0;
+  color:var(--op-text)!important;
   font-size:16px;
   line-height:1.4;
   white-space:pre-wrap;
@@ -121,29 +257,35 @@
   color:var(--op-muted)!important;
   font-size:13px;
 }
+#app .op-profile-id strong{color:var(--op-text)!important;font-weight:600}
 #app .op-profile-stats{
   display:flex;
   flex-wrap:wrap;
   gap:20px;
-  font-size:13px;
   color:var(--op-muted)!important;
+  font-size:13px;
 }
 #app .op-profile-stats b{
+  color:var(--op-text)!important;
   font-size:15px;
   font-weight:700;
 }
-#app .op-profile-section{
+#app .op-profile-section,
+#app .friends-section{
   margin:0 0 20px;
   padding:0;
-  background:transparent;
   border:0;
+  border-radius:0;
+  background:transparent;
   box-shadow:none;
 }
 #app .op-profile-section h2,
 #app .friends-section h2{
   margin:0 0 8px;
   padding:0 0 5px;
-  border-bottom:1px solid var(--op-border);
+  border:0;
+  border-bottom:1px solid var(--op-line);
+  color:var(--op-text)!important;
   font-size:22px;
   font-weight:700;
   line-height:1.4;
@@ -154,52 +296,20 @@
   gap:12px;
 }
 #app .op-profile-items .item-card{padding:4px}
-#app .op-profile-items .item-image{max-width:132px}
 
-/* Keep thumbnails and player headshots close to original OpenPekora proportions */
-#app .op-home-avatar,
-#app .home-avatar,
-#app .people-avatar,
-#app .op-home-friend img{
-  border-radius:50%;
+/* Catalog: original two-column browse rail and simple thumbnail grid */
+#app .catalog-page{
+  width:100%;
+  max-width:970px;
+  margin:0 auto;
 }
-#app .side-avatar,
-#app .op-sidebar .side-avatar{
-  border-radius:50%!important;
-  overflow:hidden;
-}
-#app .item-image,
-#app .item-detail-image,
-#app .avatar-wardrobe-image,
-#app .owner-item-thumb,
-#app .owner-game-thumb,
-#app .game-thumbnail,
-#app .game-thumbnail-empty{
-  border-radius:0!important;
-  background:var(--op-surface-alt)!important;
-  border:1px solid var(--op-border)!important;
-  box-shadow:none!important;
-}
-#app .item-image img,
-#app .item-detail-image img,
-#app .avatar-wardrobe-image img,
-#app .owner-item-thumb img,
-#app .owner-game-thumb img,
-#app .game-thumbnail img{
-  border-radius:0!important;
-}
-
-/* Catalog uses the original two-column browse layout, not a floating card grid */
-#app .catalog-page{width:100%;max-width:970px;margin:0 auto}
-#app .catalog-container,
-#app .catalog-layout,
-#app .catalog-results{
-  background:transparent!important;
+#app .catalog-container{
+  padding:2px 4px;
   border:0!important;
   border-radius:0!important;
+  background:transparent!important;
   box-shadow:none!important;
 }
-#app .catalog-container{padding:2px 4px}
 #app .catalog-title-row{
   display:grid;
   grid-template-columns:190px minmax(0,1fr);
@@ -208,6 +318,31 @@
   margin:8px 0 4px;
   padding:0 6px;
 }
+#app .catalog-title{
+  margin:0 0 8px;
+  color:var(--op-text)!important;
+  font-size:32px;
+  font-weight:700;
+  line-height:1.4;
+}
+#app .catalog-input-form{
+  display:grid;
+  grid-template-columns:minmax(100px,1fr) 145px 90px;
+  align-items:center;
+  gap:4px;
+}
+#app .catalog-input,
+#app .catalog-select{
+  width:100%;
+  height:30px;
+  padding:2px 6px;
+  border:1px solid #41414d;
+  border-radius:0;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-text)!important;
+  font-size:14px;
+}
+#app .catalog-search-button{height:30px;padding:2px 8px}
 #app .catalog-body{
   display:grid;
   grid-template-columns:190px minmax(0,1fr);
@@ -221,78 +356,269 @@
 #app .catalog-navigation .divider-right{
   min-height:400px;
   padding-right:8px;
-  border-right:1px solid var(--op-border);
+  border-right:1px solid var(--op-line)!important;
 }
-#app .catalog-browse-title,
-#app .catalog-results-header{
-  border-bottom:1px solid var(--op-border)!important;
-  border-radius:0!important;
-  box-shadow:none!important;
-}
-#app .catalog-results{min-width:0;padding:8px 8px 12px 12px}
-#app .catalog-results .item-grid{
-  grid-template-columns:repeat(4,minmax(0,1fr));
-  gap:8px;
-}
-#app .catalog-results .item-card{
-  padding:0 3px 8px;
+#app .catalog-browse-title{
+  margin:0 0 8px;
+  padding:4px 4px 9px;
   border:0;
-  border-radius:0;
-  background:transparent;
-  box-shadow:none;
+  border-bottom:1px solid var(--op-line);
 }
-#app .catalog-results .item-image{
-  width:100%;
-  max-width:132px;
-  margin:0 auto 5px;
+#app .catalog-browse-title p{
+  margin:0;
+  color:var(--op-muted)!important;
+  font-size:12px;
+  font-weight:600;
+  line-height:1.2;
+}
+#app .catalog-browse-title h2{
+  margin:0;
+  color:var(--op-text)!important;
+  font-size:20px;
+  font-weight:700;
+  line-height:1.2;
+}
+#app .catalog-categories{
+  display:flex;
+  flex-direction:column;
+  gap:0;
 }
 #app .catalog-categories a{
   display:block;
   padding:5px 6px;
+  border:0;
   border-bottom:1px solid rgba(170,165,181,.13);
   border-radius:0!important;
-  background:transparent;
+  background:transparent!important;
+  color:var(--op-link)!important;
+  font-size:14px;
+  text-decoration:none!important;
+}
+#app .catalog-categories a:hover{
+  background:rgba(166,77,255,.08)!important;
+  color:#d9b8ff!important;
+  text-decoration:underline!important;
 }
 #app .catalog-categories a.active{
-  background:rgba(166,77,255,.12)!important;
-  color:var(--op-copy)!important;
+  background:rgba(166,77,255,.13)!important;
+  color:var(--op-text)!important;
+  font-weight:700;
 }
 #app .catalog-legend{
-  border-top:1px solid var(--op-border);
-  border-radius:0;
+  margin-top:16px;
+  padding:10px 4px 0;
+  border:0;
+  border-top:1px solid var(--op-line);
+  color:var(--op-muted)!important;
+  font-size:12px;
 }
+#app .catalog-legend strong{display:block;color:var(--op-text)!important;font-size:14px}
+#app .catalog-legend p{margin:3px 0 0;color:var(--op-muted)!important;font-size:12px}
+#app .catalog-results{
+  min-width:0;
+  padding:8px 8px 12px 12px;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+#app .catalog-results-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:10px;
+  margin:0 0 10px;
+  border:0;
+  border-bottom:1px solid var(--op-line);
+}
+#app .catalog-results-header h2{
+  margin:0 0 5px;
+  color:var(--op-text)!important;
+  font-size:18px;
+  font-weight:700;
+}
+#app .catalog-results-header p{margin:0 0 5px;color:var(--op-muted)!important;font-size:12px}
+#app .catalog-sort-label{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  color:var(--op-text)!important;
+  font-size:12px;
+  font-weight:600;
+  white-space:nowrap;
+}
+#app .catalog-sort{
+  max-width:180px;
+  height:28px;
+  padding:2px 5px;
+  border:1px solid #41414d;
+  border-radius:0;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-text)!important;
+  font-size:12px;
+}
+#app .catalog-results .item-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+}
+#app .item-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+}
+#app .item-card{
+  min-width:0;
+  padding:0 3px 8px;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  text-align:center;
+}
+#app .item-card h3{
+  margin:0 0 2px;
+  color:var(--op-link)!important;
+  font-size:14px;
+  font-weight:500;
+  line-height:18px;
+  overflow-wrap:anywhere;
+}
+#app .item-card .price{
+  margin:2px 0 5px;
+  color:#38d879!important;
+  font-size:14px;
+  font-weight:700;
+}
+#app .item-image{
+  position:relative;
+  display:flex;
+  width:100%;
+  max-width:132px;
+  aspect-ratio:1/1;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  margin:0 auto 5px;
+  border:1px solid var(--op-line)!important;
+  border-radius:0!important;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-muted)!important;
+  box-shadow:none!important;
+}
+#app .item-image img:not(.limited-overlay){
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+#app .catalog-asset-kind{
+  margin:3px 0;
+  color:var(--op-muted)!important;
+  font-size:11px;
+  line-height:1.25;
+}
+#app .item-stock-text{margin:2px 0 5px;color:var(--op-muted)!important;font-size:12px;line-height:1.35}
 
-/* Item detail is the original image-and-information split, with square edges */
+/* Original OpenPekora Limited sprite — local asset, no remote image dependency */
+.icon-labels{
+  display:inline-block;
+  width:164px;
+  height:24px;
+  background-image:url('/icon_labels.svg');
+  background-repeat:no-repeat;
+  background-size:100% auto;
+  vertical-align:middle;
+}
+.icon-labels.Limited{background-position:0 -81px}
+.icon-labels.LimitedUnique{background-position:0 -189px}
+#app .item-image,
+#app .item-detail-image,
+#app .owner-item-thumb{position:relative}
+#app .limited-overlay{
+  position:absolute;
+  z-index:4;
+  left:4px;
+  bottom:4px;
+  display:block;
+  width:110px;
+  height:18px;
+  max-width:calc(100% - 8px);
+  background-size:110px auto;
+  background-position:0 -54px;
+  pointer-events:none;
+}
+#app .item-detail-image .limited-overlay{
+  left:0;
+  bottom:0;
+  width:164px;
+  height:24px;
+  max-width:100%;
+  background-size:164px auto;
+  background-position:0 -81px;
+}
+#app .stock-overlay{
+  position:absolute;
+  right:5px;
+  bottom:5px;
+  z-index:5;
+  padding:3px 6px;
+  border:1px solid var(--op-line);
+  border-radius:0!important;
+  background:rgba(21,21,28,.94)!important;
+  color:#f1eef7!important;
+  font-size:11px;
+  font-weight:700;
+  line-height:1.2;
+  pointer-events:none;
+}
+#app .stock-overlay.sold-out{border-color:#713d48;background:#40232b!important;color:#efc1c8!important}
+
+/* Item detail: OpenPekora's simple thumbnail + information split */
+#app .item-detail-page{width:100%;max-width:970px;margin:10px auto}
+#app .item-back-link{display:inline-block;margin:0 0 12px;color:var(--op-link)!important}
 #app .item-detail-card{
   display:grid;
   grid-template-columns:minmax(220px,320px) minmax(0,1fr);
   gap:24px;
   padding:15px;
-  margin:0;
-  background:var(--op-surface)!important;
   border:0!important;
   border-radius:0!important;
+  background:var(--op-surface)!important;
   box-shadow:0 1px 4px rgba(0,0,0,.35)!important;
 }
 #app .item-detail-image{
+  position:relative;
+  display:flex;
   min-height:260px;
-  border:1px solid var(--op-border)!important;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border:1px solid var(--op-line)!important;
   border-radius:0!important;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-muted)!important;
 }
+#app .item-detail-image img:not(.limited-overlay){
+  display:block;
+  width:100%;
+  height:100%;
+  max-height:360px;
+  object-fit:contain;
+}
+#app .item-detail-info{min-width:0}
 #app .item-detail-info h1{
   margin:0 0 5px;
+  color:var(--op-text)!important;
   font-size:28px;
   font-weight:700;
   line-height:1.2;
 }
-#app .item-detail-info p{margin:12px 0;line-height:1.4}
-#app .item-detail-price{
-  margin:12px 0;
-  font-size:24px;
-  font-weight:700;
-}
+#app .item-detail-info p{margin:12px 0;color:var(--op-text)!important;white-space:pre-wrap}
+#app .item-detail-price{margin:12px 0;color:#38d879!important;font-size:24px;font-weight:700}
+#app .item-detail-info button{min-width:120px}
 
-/* Forms: simple OpenPekora form rows and fields instead of layered mini-cards */
+/* Plain OpenPekora form surfaces, field borders and labels */
 #app .form,
 #app .info-panel,
 #app .info-page,
@@ -301,97 +627,256 @@
 #app .avatar-preview-panel,
 #app .avatar-wardrobe,
 #app .currency-balance-panel{
-  background:var(--op-surface)!important;
+  padding:15px!important;
   border:0!important;
   border-radius:0!important;
+  background:var(--op-surface)!important;
+  color:var(--op-text)!important;
   box-shadow:0 1px 4px rgba(0,0,0,.35)!important;
-  padding:15px!important;
 }
-#app .form{max-width:460px;margin:0 auto}
+#app .form{width:100%;max-width:460px;margin:0 auto}
 #app .form h2,
+#app .info-panel h3,
 #app .owner-section h2,
 #app .avatar-preview-panel h2,
 #app .avatar-wardrobe h2{
   margin:0 0 12px;
   padding:0 0 5px;
-  border-bottom:1px solid var(--op-border);
+  border:0;
+  border-bottom:1px solid var(--op-line);
+  color:var(--op-text)!important;
   font-size:21px;
   font-weight:700;
 }
-#app .owner-section{
-  margin:18px 0;
-}
-#app .owner-item-form,
-#app .owner-user-actions .owner-item-form,
-#app .owner-verify-form{
-  display:grid;
-  gap:10px;
-  margin:12px 0 18px;
-  padding:15px;
-  background:var(--op-surface-alt)!important;
-  border:1px solid var(--op-border)!important;
-  border-radius:0!important;
-  box-shadow:none!important;
-}
-#app .owner-item-form label{
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-  font-size:13px;
+#app .form label,
+#app .owner-item-form label,
+#app .group-create-form label{
+  display:block;
+  margin:10px 0 4px;
+  color:var(--op-text)!important;
+  font-size:14px;
   font-weight:600;
 }
 #app input:not([type=checkbox]):not([type=radio]):not([type=range]),
 #app textarea,
 #app select{
+  min-width:0;
+  border:1px solid #41414d!important;
   border-radius:3px!important;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-text)!important;
+  box-shadow:none!important;
+  outline:none;
+}
+#app input::placeholder,
+#app textarea::placeholder{color:#9993a5!important}
+#app input:focus,
+#app textarea:focus,
+#app select:focus{border-color:var(--op-accent)!important;outline:0}
+#app .error{margin-top:8px;color:#ef999f!important;font-size:14px}
+#app .notice,
+#app .offsale-notice,
+#app .trade-invalid-note,
+#app .account-warning-panel{
+  margin:10px 0;
+  padding:10px 12px;
+  border:1px solid #533776!important;
+  border-radius:0!important;
+  background:#251a33!important;
+  color:#eadcff!important;
   box-shadow:none!important;
 }
-#app .owner-item-row,
-#app .owner-game-row{
+#app .account-warning-panel p{margin:6px 0 0;color:inherit!important}
+#app .info-page{max-width:760px;margin:8px auto}
+#app .info-page p{margin:0 0 14px;color:var(--op-text)!important;font-size:15px;line-height:1.65}
+
+/* Owner panel: compact rows, simple form grid and standard thumbnail column */
+#app .owner-section{margin:18px 0}
+#app .owner-section>p{margin:0 0 8px}
+#app .owner-item-form,
+#app .owner-user-actions .owner-item-form,
+#app .owner-verify-form{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  align-items:end;
+  gap:10px;
+  margin:12px 0 18px;
+  padding:12px;
+  border:0!important;
+  border-radius:0!important;
+  background:var(--op-surface-muted)!important;
+  box-shadow:none!important;
+}
+#app .owner-item-form label{display:flex;flex-direction:column;gap:4px;margin:0;font-size:13px}
+#app .owner-item-form .owner-description{grid-column:span 2}
+#app .owner-item-form button{align-self:end}
+#app .owner-items{display:flex;flex-direction:column;gap:0}
+#app .owner-item-row{
   display:grid;
   grid-template-columns:76px minmax(0,1fr) auto;
+  align-items:start;
   gap:10px;
   margin:0;
   padding:10px 0;
   border:0;
-  border-bottom:1px solid var(--op-border);
+  border-bottom:1px solid var(--op-line);
+  border-radius:0;
+  background:transparent;
+}
+#app .owner-item-thumb,
+#app .owner-game-thumb{
+  display:flex;
+  width:76px;
+  height:76px;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border:1px solid var(--op-line)!important;
+  border-radius:0!important;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-muted)!important;
+}
+#app .owner-item-thumb img{width:100%;height:100%;object-fit:contain}
+#app .owner-item-fields{display:flex;flex-direction:column;gap:5px;min-width:0}
+#app .owner-item-subfields{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(135px,1fr));
+  align-items:center;
+  gap:5px;
+}
+#app .owner-item-subfields select[name=currency]{min-width:88px}
+#app .owner-item-actions{display:flex;flex-direction:column;gap:5px}
+#app .owner-toggle,
+#app .owner-inline-check{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin:0!important;
+  padding:7px 10px;
+  border:1px solid var(--op-line)!important;
+  border-radius:0!important;
+  background:var(--op-surface)!important;
+  color:var(--op-text)!important;
+}
+#app .owner-toggle input[type=checkbox],
+#app .owner-inline-check input[type=checkbox]{
+  width:18px;
+  height:18px;
+  min-width:18px;
+  accent-color:var(--op-accent);
+}
+#app .owner-user-results{display:grid;gap:0;margin:12px 0}
+#app .owner-user-result{
+  display:flex;
+  width:100%;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  border:0!important;
+  border-bottom:1px solid var(--op-line)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:var(--op-text)!important;
+  text-align:left;
+  box-shadow:none!important;
+}
+#app .owner-user-result:hover,
+#app .owner-user-result:focus{background:rgba(166,77,255,.08)!important}
+#app .owner-user-result strong{color:var(--op-text)!important}
+#app .owner-user-result span{color:var(--op-muted)!important;font-size:12px}
+#app .owner-user-details{margin-top:14px}
+#app .owner-user-card h3{margin:0 0 4px;color:var(--op-text)!important}
+#app .owner-user-card h4{margin:14px 0 6px;color:var(--op-text)!important}
+#app .owner-user-card li{margin:6px 0;color:var(--op-text)!important;overflow-wrap:anywhere}
+#app .owner-user-card ul{padding-left:20px}
+
+/* Inventory: classic item grid and compact sale summary */
+#app .inventory-sell-intro{margin:0 0 14px;color:var(--op-muted)!important;font-size:14px}
+#app .inventory-sell-card{
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  align-items:center;
+  gap:5px;
+  padding:0 3px 8px;
+  border:0!important;
   border-radius:0!important;
   background:transparent!important;
   box-shadow:none!important;
+  text-align:center;
 }
-#app .owner-item-actions{display:flex;flex-direction:column;gap:5px}
-#app .owner-user-details{margin-top:14px}
-#app .owner-user-card h3{margin:0 0 4px}
-#app .owner-user-card h4{margin:14px 0 6px}
-#app .owner-user-card ul{padding-left:20px}
-#app .owner-user-card li{margin:6px 0;overflow-wrap:anywhere}
-
-/* Groups and avatar wardrobe use simple thumbnail rows and square separators */
-#app .groups-list,
-#app .owner-items{display:flex;flex-direction:column;gap:0}
-#app .group-card{
+#app .inventory-sell-card.is-selected{
+  background:rgba(166,77,255,.08)!important;
+  outline:1px solid #533776;
+  outline-offset:-1px;
+}
+#app .inventory-sell-card .item-image{width:100%;max-width:132px;margin:0 auto 4px}
+#app .inventory-sell-card h3{width:100%;overflow-wrap:anywhere}
+#app .inventory-item-price{margin:3px 0;color:#d9b8ff!important;font-weight:700}
+#app .inventory-select-button{width:100%;max-width:180px;min-height:32px;padding:6px 10px}
+#app .inventory-sell-panel{
   display:flex;
   align-items:center;
-  gap:14px;
-  margin:0;
-  padding:12px 0;
-  background:transparent!important;
-  border:0!important;
-  border-bottom:1px solid var(--op-border)!important;
+  justify-content:space-between;
+  gap:16px;
+  margin:18px 0 8px;
+  padding:15px;
+  border:1px solid #533776!important;
   border-radius:0!important;
+  background:var(--op-surface)!important;
   box-shadow:none!important;
 }
-#app .group-card-mark{
-  flex:0 0 54px;
-  width:54px;
-  height:54px;
-  border-radius:0!important;
-  background:var(--op-violet-soft)!important;
-  color:#d9b8ff!important;
+#app .inventory-sell-summary{min-width:0}
+#app .inventory-sell-summary strong{color:var(--op-text)!important;font-size:17px}
+#app .inventory-sell-summary p{margin:5px 0 0}
+#app .inventory-sell-summary b{color:#d9b8ff!important}
+#app .inventory-confirm-sell{flex:0 0 auto;min-width:130px;padding:10px 16px}
+#app .inventory-confirm-sell:disabled{opacity:.65}
+
+/* Avatar wardrobe: square thumbnails and tab underline like the original selectors */
+#app .avatar-editor{width:100%;max-width:970px;margin:0 auto}
+#app .avatar-editor-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
 }
-#app .group-card-info{flex:1;min-width:0}
-#app .group-card-info h3{margin:0 0 3px;font-size:18px}
-#app .group-card-info p{margin:0 0 5px;overflow-wrap:anywhere}
+#app .avatar-editor-heading .page-title{margin:0}
+#app .avatar-editor-layout{
+  display:grid;
+  grid-template-columns:280px minmax(0,1fr);
+  align-items:start;
+  gap:16px;
+}
+#app .avatar-preview-panel,
+#app .avatar-wardrobe{min-width:0}
+#app .avatar-preview-panel>p{margin:12px 0}
+#app .avatar-category-tabs{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:stretch;
+  gap:0;
+  margin:0 0 12px;
+  border-bottom:1px solid var(--op-line);
+}
+#app .avatar-category{
+  padding:8px 10px;
+  border:0!important;
+  border-bottom:3px solid transparent!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:var(--op-muted)!important;
+  box-shadow:none!important;
+}
+#app .avatar-category.active{
+  border-bottom-color:var(--op-accent)!important;
+  background:transparent!important;
+  color:var(--op-text)!important;
+}
 #app .avatar-wardrobe-grid{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
@@ -401,35 +886,212 @@
   min-width:0;
   padding:8px 6px;
   border:0!important;
-  border-bottom:1px solid var(--op-border)!important;
+  border-bottom:1px solid var(--op-line)!important;
   border-radius:0!important;
   background:transparent!important;
   text-align:center;
 }
-#app .avatar-wardrobe-empty{
-  background:var(--op-surface-alt)!important;
+#app .avatar-wardrobe-image{
+  display:flex;
+  width:100%;
+  aspect-ratio:1;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border:1px solid var(--op-line)!important;
   border-radius:0!important;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-muted)!important;
+}
+#app .avatar-wardrobe-image img{width:100%;height:100%;object-fit:contain}
+#app .avatar-wardrobe-name{
+  min-height:34px;
+  padding:5px 0;
+  color:var(--op-text)!important;
+  font-size:13px;
+  overflow-wrap:anywhere;
+}
+#app .avatar-wardrobe-empty,
+#app .avatar-wardrobe-no-image{
   padding:24px;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-muted)!important;
+  text-align:center;
+}
+#app .avatar-initials{
+  display:flex;
+  width:100%;
+  height:100%;
+  min-width:0;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border-radius:50%!important;
+  background:#30203f!important;
+  color:#eadcff!important;
+  font-size:18px;
+  font-weight:700;
 }
 
-/* Trades and game rows: flat bordered lists, no modern floating cards or pills */
+/* People and friend lists: rows with separators, no rounded mini-panels */
+#app .people-search{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+#app .people-search .search-input{max-width:420px}
+#app .people-results{
+  background:var(--op-surface)!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:0 1px 4px rgba(0,0,0,.35)!important;
+}
+#app .people-user{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px 14px;
+  border:0;
+  border-bottom:1px solid var(--op-line);
+  border-radius:0!important;
+  background:transparent!important;
+}
+#app .people-avatar{
+  display:grid;
+  width:42px;
+  height:42px;
+  flex:0 0 42px;
+  place-items:center;
+  overflow:hidden;
+  border-radius:50%;
+  background:var(--op-surface-muted)!important;
+}
+#app .people-user-info{display:flex;min-width:0;flex:1;flex-direction:column}
+#app .people-user-info strong{color:var(--op-text)!important;font-size:16px;font-weight:600}
+#app .people-user-info span{color:var(--op-muted)!important;font-size:12px}
+#app .friends-section{margin:18px 0}
+#app .friends-section .people-user{background:transparent!important}
+
+/* Games and groups: the restrained OpenPekora list/card treatment */
+#app .games-page,
+#app .groups-page,
+#app .trades-page,
+#app .currency-page{width:100%;max-width:970px;margin:8px auto}
+#app .games-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:16px}
+#app .game-card{
+  overflow:hidden;
+  border:0!important;
+  border-bottom:1px solid var(--op-line)!important;
+  border-radius:0!important;
+  background:var(--op-surface)!important;
+  box-shadow:none!important;
+}
+#app .game-thumbnail{
+  display:flex;
+  height:145px;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border:1px solid var(--op-line)!important;
+  border-radius:0!important;
+  background:var(--op-surface-muted)!important;
+}
+#app .game-thumbnail img{width:100%;height:100%;object-fit:cover}
+#app .game-thumbnail-empty{font-size:28px;font-weight:900;letter-spacing:3px;color:var(--op-muted)!important}
+#app .game-card-body{padding:12px 0}
+#app .game-card-body h2{margin:0 0 7px;color:var(--op-text)!important;font-size:19px}
+#app .game-card-body p{min-height:38px;color:var(--op-muted)!important;font-size:14px}
+#app .game-locked-button,
+#app .game-locked-button:disabled{
+  display:flex;
+  width:100%;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:8px 12px;
+  border:1px solid var(--op-line)!important;
+  border-radius:0!important;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-muted)!important;
+  box-shadow:none!important;
+  cursor:not-allowed;
+}
+#app .game-lock-icon{width:13px;height:11px;border:2px solid currentColor;border-radius:2px;display:inline-block;position:relative;margin-top:5px}
+#app .game-lock-icon:before{content:"";position:absolute;width:7px;height:7px;border:2px solid currentColor;border-bottom:0;border-radius:7px 7px 0 0;left:1px;top:-9px}
+#app .groups-list{display:flex;flex-direction:column;gap:0}
+#app .group-card{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  margin:0;
+  padding:12px 0;
+  border:0!important;
+  border-bottom:1px solid var(--op-line)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+#app .group-card-mark{
+  display:flex;
+  width:54px;
+  height:54px;
+  flex:0 0 54px;
+  align-items:center;
+  justify-content:center;
+  border:1px solid var(--op-line);
+  border-radius:0!important;
+  background:var(--op-violet-soft)!important;
+  color:#d9b8ff!important;
+  font-size:24px;
+  font-weight:800;
+}
+#app .group-card-info{min-width:0;flex:1}
+#app .group-card-info h3{margin:0 0 3px;color:var(--op-text)!important;font-size:18px}
+#app .group-card-info p{margin:0 0 5px;color:var(--op-text)!important;overflow-wrap:anywhere}
+#app .group-card-info .muted{font-size:12px}
+
+/* Trades: simple rows and square status labels */
+#app .trade-target-form{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+#app .trade-target-form label{display:grid;min-width:220px;flex:1;gap:6px;color:var(--op-text)!important}
+#app .trade-target-form input{padding:8px;border:1px solid #41414d}
+#app .trade-builder{margin-top:18px}
+#app .trade-pick-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+#app .trade-pick-list{
+  display:grid;
+  max-height:320px;
+  gap:0;
+  overflow:auto;
+  padding:8px;
+  border:1px solid var(--op-line)!important;
+  border-radius:0!important;
+  background:var(--op-surface)!important;
+}
+#app .trade-select-item{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:7px 4px;
+  border:0;
+  border-bottom:1px solid rgba(170,165,181,.13);
+  border-radius:0!important;
+  background:transparent!important;
+  color:var(--op-text)!important;
+  cursor:pointer;
+}
+#app .trade-select-item img{width:34px;height:34px;border-radius:0;object-fit:cover}
 #app .trade-list{display:grid;gap:0}
 #app .trade-card{
   padding:14px 0;
-  background:var(--op-surface)!important;
   border:0!important;
-  border-bottom:1px solid var(--op-border)!important;
+  border-bottom:1px solid var(--op-line)!important;
   border-radius:0!important;
+  background:var(--op-surface)!important;
   box-shadow:none!important;
 }
 #app .trade-card-heading{
   display:flex;
-  justify-content:space-between;
   align-items:center;
+  justify-content:space-between;
   gap:12px;
-  margin:0 0 10px;
+  margin:0 0 12px;
   padding:0 0 6px;
-  border-bottom:1px solid var(--op-border);
+  border-bottom:1px solid var(--op-line);
 }
 #app .trade-status,
 #app .trade-status-accepted,
@@ -437,68 +1099,54 @@
 #app .trade-status-cancelled{
   display:inline-block;
   padding:2px 6px;
-  border:1px solid var(--op-border);
+  border:1px solid var(--op-line);
   border-radius:0!important;
   background:transparent!important;
   color:var(--op-muted)!important;
   font-size:12px;
-  font-weight:600;
+  font-weight:700;
 }
-#app .trade-status-accepted{color:#8bd7aa!important;border-color:#315a43}
+#app .trade-status-accepted{border-color:#315a43;color:#8bd7aa!important}
 #app .trade-status-declined,
-#app .trade-status-cancelled{color:#d1b9c0!important;border-color:#5b3c45}
-#app .trade-pick-columns{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:18px;
-}
-#app .trade-pick-list{
-  display:grid;
-  gap:0;
-  max-height:320px;
-  overflow:auto;
-  padding:6px;
-  background:var(--op-surface)!important;
-  border:1px solid var(--op-border)!important;
-  border-radius:0!important;
-}
-#app .trade-select-item{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:7px 4px;
-  background:transparent!important;
-  border:0;
-  border-bottom:1px solid rgba(170,165,181,.13);
-  border-radius:0!important;
-}
-#app .trade-select-item img{border-radius:0!important}
-#app .trade-item-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+#app .trade-status-cancelled{border-color:#5b3c45;color:#d1b9c0!important}
+#app .trade-item-group{margin:10px 0}
+#app .trade-item-list{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
 #app .trade-item-chip{
   display:inline-flex;
   align-items:center;
   gap:6px;
   padding:5px 8px;
-  background:var(--op-surface-alt)!important;
-  border:1px solid var(--op-border);
+  border:1px solid var(--op-line);
   border-radius:0!important;
+  background:var(--op-surface-muted)!important;
+  color:var(--op-text)!important;
   font-size:13px;
 }
-#app .game-card{
-  overflow:hidden;
-  background:var(--op-surface)!important;
-  border:0!important;
-  border-bottom:1px solid var(--op-border)!important;
+#app .trade-item-chip img{width:25px;height:25px;object-fit:cover;border-radius:0}
+#app .trade-limited-tag{
+  margin-left:4px;
+  padding:2px 5px;
+  border:1px solid #533776;
   border-radius:0!important;
-  box-shadow:none!important;
+  background:#30203f!important;
+  color:#d9b8ff!important;
+  font-size:10px;
 }
-#app .game-card-body{padding:12px 0}
-#app .game-card-body h2{font-size:19px;margin:0 0 7px}
-#app .game-card-body p{font-size:14px;min-height:38px;color:var(--op-muted)!important}
-#app .game-thumbnail,
-#app .game-thumbnail-empty{border-radius:0!important}
+#app .trade-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 
-/* Currency follows the original header treatment: icon and amount, not floating chips */
+/* Currency: keep the original icon-and-number presentation, not floating widgets */
+#app .currency-inline{
+  display:inline-flex;
+  max-width:100%;
+  align-items:center;
+  gap:5px;
+  color:inherit;
+  line-height:1.2;
+  vertical-align:middle;
+  white-space:nowrap;
+}
+#app .currency-inline b{color:inherit!important;font-weight:800}
+#app .currency-inline>span{color:inherit!important;font-size:.88em;font-weight:700}
 #app .currency-inline.wallet-chip,
 #app .currency-inline.balance-chip,
 #app .currency-inline.currency-large{
@@ -508,18 +1156,16 @@
   background:transparent!important;
   box-shadow:none!important;
 }
-#app .currency-inline.wallet-chip{font-size:13px}
-#app .currency-inline.balance-chip{font-size:14px}
-#app .currency-inline.currency-large{font-size:24px}
+#app .currency-inline.wallet-chip{color:#fff!important;font-size:13px}
+#app .currency-inline.balance-chip{color:var(--op-text)!important;font-size:14px}
+#app .currency-inline.currency-large{color:var(--op-text)!important;font-size:24px}
+#app .currency-inline.currency-large .currency-icon{width:20px;height:20px;flex-basis:20px}
 #app .header-wallets,
 #app .home-balances,
-#app .currency-balances{
-  display:flex;
-  align-items:center;
-  flex-wrap:wrap;
-  gap:12px;
-}
+#app .currency-balances{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
 #app .currency-page .currency-balances{margin:8px 0 12px}
+#app .currency-balance-panel h2{margin:0 0 8px;font-size:20px;font-weight:700}
+#app .currency-balance-value{display:block;margin:4px 0 10px;color:#38d879!important;font-size:34px;font-weight:700}
 #app .currency-history-list{display:flex;flex-direction:column;gap:0}
 #app .currency-history-row{
   display:flex;
@@ -528,151 +1174,145 @@
   gap:14px;
   padding:10px 0;
   border:0;
-  border-bottom:1px solid var(--op-border);
-  border-radius:0!important;
+  border-bottom:1px solid var(--op-line);
   background:transparent!important;
 }
+#app .currency-history-row>div{display:flex;min-width:0;flex-direction:column}
+#app .currency-history-row strong{color:var(--op-text)!important;overflow-wrap:anywhere}
+#app .currency-history-row b{color:#38d879!important;white-space:nowrap}
+#app .price .currency-inline,
+#app .item-detail-price .currency-inline{color:#38d879!important}
+#app .inventory-item-price .currency-inline,
+#app .inventory-sell-summary .currency-inline{color:#e9ddff!important}
 
-/* Notices and limited labels are rectangular OpenPekora-style information strips */
-#app .notice,
-#app .offsale-notice,
-#app .trade-invalid-note,
-#app .account-warning-panel,
-#app .trade-limited-tag,
-#app .limited-overlay,
-#app .stock-overlay{
-  border-radius:0!important;
-  box-shadow:none!important;
-}
-#app .notice,
-#app .offsale-notice,
-#app .trade-invalid-note,
-#app .account-warning-panel{
-  background:var(--op-violet-soft)!important;
-  border:1px solid #533776!important;
-  color:#eadcff!important;
-}
-#app .trade-limited-tag,
-#app .limited-overlay,
-#app .stock-overlay{
-  border:1px solid #533776!important;
-  background:rgba(37,26,51,.95)!important;
-  color:#eadcff!important;
-  padding:3px 6px;
-}
-
-/* OpenPekora used a top alert strip instead of a floating bottom-right toast */
+/* Toast is a classic fixed alert strip, not a floating glass notification */
 #toast.toast{
+  position:fixed;
+  z-index:1500;
   top:-70px;
   right:auto;
   bottom:auto;
   left:50%;
+  display:none;
   width:calc(100% - 24px);
   max-width:970px;
   padding:15px;
   transform:translateX(-50%);
   border:0;
   border-radius:0!important;
-  box-shadow:none!important;
-  background:#6b2eb5!important;
+  background:var(--op-violet)!important;
   color:#fff!important;
+  box-shadow:none!important;
   text-align:center;
   transition:top .5s ease;
 }
 #toast.toast.show{display:block;top:40px}
 
-/* Keep the original OpenPekora responsive proportions */
+/* Navigation tabs remain tabs, not buttons */
+#app .tabs{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:stretch;
+  gap:0;
+  margin:0 0 14px;
+  border:0;
+  border-bottom:1px solid var(--op-line);
+}
+#app .tabs a{
+  padding:8px 12px;
+  border:0;
+  border-bottom:3px solid transparent;
+  border-radius:0;
+  background:transparent;
+  color:var(--op-muted)!important;
+  font-size:16px;
+}
+#app .tabs a.active,
+#app .tabs a:hover{
+  border-bottom-color:var(--op-accent);
+  background:transparent;
+  color:var(--op-text)!important;
+  text-decoration:none;
+}
+
+/* Keep real image thumbnails square and player headshots circular */
+#app .side-avatar,
+#app .people-avatar,
+#app .op-home-avatar,
+#app .op-profile-avatar{overflow:hidden}
+#app .verified-badge{
+  display:inline-block!important;
+  width:16px!important;
+  height:16px!important;
+  min-width:16px!important;
+  max-width:16px!important;
+  min-height:16px!important;
+  max-height:16px!important;
+  flex:0 0 16px!important;
+  margin:0 0 0 4px!important;
+  border-radius:0!important;
+  background:transparent!important;
+  object-fit:contain!important;
+  vertical-align:-3px!important;
+}
+#app .side-avatar .avatar-initials,
+#app .people-avatar .avatar-initials{border-radius:50%!important}
+
+/* Neutral legacy selectors retained by the application */
+#app .profile-friend-action{margin-top:12px}
+#app .owner-game-row{display:flex;align-items:center;gap:12px;padding:10px 0;border:0;border-bottom:1px solid var(--op-line);border-radius:0;background:transparent}
+#app .owner-game-info{flex:1;min-width:0}
+#app .owner-game-info p{margin:3px 0 0;color:var(--op-muted)!important}
+#app .owner-game-thumb img{width:100%;height:100%;object-fit:cover}
+#app .offsale-notice{display:inline-block;margin:8px 0;padding:6px 10px;font-size:12px;font-weight:700;letter-spacing:.04em}
+#app .limited-overlay,
+#app .stock-overlay{pointer-events:none}
+#app .toast,
+#app .notice{font-family:'Source Sans Pro',Arial,sans-serif}
+
+/* Original OpenPekora proportions on narrow screens */
 @media(max-width:767px){
+  #app .op-home-header{min-height:90px;gap:12px}
+  #app .op-home-avatar,#app .home-avatar{width:90px;height:90px;flex-basis:90px}
+  #app .op-home-header h1,#app .op-home-header h1 a{font-size:26px}
+  #app .op-home-items{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #app .item-grid,
+  #app .catalog-results .item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   #app .op-profile-header{flex-direction:column;align-items:flex-start;gap:10px}
   #app .op-profile-avatar{width:100px;height:100px;flex-basis:100px}
+  #app .op-profile-info h1{font-size:24px}
   #app .op-profile-items{grid-template-columns:repeat(2,minmax(0,1fr))}
   #app .catalog-title-row{grid-template-columns:1fr;gap:0}
   #app .catalog-body{grid-template-columns:120px minmax(0,1fr)}
   #app .catalog-results{padding-left:6px;padding-right:4px}
-  #app .catalog-results .item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #app .catalog-results-header{align-items:flex-start;flex-direction:column}
+  #app .catalog-sort-label{margin-bottom:8px}
+  #app .catalog-sort{max-width:160px}
   #app .item-detail-card{grid-template-columns:1fr;gap:14px}
   #app .item-detail-image{min-height:190px}
+  #app .avatar-editor-layout{grid-template-columns:1fr}
+  #app .avatar-wardrobe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #app .owner-item-form{grid-template-columns:1fr 1fr}
+  #app .owner-item-form .owner-description{grid-column:1/-1}
+  #app .owner-item-row{grid-template-columns:58px minmax(0,1fr)}
+  #app .owner-item-thumb{width:58px;height:58px}
+  #app .owner-item-actions{grid-column:2;flex-direction:row}
+  #app .owner-item-subfields{grid-template-columns:repeat(2,minmax(0,1fr))}
   #app .trade-pick-columns{grid-template-columns:1fr}
 }
 @media(max-width:560px){
-  #app .avatar-wardrobe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   #app .group-card{align-items:flex-start;flex-wrap:wrap}
   #app .group-card-info{flex-basis:calc(100% - 70px)}
+  #app .group-card>button{margin-left:68px}
   #app .trade-target-form{align-items:stretch}
+  #app .trade-target-form button{width:100%}
+  #app .inventory-sell-panel{align-items:stretch;flex-direction:column}
+  #app .inventory-confirm-sell{width:100%}
   #app .owner-game-row{align-items:flex-start}
 }
-
-
-/* Final pass: flatten the remaining custom inventory and owner controls */
-#app .inventory-sell-card{
-  min-width:0;
-  padding:10px 4px;
-  border:0!important;
-  border-bottom:1px solid var(--op-border)!important;
-  border-radius:0!important;
-  background:transparent!important;
-  box-shadow:none!important;
-}
-#app .inventory-sell-card.is-selected{
-  border:1px solid #533776!important;
-  border-radius:0!important;
-  background:rgba(166,77,255,.08)!important;
-  box-shadow:none!important;
-}
-#app .inventory-sell-panel{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:16px;
-  margin:18px 0 8px;
-  padding:15px;
-  background:var(--op-surface)!important;
-  border:1px solid var(--op-border)!important;
-  border-radius:0!important;
-  box-shadow:none!important;
-}
-#app .owner-toggle,
-#app .owner-inline-check{
-  border:1px solid var(--op-border)!important;
-  border-radius:0!important;
-  background:var(--op-surface-alt)!important;
-  color:var(--op-copy)!important;
-  box-shadow:none!important;
-}
-#app .avatar-wardrobe-no-image{
-  border-radius:0!important;
-  background:var(--op-surface-alt)!important;
-  color:var(--op-muted)!important;
-}
-#app .avatar-wardrobe-name{
-  min-height:34px;
-  padding:5px 0;
-  overflow-wrap:anywhere;
-}
-#app .inventory-item-price{color:#d9b8ff!important}
-#app .inventory-sell-summary b{color:#d9b8ff!important}
-#app .stock-overlay{border-radius:0!important;box-shadow:none!important}
-#app .account-warning-panel{border-left:1px solid #533776!important}
-#app .owner-user-result{
-  border-radius:0!important;
-  box-shadow:none!important;
-}
-#app .owner-user-result:hover,
-#app .owner-user-result:focus{
-  background:rgba(166,77,255,.08)!important;
-  border-color:#533776!important;
-  box-shadow:none!important;
-}
-#app .owner-item-subfields,
-#app .owner-item-fields,
-#app .owner-user-actions{
-  border-radius:0!important;
-  box-shadow:none!important;
-}
-@media(max-width:560px){
-  #app .inventory-sell-panel{
-    align-items:stretch;
-    flex-direction:column;
-  }
-  #app .inventory-confirm-sell{width:100%}
+@media(max-width:420px){
+  #app .owner-item-form{grid-template-columns:1fr}
+  #app .owner-item-form .owner-description{grid-column:1}
+  #app .owner-user-result{align-items:flex-start;flex-direction:column}
+  #app .catalog-body{grid-template-columns:105px minmax(0,1fr)}
 }
