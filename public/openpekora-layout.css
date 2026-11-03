@@ -233,3 +233,57 @@ input:focus,textarea:focus,select:focus{
 .avatar-initials{background:#30203f!important;color:#eadcff!important}
 .side-avatar{background:#30203f!important}
 .toast{color:#fff!important}
+
+
+/* Sakura white button surfaces and clean white page typography */
+#app :where(h1,h2,h3,h4,h5,h6,p,span,label,strong,small,li,td,th,legend){
+  color:#f5f3fa!important;
+}
+#sidebar :where(h1,h2,h3,h4,h5,h6,p,span,label,strong,small,li,a){
+  color:#f5f3fa!important;
+}
+.op-footer .footer-inner p,.op-footer .footer-links a{color:#f5f3fa!important}
+#app a:not(.button):not(.primary):not(.trade-select-item){
+  color:#c18aff!important;
+}
+#app .muted,#app .page-subtitle,#app .inventory-sell-intro,
+#app .op-profile-meta,#app .op-profile-id,#app .people-user-info span{
+  color:#aaa5b5!important;
+}
+#app .price,#app .item-detail-price,#app .currency-balance-value,
+#app .home-balance,#app .currency-history-row b{
+  color:#38d879!important;
+}
+
+/* White button backgrounds with readable violet labels */
+#app .button,#app .primary,#app button.button,#app button.primary,
+#app .catalog-search-button,#app input[type="submit"],
+.op-account button,.op-account #registerBtn{
+  background:#fff!important;
+  background-image:none!important;
+  border:1px solid #fff!important;
+  color:#6b2eb5!important;
+  font-weight:700;
+  box-shadow:0 1px 3px rgba(0,0,0,.25);
+}
+#app .button:hover,#app .primary:hover,#app button.button:hover,
+#app button.primary:hover,#app .catalog-search-button:hover,
+.op-account button:hover,.op-account #registerBtn:hover{
+  background:#eee6fa!important;
+  border-color:#d7c4f0!important;
+  color:#54228c!important;
+}
+#app .button:disabled,#app .primary:disabled,
+.op-account button:disabled{
+  background:#d8d4df!important;
+  border-color:#d8d4df!important;
+  color:#777181!important;
+  opacity:1;
+}
+#app .button.secondary{
+  background:#fff!important;
+  color:#6b2eb5!important;
+}
+#app .trade-actions .button,#app .trade-actions .primary{
+  min-height:34px;
+}
