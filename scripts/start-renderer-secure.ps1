@@ -1,10 +1,25 @@
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$rendererDir = Join-Path $repoRoot "game-renderer"
+$candidateRoots = @(
+    $repoRoot,
+    (Join-Path $repoRoot "OpenPekora"),
+    "C:\Pekora-RCC-Host\OpenPekora"
+) | Select-Object -Unique
+$openPekoraRoot = $null
+foreach ($candidate in $candidateRoots) {
+    $candidateRenderer = Join-Path $candidate "game-renderer"
+    if (Test-Path -LiteralPath (Join-Path $candidateRenderer "package.json")) {
+        $openPekoraRoot = $candidate
+        break
+    }
+}
+if (-not $openPekoraRoot) {
+    throw "Could not find the OpenPekora checkout. Expected game-renderer\package.json under C:\Pekora-RCC-Host\OpenPekora or beside this Sakura repository."
+}
+$rendererDir = Join-Path $openPekoraRoot "game-renderer"
 $configPath = Join-Path $rendererDir "config.json"
 $mainPath = Join-Path $rendererDir "src\Main.ts"
-
 if (-not (Test-Path -LiteralPath $mainPath)) {
     throw "OpenPekora Renderer source was not found: $mainPath"
 }
