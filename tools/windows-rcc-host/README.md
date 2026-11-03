@@ -1,18 +1,21 @@
-# Sakura Renderer one-click launcher
+# Sakura / OpenPekora renderer — one-click launcher
 
-This package starts the existing OpenPekora RCCService 2020 workers and the secured HTTP renderer without requiring terminal commands.
+This launcher starts the genuine OpenPekora HTTP renderer and its local RCCService 2020 process.
 
-## Start
+## First launch
 
-1. Extract the complete folder.
-2. Double-click Start-Sakura-Renderer.vbs.
-3. Approve the Windows permission prompt.
-4. If asked, select the OpenPekora folder containing game-renderer and RCCService.
-5. Enter the same private key already configured in the Cloudflare Worker as AVATAR_RENDERER_SECRET.
-6. Wait for the success message, then open Sakura → Avatar → Refresh Preview.
+1. Open `Start-Sakura-Renderer.vbs` with a double-click.
+2. Approve the Windows permission prompt.
+3. If Windows asks for the OpenPekora folder, select the folder containing both `game-renderer` and `RCCService`.
+4. Enter the same value configured in the Cloudflare Worker as `AVATAR_RENDERER_SECRET`.
 
-The launcher keeps RCCService bound to localhost and adds inbound firewall blocks for its ports. It writes diagnostics to %LOCALAPPDATA%\SakuraRenderer\logs.
+The launcher remembers the OpenPekora folder and stores the renderer key protected with Windows DPAPI for the current Windows account. The key is not written as plain text. Later launches should not ask for the folder or key again.
 
-The computer must remain on while the renderer is needed. Cloudflare Tunnel must route renderer.mopcblox.online to the Renderer HTTP port shown in game-renderer\config.json.
+The launcher now checks the actual RCC SOAP `HelloWorld` response after confirming that TCP port 64989 is listening. A TCP listener alone is not considered a successful renderer start. Diagnostic logs are saved under `%LOCALAPPDATA%\SakuraRenderer\logs`, including `rcc-soap-probe.log`.
 
-This launcher does not create a new renderer host in the cloud. It starts the local OpenPekora/RCC components already installed on the Windows computer.
+## Important
+
+- Keep the Windows PC awake while OpenPekora rendering is needed.
+- The Cloudflare Tunnel must route `renderer.mopcblox.online` to the local HTTP renderer port from `game-renderer\config.json`.
+- RCCService's SOAP port must remain local-only. Never publish TCP 64989 directly to the internet.
+- This launcher does not create a cloud host. It starts the OpenPekora/RCC programs already present on the Windows PC.
