@@ -1,0 +1,18 @@
+{
+  "Debug": false,
+  "BaseUrl": "https://sakura.mopcblox.online/",
+  "RCCUrl": "http://127.0.0.1",
+  "Ports": {
+    "Process": 10000,
+    "RCC": {
+      "All": [64989],
+      "Player": [64989],
+      "Image": [64989],
+      "Place": [64989],
+      "Catalog": [64989]
+    }
+  },
+  "Paths": {
+    "RCCService": "../RCCService/RCCService2020"
+  }
+}
