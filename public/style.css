@@ -667,3 +667,12 @@ pekora-avatar-viewer:active{cursor:grabbing}
 .inventory-confirm-sell{flex:0 0 auto;min-width:130px;padding:10px 16px;cursor:pointer}
 .inventory-confirm-sell:disabled{opacity:.65;cursor:wait}
 @media(max-width:560px){.inventory-sell-panel{align-items:stretch;flex-direction:column}.inventory-confirm-sell{width:100%}}
+
+
+/* Off Sale catalog state */
+.offsale-button{cursor:not-allowed!important;opacity:.82}
+.offsale-notice{display:inline-block;margin:8px 0;padding:6px 10px;border:1px solid #d9c4ee;border-radius:4px;background:#f7f0ff;color:#6a1bb1;font-weight:700;font-size:12px;letter-spacing:.04em}
+.owner-inline-check{display:flex;align-items:center;gap:5px;min-width:0;color:#343434;font-size:12px;font-weight:600}
+.owner-inline-check input{width:auto;min-width:auto;margin:0;accent-color:#7b2cbf}
+.owner-item-subfields{grid-template-columns:110px 100px minmax(0,1fr) minmax(0,1fr) 110px 120px 105px}
+@media(max-width:767px){.owner-item-subfields{grid-template-columns:repeat(2,minmax(0,1fr))}}
