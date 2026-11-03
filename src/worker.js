@@ -823,8 +823,9 @@ async function route(request, env) {
     }
     const rendererBase = String(env.AVATAR_RENDERER_URL || "https://renderer.mopcblox.online").trim().replace(/\/+$/,"");
     if (!/^https:\/\//i.test(rendererBase)) return fail("Avatar renderer URL must use HTTPS.",503);
-    const rendererHeaders = {"content-type":"application/json"};
-    if (env.AVATAR_RENDERER_SECRET) rendererHeaders["X-Pekora-Renderer-Secret"] = String(env.AVATAR_RENDERER_SECRET);
+    const rendererSecret = String(env.AVATAR_RENDERER_SECRET || "").trim();
+    if (!rendererSecret) return new Response("Avatar renderer secret is not configured in the Cloudflare Worker.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+    const rendererHeaders = {"content-type":"application/json","X-Pekora-Renderer-Secret":rendererSecret};
     if (env.AVATAR_RENDERER_ACCESS_ID && env.AVATAR_RENDERER_ACCESS_SECRET) {
       rendererHeaders["CF-Access-Client-Id"] = String(env.AVATAR_RENDERER_ACCESS_ID);
       rendererHeaders["CF-Access-Client-Secret"] = String(env.AVATAR_RENDERER_ACCESS_SECRET);
@@ -842,9 +843,10 @@ async function route(request, env) {
       return new Response("OpenPekora renderer is offline. Start the renderer and RCCService on the host PC.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
     }
     if (!rendererResponse.ok) {
-      const detail=(await rendererResponse.text()).slice(0,300);
-      console.error("[Sakura avatar] Renderer returned an error:",rendererResponse.status,detail);
-      return new Response("OpenPekora renderer returned HTTP "+rendererResponse.status+". Check renderer and RCC logs.",{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+      const detail=(await rendererResponse.text()).slice(0,500);
+      const safeDetail=detail.replace(/(secret|token|authorization)(\\s*[:=]\\s*)[^,\\s"]+/gi,"$1$2[redacted]");
+      console.error("[Sakura avatar] Renderer returned an error:",rendererResponse.status,safeDetail);
+      return new Response("OpenPekora renderer returned HTTP "+rendererResponse.status+": "+(safeDetail || "No additional renderer details."),{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store","x-sakura-renderer-status":String(rendererResponse.status)}});
     }
     let rendererPayload;
     try { rendererPayload=await rendererResponse.json(); }
