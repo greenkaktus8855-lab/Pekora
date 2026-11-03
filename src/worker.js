@@ -446,6 +446,69 @@ async function route(request, env) {
       return json({ error:"Catalog database setup failed. Check Worker logs." },503);
     }
   }
+
+  if (request.method === "GET" && path === "/v1.1/avatar-fetch") {
+    const publicId = Number(url.searchParams.get("userId") || 0);
+    const placeId = Number(url.searchParams.get("placeId") || 0);
+    if (!Number.isSafeInteger(publicId) || publicId < 1 || publicId > 2147483647 || !Number.isSafeInteger(placeId) || placeId < 0) {
+      return fail("A valid userId and placeId are required.",400);
+    }
+    const target = await env.DB.prepare("SELECT id,public_id FROM users WHERE public_id=? AND is_banned=0").bind(publicId).first();
+    if (!target) return fail("Avatar not found.",404);
+    const [itemRows,settings] = await Promise.all([
+      env.DB.prepare("SELECT i.asset_id,i.asset_type_id,i.category FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND i.asset_id IS NOT NULL AND i.asset_id>0 ORDER BY e.equipped_at DESC").bind(target.id).all(),
+      loadAvatarSettings(env,target.id)
+    ]);
+    const fallbackTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+    const validAssetTypes = new Set([2,8,11,12,17,18,19,27,28,29,30,31,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,61]);
+    const assets = (itemRows.results||[]).map(item=>({
+      assetId:Number(item.asset_id||0),
+      assetTypeId:Number(item.asset_type_id||fallbackTypes[item.category]||0)
+    })).filter(item=>Number.isSafeInteger(item.assetId)&&item.assetId>0&&Number.isSafeInteger(item.assetTypeId)&&validAssetTypes.has(item.assetTypeId));
+    const c=settings.bodyColors;
+    const bodyColors={
+      headColorId:c.headColorId,torsoColorId:c.torsoColorId,rightArmColorId:c.rightArmColorId,leftArmColorId:c.leftArmColorId,rightLegColorId:c.rightLegColorId,leftLegColorId:c.leftLegColorId,
+      HeadColor:c.headColorId,LeftArmColor:c.leftArmColorId,LeftLegColor:c.leftLegColorId,RightArmColor:c.rightArmColorId,RightLegColor:c.rightLegColorId,TorsoColor:c.torsoColorId
+    };
+    const s=settings.scales;
+    const scales={height:s.height,Height:s.height,width:s.width,Width:s.width,head:s.head,Head:s.head,depth:s.depth,Depth:s.depth,proportion:s.proportion,Proportion:s.proportion,bodyType:s.bodyType,BodyType:s.bodyType};
+    return json({
+      resolvedAvatarType:settings.rigType,
+      accessoryVersionIds:placeId!==0?assets.filter(item=>[8,41,42,43,44,45,46,47].includes(item.assetTypeId)).map(item=>item.assetId):[],
+      equippedGearVersionIds:[],
+      assetAndAssetTypeIds:assets.map(item=>({assetId:item.assetId,assetTypeId:item.assetTypeId})),
+      backpackGearVersionIds:[],animationAssetIds:{},playerAvatarType:settings.rigType,scales,
+      bodyColorsUrl:url.origin+"/Asset/BodyColors.ashx?userId="+publicId,bodyColors,emotes:[]
+    });
+  }
+
+  if (request.method === "GET" && path.toLowerCase() === "/asset/bodycolors.ashx") {
+    const publicId=Number(url.searchParams.get("userId")||0);
+    if(!Number.isSafeInteger(publicId)||publicId<1||publicId>2147483647)return fail("A valid userId is required.",400);
+    const target=await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND is_banned=0").bind(publicId).first();
+    if(!target)return fail("Avatar not found.",404);
+    const c=(await loadAvatarSettings(env,target.id)).bodyColors;
+    const colors={HeadColor:c.headColorId,LeftArmColor:c.leftArmColorId,LeftLegColor:c.leftLegColorId,RightArmColor:c.rightArmColorId,RightLegColor:c.rightLegColorId,TorsoColor:c.torsoColorId};
+    const xmlBody='<?xml version="1.0" encoding="utf-8"?><roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4"><External>null</External><External>nil</External><Item class="BodyColors"><Properties>'+
+      Object.entries(colors).map(([name,value])=>'<int name="'+name+'">'+value+'</int>').join("")+
+      '<string name="Name">Body Colors</string><bool name="archivable">true</bool></Properties></Item></roblox>';
+    return new Response(xmlBody,{status:200,headers:{"content-type":"application/xml; charset=utf-8","cache-control":"public, max-age=60"}});
+  }
+
+  if (request.method === "GET" && /^\/asset\/?$/i.test(path)) {
+    const assetId=Number(url.searchParams.get("id")||0);
+    if(!Number.isSafeInteger(assetId)||assetId<1||assetId>9007199254740991)return fail("A valid asset id is required.",400);
+    const upstreamUrl=new URL("https://assetdelivery.roblox.com/v1/asset/");
+    upstreamUrl.searchParams.set("id",String(assetId));
+    const upstream=await fetch(upstreamUrl.toString(),{redirect:"follow",headers:{"user-agent":"Sakura-OpenPekora-Renderer/1.0"}});
+    if(!upstream.ok)return new Response("Asset could not be loaded.",{status:upstream.status,headers:{"cache-control":"no-store","content-type":"text/plain; charset=utf-8"}});
+    const headers=new Headers();
+    headers.set("content-type",upstream.headers.get("content-type")||"application/octet-stream");
+    headers.set("cache-control","public, max-age=3600, s-maxage=86400");
+    headers.set("x-content-type-options","nosniff");
+    return new Response(upstream.body,{status:200,headers});
+  }
+
   if (request.method === "GET" && path === "/api/health") {
     if (!env.DB) return json({ ok:false, site:"Sakura", database:false, schema:false, error:"D1 binding DB is missing." },503);
     try {
@@ -1584,7 +1647,8 @@ export default {
   },
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/")) {
+    const avatarSupportRoute = url.pathname === "/v1.1/avatar-fetch" || url.pathname.toLowerCase() === "/asset/bodycolors.ashx" || /^\\/asset\\/?$/i.test(url.pathname);
+    if (url.pathname.startsWith("/api/") || avatarSupportRoute) {
       try { return await route(request,env); }
       catch (error) {
         if (error instanceof RequestBodyTooLarge) return fail("Request body must be 16 KB or smaller.",413);
