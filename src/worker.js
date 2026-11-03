@@ -138,6 +138,8 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("DROP TABLE IF EXISTS avatar_render_files"),
         env.DB.prepare("DROP TABLE IF EXISTS avatar_render_users"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', thumbnail_url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS sakura_groups (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, description TEXT NOT NULL DEFAULT '', owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS group_members (group_id TEXT NOT NULL REFERENCES sakura_groups(id) ON DELETE CASCADE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL DEFAULT 'MEMBER' CHECK(role IN ('OWNER','MEMBER')), joined_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(group_id,user_id))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS trades (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, offered_items TEXT NOT NULL DEFAULT '[]', requested_items TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','DECLINED','CANCELLED')), created_at TEXT NOT NULL DEFAULT (datetime('now')), responded_at TEXT)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS trade_locks (owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE CASCADE, PRIMARY KEY(owner_id,item_id))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_trades_sender ON trades(sender_id,status,created_at DESC)"),
@@ -536,7 +538,7 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -581,17 +583,17 @@ async function route(request, env) {
   if (request.method === "GET" && profileIdInventoryMatch) {
     const profile = await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND is_banned=0").bind(Number(profileIdInventoryMatch[1])).first();
     if (!profile) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
     return json({ items:rows.results || [] });
   }
 
   const profileIdMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})$/);
   if (request.method === "GET" && profileIdMatch) {
-    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1) AS total_rap
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.public_id=? AND u.is_banned=0`).bind(Number(profileIdMatch[1])).first();
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,isVerified:Boolean(profile.is_verified)} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap:Number(profile.total_rap||0),isVerified:Boolean(profile.is_verified)} });
   }
 
   const profileInventoryMatch = path.match(/^\/api\/profile\/([A-Za-z0-9_]{1,20})\/inventory$/);
@@ -599,7 +601,7 @@ async function route(request, env) {
     const username = profileInventoryMatch[1];
     const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -608,26 +610,21 @@ async function route(request, env) {
     try { username = decodeURIComponent(path.slice("/api/profile/".length, -"/avatar".length)); }
     catch { return fail("Invalid username.",400); }
     if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return fail("Invalid username.",400);
-    const target = await env.DB.prepare("SELECT u.id,p.avatar_json FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0").bind(username).first();
+    const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!target) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(target.id).all();
-    let render = null;
-    try {
-      const parsed = target.avatar_json ? JSON.parse(target.avatar_json) : null;
-      if (parsed && parsed.camera && parsed.aabb && typeof parsed.obj === "string" && typeof parsed.mtl === "string" && Array.isArray(parsed.textures)) render = parsed;
-    } catch {}
-    return json({equipped:rows.results||[],render});
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(target.id).all();
+    return json({equipped:rows.results||[]});
   }
 
   if (request.method === "GET" && path.startsWith("/api/profile/")) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
     catch { return fail("Invalid username.",400); }
-    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1) AS total_rap
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,isVerified:Boolean(profile.is_verified)} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap:Number(profile.total_rap||0),isVerified:Boolean(profile.is_verified)} });
   }
 
   if (path === "/api/avatar" && request.method === "GET") {
@@ -939,6 +936,65 @@ async function route(request, env) {
     return json({games:rows.results||[]});
   }
 
+  if (path === "/api/groups" && request.method === "GET") {
+    const viewer = await currentUser(request,env);
+    const rows = await env.DB.prepare(`SELECT g.id,g.name,g.description,g.created_at,u.username AS owner_name,
+      COUNT(m.user_id) AS member_count,
+      MAX(CASE WHEN m.user_id=? THEN 1 ELSE 0 END) AS is_member
+      FROM sakura_groups g JOIN users u ON u.id=g.owner_id
+      LEFT JOIN group_members m ON m.group_id=g.id
+      GROUP BY g.id ORDER BY g.created_at DESC,g.name LIMIT 100`).bind(viewer?.id||"").all();
+    return json({groups:rows.results||[]});
+  }
+
+  if (path === "/api/groups" && request.method === "POST") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in to create a group.",401);
+    const data = await body(request);
+    const name = String(data?.name||"").trim();
+    const description = String(data?.description||"").trim();
+    if (!/^[a-z0-9а-яёіїєґ _.-]{3,32}$/i.test(name)) return fail("Group name must be 3–32 characters and use letters, numbers, spaces, dots, underscores or hyphens.");
+    if (description.length>300) return fail("Group description must be 300 characters or less.");
+    const admin = await env.DB.prepare("SELECT id FROM users WHERE username='Admin' COLLATE NOCASE AND is_banned=0").first();
+    if (!admin) return fail("The Admin account could not be found. Group creation is temporarily unavailable.",503);
+    const duplicate = await env.DB.prepare("SELECT id FROM sakura_groups WHERE name=? COLLATE NOCASE").bind(name).first();
+    if (duplicate) return fail("A group with this name already exists.",409);
+    if (Number(user.balance)<100) return fail("Creating a group costs 100 P$.",400);
+
+    const groupId = id();
+    try {
+      const results = await env.DB.batch([
+        env.DB.prepare("INSERT INTO sakura_groups (id,name,description,owner_id) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM users WHERE id=? AND balance>=100) AND EXISTS (SELECT 1 FROM users WHERE id=?) AND NOT EXISTS (SELECT 1 FROM sakura_groups WHERE name=? COLLATE NOCASE)").bind(groupId,name,description,user.id,user.id,admin.id,name),
+        env.DB.prepare("UPDATE users SET balance=balance-100 WHERE id=? AND balance>=100 AND changes()=1").bind(user.id),
+        env.DB.prepare("UPDATE users SET balance=balance+100 WHERE id=? AND changes()=1").bind(admin.id),
+        env.DB.prepare("INSERT INTO group_members (group_id,user_id,role) SELECT ?,?,'OWNER' WHERE changes()=1").bind(groupId,user.id)
+      ]);
+      if (!results?.[0]?.meta?.changes) return fail("Group name is already taken or the group could not be created.",409);
+      if (!results?.[1]?.meta?.changes || !results?.[2]?.meta?.changes || !results?.[3]?.meta?.changes) {
+        console.error("[Sakura groups] Group payment transaction did not complete.");
+        return fail("Group creation could not be completed. Please try again.",500);
+      }
+    } catch (error) {
+      console.error("[Sakura groups] Group creation failed:",error);
+      return fail("A group with this name may already exist. Please try another name.",409);
+    }
+    const updated = await env.DB.prepare("SELECT balance FROM users WHERE id=?").bind(user.id).first();
+    const group = await env.DB.prepare("SELECT g.id,g.name,g.description,g.created_at,u.username AS owner_name,1 AS member_count,1 AS is_member FROM sakura_groups g JOIN users u ON u.id=g.owner_id WHERE g.id=?").bind(groupId).first();
+    return json({ok:true,balance:Number(updated?.balance||0),group},201);
+  }
+
+  const groupJoinPrefix = "/api/groups/";
+  if (path.startsWith(groupJoinPrefix) && path.endsWith("/join") && request.method === "POST") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in to join a group.",401);
+    const groupId = path.slice(groupJoinPrefix.length,-5);
+    if (!/^[A-Za-z0-9-]{1,80}$/.test(groupId)) return fail("Invalid group.");
+    const group = await env.DB.prepare("SELECT id FROM sakura_groups WHERE id=?").bind(groupId).first();
+    if (!group) return fail("Group not found.",404);
+    const result = await env.DB.prepare("INSERT OR IGNORE INTO group_members (group_id,user_id,role) VALUES (?,?, 'MEMBER')").bind(group.id,user.id).run();
+    return json({ok:true,joined:Boolean(result?.meta?.changes)});
+  }
+
   if (path.startsWith("/api/owner/games")) {
     const actor = await requireUser(request,env);
     if (!actor) return fail("Please sign in.",401);
@@ -983,7 +1039,7 @@ async function route(request, env) {
       const loadItems = async (ownerId,ids) => {
         if (!ids.length) return [];
         const marks=ids.map(()=>"?").join(",");
-        const found=await env.DB.prepare(`SELECT i.id,i.name,i.category,i.image_url,i.price,i.is_limited FROM items i WHERE i.id IN (${marks})`).bind(...ids).all();
+        const found=await env.DB.prepare(`SELECT i.id,i.name,i.category,i.image_url,i.price,i.is_limited,i.is_offsale FROM items i WHERE i.id IN (${marks})`).bind(...ids).all();
         return found.results||[];
       };
       trades.push({...row,offeredItems:await loadItems(row.sender_id,offeredIds),requestedItems:await loadItems(row.recipient_id,requestedIds)});
@@ -1006,11 +1062,11 @@ async function route(request, env) {
     const checkOwned=async(ownerId,ids)=>{
       if(!ids.length)return true;
       const marks=ids.map(()=>"?").join(",");
-      const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.is_limited=1 AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
+      const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND (i.is_limited=1 OR i.is_offsale=1) AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
       return (rows.results||[]).length===ids.length;
     };
-    if(!(await checkOwned(user.id,offered)))return fail("You can only offer Limited items that are in your inventory.",409);
-    if(!(await checkOwned(recipient.id,requested)))return fail("You can only request Limited items that are in that player's inventory.",409);
+    if(!(await checkOwned(user.id,offered)))return fail("You can only offer Limited or Off Sale items that are in your inventory.",409);
+    if(!(await checkOwned(recipient.id,requested)))return fail("You can only request Limited or Off Sale items that are in that player's inventory.",409);
     const ownsIncoming=async(ownerId,ids)=>ids.length?await checkOwned(ownerId,ids):false;
     if(await ownsIncoming(recipient.id,offered))return fail("That player already owns an item you offered.",409);
     if(await ownsIncoming(user.id,requested))return fail("You already own an item requested in this trade.",409);
@@ -1039,10 +1095,10 @@ async function route(request, env) {
       const owned=async(ownerId,ids)=>{
         if(!ids.length)return true;
         const marks=ids.map(()=>"?").join(",");
-        const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.is_limited=1 AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
+        const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND (i.is_limited=1 OR i.is_offsale=1) AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
         return (rows.results||[]).length===ids.length;
       };
-      if(!(await owned(trade.sender_id,offered))||!(await owned(trade.recipient_id,requested)))return fail("Only Limited items can be traded. This offer is no longer valid; cancel it and create a new trade.",409);
+      if(!(await owned(trade.sender_id,offered))||!(await owned(trade.recipient_id,requested)))return fail("Only Limited or Off Sale items can be traded. This offer is no longer valid; cancel it and create a new trade.",409);
       if((offered.length&&await owned(trade.recipient_id,offered))||(requested.length&&await owned(trade.sender_id,requested)))return fail("One player already owns an incoming item. Trade cannot be completed.",409);
       const changed=await env.DB.prepare("UPDATE trades SET status='ACCEPTED',responded_at=datetime('now') WHERE id=? AND status='PENDING' AND recipient_id=?").bind(trade.id,user.id).run();
       if(!changed?.meta?.changes)return fail("This trade was already answered.",409);
