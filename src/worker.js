@@ -165,9 +165,6 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_moderation_warnings_user ON moderation_warnings(user_id,created_at DESC)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS owner_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL REFERENCES users(id), target_user_id TEXT REFERENCES users(id) ON DELETE SET NULL, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_owner_audit_target ON owner_audit_log(target_user_id,created_at DESC)"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS equipped_items (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, category TEXT NOT NULL, equipped_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,item_id))"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_render_cache (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, source_hash TEXT NOT NULL, thumbnail_data BLOB NOT NULL, rendered_at TEXT NOT NULL DEFAULT (datetime('now')))"),
-        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_equipped_items_user ON equipped_items(user_id,category)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_friends_friend_status ON friends(friend_id,status)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_items_category_name ON items(category,name)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_items_public_catalog ON items(is_for_sale,category,name)"),
@@ -406,72 +403,17 @@ async function runDailyMembershipPayout(controller,env) {
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
-  const avatarSupportRoute = path === "/v1.1/avatar-fetch" || path.toLowerCase() === "/asset/bodycolors.ashx";
   const apiRoute = path.startsWith("/api/");
-  if ((apiRoute && path !== "/api/health" || avatarSupportRoute) && !env.DB) {
+  if (apiRoute && path !== "/api/health" && !env.DB) {
     return json({ error:"D1 binding DB is missing." },503);
   }
-  if ((apiRoute && path !== "/api/health" || avatarSupportRoute) && env.DB) {
+  if (apiRoute && path !== "/api/health" && env.DB) {
     try { await ensureSiteSettings(env); }
     catch (error) {
       console.error("[Pekora setup] Site settings setup failed:", error);
       return json({ error:"Catalog database setup failed. Check Worker logs." },503);
     }
   }
-  if (request.method === "GET" && path === "/v1.1/avatar-fetch") {
-    const publicId = Number(url.searchParams.get("userId") || 0);
-    const placeId = Number(url.searchParams.get("placeId") || 0);
-    if (!Number.isSafeInteger(publicId) || publicId < 1 || publicId > 2147483647 || !Number.isSafeInteger(placeId) || placeId < 0) {
-      return fail("A valid userId and placeId are required.",400);
-    }
-    const target = await env.DB.prepare("SELECT id,public_id FROM users WHERE public_id=? AND is_banned=0").bind(publicId).first();
-    if (!target) return fail("Avatar not found.",404);
-    const rows = await env.DB.prepare("SELECT i.asset_id,i.asset_type_id,i.category FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND i.asset_id IS NOT NULL AND i.asset_id>0 ORDER BY e.equipped_at DESC").bind(target.id).all();
-    const fallbackTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
-    const validAssetTypes = new Set([2,8,11,12,17,18,19,27,28,29,30,31,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,61]);
-    const assets = (rows.results||[]).map(item=>{
-      const assetId=Number(item.asset_id||0);
-      const assetTypeId=Number(item.asset_type_id||fallbackTypes[item.category]||0);
-      return {assetId,assetTypeId};
-    }).filter(item=>Number.isSafeInteger(item.assetId)&&item.assetId>0&&Number.isSafeInteger(item.assetTypeId)&&validAssetTypes.has(item.assetTypeId));
-    const colors = {headColorId:194,torsoColorId:23,rightArmColorId:194,leftArmColorId:194,rightLegColorId:102,leftLegColorId:102};
-    const bodyColors = {
-      ...colors,
-      HeadColor:colors.headColorId,
-      LeftArmColor:colors.leftArmColorId,
-      LeftLegColor:colors.leftLegColorId,
-      RightArmColor:colors.rightArmColorId,
-      RightLegColor:colors.rightLegColorId,
-      TorsoColor:colors.torsoColorId
-    };
-    const scales = {height:1,Height:1,width:1,Width:1,head:1,Head:1,depth:1,Depth:1,proportion:0,Proportion:0,bodyType:0,BodyType:0};
-    return json({
-      resolvedAvatarType:"R6",
-      accessoryVersionIds:placeId!==0?assets.filter(item=>[8,41,42,43,44,45,46,47].includes(item.assetTypeId)).map(item=>item.assetId):[],
-      equippedGearVersionIds:[],
-      assetAndAssetTypeIds:assets.map(item=>({assetId:item.assetId,assetTypeId:item.assetTypeId})),
-      backpackGearVersionIds:[],
-      animationAssetIds:{},
-      playerAvatarType:"R6",
-      scales,
-      bodyColorsUrl:url.origin+"/Asset/BodyColors.ashx?userId="+publicId,
-      bodyColors,
-      emotes:[]
-    });
-  }
-
-  if (request.method === "GET" && path.toLowerCase() === "/asset/bodycolors.ashx") {
-    const publicId = Number(url.searchParams.get("userId") || 0);
-    if (!Number.isSafeInteger(publicId) || publicId < 1 || publicId > 2147483647) return fail("A valid userId is required.",400);
-    const target = await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND is_banned=0").bind(publicId).first();
-    if (!target) return fail("Avatar not found.",404);
-    const colors = {HeadColor:194,LeftArmColor:194,LeftLegColor:102,RightArmColor:194,RightLegColor:102,TorsoColor:23};
-    const bodyColorXml = '<?xml version="1.0" encoding="utf-8"?><roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4"><External>null</External><External>nil</External><Item class="BodyColors"><Properties>'+
-      Object.entries(colors).map(([name,value])=>'<int name="'+name+'">'+value+'</int>').join("")+
-      '<string name="Name">Body Colors</string><bool name="archivable">true</bool></Properties></Item></roblox>';
-    return new Response(bodyColorXml,{status:200,headers:{"content-type":"application/xml; charset=utf-8","cache-control":"public, max-age=300"}});
-  }
-
   if (request.method === "GET" && /^\/asset\/?$/i.test(path)) {
     const assetId = Number(url.searchParams.get("id") || 0);
     if (!Number.isSafeInteger(assetId) || assetId < 1 || assetId > 9007199254740991) return fail("A valid asset id is required.",400);
@@ -786,17 +728,6 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
-  if (request.method === "GET" && path.startsWith("/api/profile/") && path.endsWith("/avatar")) {
-    let username;
-    try { username = decodeURIComponent(path.slice("/api/profile/".length, -"/avatar".length)); }
-    catch { return fail("Invalid username.",400); }
-    if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return fail("Invalid username.",400);
-    const target = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
-    if (!target) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(target.id).all();
-    return json({equipped:rows.results||[]});
-  }
-
   if (request.method === "GET" && path.startsWith("/api/profile/")) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
@@ -806,103 +737,6 @@ async function route(request, env) {
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
     return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap:Number(profile.total_rap||0),isVerified:Boolean(profile.is_verified)} });
-  }
-
-  if (request.method === "GET" && path.startsWith("/api/avatar/thumbnail/")) {
-    const match = path.match(/^\/api\/avatar\/thumbnail\/([0-9]{1,10})$/);
-    if (!match) return fail("Invalid avatar id.",400);
-    const publicId = Number(match[1]);
-    const target = await env.DB.prepare("SELECT id,public_id FROM users WHERE public_id=? AND is_banned=0").bind(publicId).first();
-    if (!target) return fail("Avatar not found.",404);
-    const itemRows = await env.DB.prepare("SELECT i.id,i.asset_id,i.asset_type_id,i.category FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(target.id).all();
-    const sourceHash = await digest(JSON.stringify((itemRows.results||[]).map(item=>[item.id,item.asset_id,item.asset_type_id,item.category])));
-    const cached = await env.DB.prepare("SELECT source_hash,thumbnail_data FROM avatar_render_cache WHERE user_id=?").bind(target.id).first();
-    if (cached?.source_hash === sourceHash && cached.thumbnail_data) {
-      const cachedBytes = cached.thumbnail_data instanceof Uint8Array ? cached.thumbnail_data : new Uint8Array(cached.thumbnail_data);
-      if (cachedBytes.byteLength > 8) return new Response(cachedBytes,{status:200,headers:{"content-type":"image/png","cache-control":"public, max-age=300, s-maxage=300, stale-while-revalidate=3600","x-avatar-renderer":"OpenPekora-RCC"}});
-    }
-    const rendererBase = String(env.AVATAR_RENDERER_URL || "https://renderer.mopcblox.online").trim().replace(/\/+$/,"");
-    if (!/^https:\/\//i.test(rendererBase)) return fail("Avatar renderer URL must use HTTPS.",503);
-    const rendererSecret = String(env.AVATAR_RENDERER_SECRET || "").trim();
-    if (!rendererSecret) return new Response("Avatar renderer secret is not configured in the Cloudflare Worker.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
-    const rendererHeaders = {"content-type":"application/json","X-Pekora-Renderer-Secret":rendererSecret};
-    if (env.AVATAR_RENDERER_ACCESS_ID && env.AVATAR_RENDERER_ACCESS_SECRET) {
-      rendererHeaders["CF-Access-Client-Id"] = String(env.AVATAR_RENDERER_ACCESS_ID);
-      rendererHeaders["CF-Access-Client-Secret"] = String(env.AVATAR_RENDERER_ACCESS_SECRET);
-    }
-    let rendererResponse;
-    try {
-      rendererResponse = await fetch(rendererBase+"/player/thumbnail",{
-        method:"POST",
-        headers:rendererHeaders,
-        body:JSON.stringify({userId:publicId,jobExpiration:60}),
-        signal:AbortSignal.timeout(90000)
-      });
-    } catch (error) {
-      console.error("[Sakura avatar] Renderer connection failed:",error);
-      return new Response("OpenPekora renderer is offline. Start the renderer and RCCService on the host PC.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
-    }
-    if (!rendererResponse.ok) {
-      const detail=(await rendererResponse.text()).slice(0,500);
-      const safeDetail=detail.replace(/(secret|token|authorization)(\\s*[:=]\\s*)[^,\\s"]+/gi,"$1$2[redacted]");
-      console.error("[Sakura avatar] Renderer returned an error:",rendererResponse.status,safeDetail);
-      return new Response("OpenPekora renderer returned HTTP "+rendererResponse.status+": "+(safeDetail || "No additional renderer details."),{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store","x-sakura-renderer-status":String(rendererResponse.status)}});
-    }
-    let rendererPayload;
-    try { rendererPayload=await rendererResponse.json(); }
-    catch { return new Response("OpenPekora renderer returned invalid JSON.",{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}}); }
-    const encoded=typeof rendererPayload?.data==="string"?rendererPayload.data:
-      typeof rendererPayload?.data?.data==="string"?rendererPayload.data.data:null;
-    if (!rendererPayload?.success || !encoded || encoded.length>8*1024*1024) {
-      console.error("[Sakura avatar] Renderer response did not contain a valid PNG.");
-      return new Response("OpenPekora renderer did not return an avatar image. Check avatar-fetch and RCC logs.",{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
-    }
-    let imageBytes;
-    try {
-      const binary=atob(encoded.replace(/\s/g,""));
-      if (binary.length<8 || binary.length>6*1024*1024) throw new Error("PNG size is outside the allowed range.");
-      imageBytes=new Uint8Array(binary.length);
-      for(let i=0;i<binary.length;i++) imageBytes[i]=binary.charCodeAt(i);
-      if (imageBytes[0]!==137 || imageBytes[1]!==80 || imageBytes[2]!==78 || imageBytes[3]!==71) throw new Error("Renderer data is not a PNG image.");
-    } catch (error) {
-      console.error("[Sakura avatar] Invalid renderer image:",error);
-      return new Response("OpenPekora renderer returned an invalid image.",{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
-    }
-    if (imageBytes.byteLength<=1500000) {
-      await env.DB.prepare("INSERT INTO avatar_render_cache (user_id,source_hash,thumbnail_data,rendered_at) VALUES (?,?,?,datetime('now')) ON CONFLICT(user_id) DO UPDATE SET source_hash=excluded.source_hash,thumbnail_data=excluded.thumbnail_data,rendered_at=excluded.rendered_at")
-        .bind(target.id,sourceHash,imageBytes).run();
-    }
-    return new Response(imageBytes,{status:200,headers:{"content-type":"image/png","cache-control":"public, max-age=300, s-maxage=300","x-avatar-renderer":"OpenPekora-RCC"}});
-  }
-
-  if (path === "/api/avatar" && request.method === "GET") {
-    const user = await requireUser(request,env);
-    if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(user.id).all();
-    return json({ enabled:true, equipped:rows.results||[] });
-  }
-
-  if (path === "/api/avatar" && request.method === "PUT") {
-    const user = await requireUser(request,env);
-    if (!user) return fail("Please sign in.",401);
-    const data = await body(request);
-    const itemId = String(data?.itemId||"");
-    const action = data?.action;
-    if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId) || !["wear","remove"].includes(action)) return fail("Choose an inventory item and a valid avatar action.");
-    const item = await env.DB.prepare("SELECT i.id,i.category FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
-    if (!item) return fail("You can only equip items in your inventory.",404);
-    if (!["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category)) return fail("This item category cannot be equipped on the avatar.");
-    if (action === "remove") {
-      await env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=?").bind(user.id,itemId).run();
-      return json({ok:true,action,equipped:false});
-    }
-    const statements = [];
-    if (["Hair","Faces","Shirts","Pants"].includes(item.category)) {
-      statements.push(env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND category=?").bind(user.id,item.category));
-    }
-    statements.push(env.DB.prepare("INSERT OR IGNORE INTO equipped_items (user_id,item_id,category) VALUES (?,?,?)").bind(user.id,item.id,item.category));
-    await env.DB.batch(statements);
-    return json({ok:true,action,equipped:true});
   }
 
   if (request.method === "PUT" && path === "/api/profile") {
@@ -1597,7 +1431,7 @@ export default {
   },
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/") || url.pathname === "/v1.1/avatar-fetch" || url.pathname.toLowerCase() === "/asset/bodycolors.ashx" || /^\/asset\/?$/i.test(url.pathname)) {
+    if (url.pathname.startsWith("/api/") || /^\/asset\/?$/i.test(url.pathname)) {
       try { return await route(request,env); }
       catch (error) {
         if (error instanceof RequestBodyTooLarge) return fail("Request body must be 16 KB or smaller.",413);
