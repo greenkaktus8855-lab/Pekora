@@ -1,25 +1,32 @@
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$rccDir = Join-Path $repoRoot "RCCService\RCCService2020"
+$candidateRoots = @(
+    $repoRoot,
+    (Join-Path $repoRoot "OpenPekora"),
+    "C:\Pekora-RCC-Host\OpenPekora"
+) | Select-Object -Unique
+$openPekoraRoot = $null
+foreach ($candidate in $candidateRoots) {
+    $candidateRenderer = Join-Path $candidate "game-renderer"
+    $candidateRcc = Join-Path $candidate "RCCService\RCCService2020"
+    if ((Test-Path -LiteralPath (Join-Path $candidateRenderer "config.json")) -and (Test-Path -LiteralPath (Join-Path $candidateRcc "RCCService.exe"))) {
+        $openPekoraRoot = $candidate
+        break
+    }
+}
+if (-not $openPekoraRoot) {
+    throw "Could not find the OpenPekora checkout. Expected game-renderer\config.json and RCCService\RCCService2020\RCCService.exe under C:\Pekora-RCC-Host\OpenPekora or beside this Sakura repository."
+}
+$rccDir = Join-Path $openPekoraRoot "RCCService\RCCService2020"
 $rccExe = Join-Path $rccDir "RCCService.exe"
 $settingsPath = Join-Path $rccDir "Settings.json"
-$configPath = Join-Path $repoRoot "game-renderer\config.json"
-$rendererDir = Join-Path $repoRoot "game-renderer"
+$configPath = Join-Path $openPekoraRoot "game-renderer\config.json"
+$rendererDir = Join-Path $openPekoraRoot "game-renderer"
 $baseControllerPath = Join-Path $rendererDir "src\Controllers\BaseController.ts"
 $requestPath = Join-Path $rendererDir "src\Utilities\Libraries\Request.ts"
 $ports = @(1621, 2621, 3621, 4621)
 $legacyPort = 64989
-
-function Test-IsAdministrator {
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
-if (-not (Test-IsAdministrator)) {
-    throw "Run PowerShell as Administrator. The script adds Windows Firewall rules so RCCService stays local-only."
-}
 if (-not (Test-Path -LiteralPath $rccExe)) { throw "RCCService 2020 executable not found: $rccExe" }
 if (-not (Test-Path -LiteralPath $configPath)) { throw "game-renderer\config.json was not found: $configPath" }
 if (-not (Test-Path -LiteralPath $settingsPath)) {
@@ -37,6 +44,7 @@ function Set-ConfigValue($Object, [string]$Name, $Value) {
     if ($Object.PSObject.Properties[$Name]) { $Object.$Name = $Value }
     else { $Object | Add-Member -MemberType NoteProperty -Name $Name -Value $Value }
 }
+Set-ConfigValue $config "BaseUrl" "https://sakura.mopcblox.online/"
 Set-ConfigValue $config "RCCUrl" "http://127.0.0.1"
 Set-ConfigValue $config.Ports.RCC "All" @($ports)
 Set-ConfigValue $config.Ports.RCC "Player" @(1621)
