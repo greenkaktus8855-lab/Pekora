@@ -26,7 +26,7 @@ $configPath = Join-Path $openPekoraRoot "game-renderer\config.json"
 $rendererDir = Join-Path $openPekoraRoot "game-renderer"
 $baseControllerPath = Join-Path $rendererDir "src\Controllers\BaseController.ts"
 $requestPath = Join-Path $rendererDir "src\Utilities\Libraries\Request.ts"
-$ports = @(64989)
+$ports = @(1621, 2621, 3621, 4621)
 $legacyPort = 64989
 if (-not (Test-Path -LiteralPath $rccExe)) { throw "RCCService 2020 executable not found: $rccExe" }
 if (-not (Test-Path -LiteralPath $configPath)) { throw "game-renderer\config.json was not found: $configPath" }
@@ -48,14 +48,14 @@ function Set-ConfigValue($Object, [string]$Name, $Value) {
 Set-ConfigValue $config "BaseUrl" "https://sakura.mopcblox.online/"
 Set-ConfigValue $config "RCCUrl" "http://127.0.0.1"
 Set-ConfigValue $config.Ports.RCC "All" @($ports)
-Set-ConfigValue $config.Ports.RCC "Player" @(64989)
-Set-ConfigValue $config.Ports.RCC "Image" @(64989)
-Set-ConfigValue $config.Ports.RCC "Place" @(64989)
-Set-ConfigValue $config.Ports.RCC "Catalog" @(64989)
+Set-ConfigValue $config.Ports.RCC "Player" @(1621)
+Set-ConfigValue $config.Ports.RCC "Image" @(2621)
+Set-ConfigValue $config.Ports.RCC "Place" @(3621)
+Set-ConfigValue $config.Ports.RCC "Catalog" @(4621)
 if (-not $config.Paths) { $config | Add-Member -MemberType NoteProperty -Name Paths -Value ([pscustomobject]@{}) }
 Set-ConfigValue $config.Paths "RCCService" "..\RCCService\RCCService2020"
 [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 30), [System.Text.UTF8Encoding]::new($false))
-Write-Host "Renderer config now points to the local RCCService 2020 SOAP port 64989."
+Write-Host "Renderer config now points to the four local RCCService 2020 SOAP ports."
 
 # The renderer should show a useful error if RCC returns no SOAP response.
 if (-not (Test-Path -LiteralPath $baseControllerPath)) { throw "Renderer source not found: $baseControllerPath" }
