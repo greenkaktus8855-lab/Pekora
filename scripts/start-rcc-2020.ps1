@@ -26,16 +26,14 @@ $configPath = Join-Path $openPekoraRoot "game-renderer\config.json"
 $rendererDir = Join-Path $openPekoraRoot "game-renderer"
 $baseControllerPath = Join-Path $rendererDir "src\Controllers\BaseController.ts"
 $requestPath = Join-Path $rendererDir "src\Utilities\Libraries\Request.ts"
-$ports = @(1621, 2621, 3621, 4621)
-$legacyPort = 64989
+$ports = @(64989)
 if (-not (Test-Path -LiteralPath $rccExe)) { throw "RCCService 2020 executable not found: $rccExe" }
 if (-not (Test-Path -LiteralPath $configPath)) { throw "game-renderer\config.json was not found: $configPath" }
 if (-not (Test-Path -LiteralPath $settingsPath)) {
     [System.IO.File]::WriteAllText($settingsPath, '{"applicationSettings":{}}', [System.Text.UTF8Encoding]::new($false))
 }
 
-# Match the upstream OpenPekora RCCService 2020 port layout:
-# Player=1621, Image=2621, Game/Place=3621, Catalog=4621.
+# OpenPekora RCCService 2020 exposes its SOAP endpoint on TCP 64989.
 try { $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json }
 catch { throw "game-renderer\config.json is not valid JSON. No changes were made. $($_.Exception.Message)" }
 
@@ -47,15 +45,16 @@ function Set-ConfigValue($Object, [string]$Name, $Value) {
 }
 Set-ConfigValue $config "BaseUrl" "https://sakura.mopcblox.online/"
 Set-ConfigValue $config "RCCUrl" "http://127.0.0.1"
-Set-ConfigValue $config.Ports.RCC "All" @($ports)
-Set-ConfigValue $config.Ports.RCC "Player" @(1621)
-Set-ConfigValue $config.Ports.RCC "Image" @(2621)
-Set-ConfigValue $config.Ports.RCC "Place" @(3621)
-Set-ConfigValue $config.Ports.RCC "Catalog" @(4621)
+$singleRccPort = @($ports)
+Set-ConfigValue $config.Ports.RCC "All" $singleRccPort
+Set-ConfigValue $config.Ports.RCC "Player" $singleRccPort
+Set-ConfigValue $config.Ports.RCC "Image" $singleRccPort
+Set-ConfigValue $config.Ports.RCC "Place" $singleRccPort
+Set-ConfigValue $config.Ports.RCC "Catalog" $singleRccPort
 if (-not $config.Paths) { $config | Add-Member -MemberType NoteProperty -Name Paths -Value ([pscustomobject]@{}) }
 Set-ConfigValue $config.Paths "RCCService" "..\RCCService\RCCService2020"
 [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 30), [System.Text.UTF8Encoding]::new($false))
-Write-Host "Renderer config now points to the four local RCCService 2020 SOAP ports."
+Write-Host "Renderer config now points to the local RCCService 2020 SOAP endpoint on port 64989."
 
 # The renderer should show a useful error if RCC returns no SOAP response.
 if (-not (Test-Path -LiteralPath $baseControllerPath)) { throw "Renderer source not found: $baseControllerPath" }
@@ -100,7 +99,7 @@ if (Test-Path -LiteralPath $requestPath) {
 
 # RCCService 2020 has no authentication of its own. Block all inbound access to
 # its ports; the local renderer can still reach 127.0.0.1.
-$blockedPorts = @($legacyPort) + $ports
+$blockedPorts = $ports
 foreach ($port in $blockedPorts) {
     $ruleName = "Sakura RCC local-only TCP $port"
     if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
@@ -115,16 +114,6 @@ try {
     & npm run build
     if ($LASTEXITCODE -ne 0) { throw "Renderer build failed with exit code $LASTEXITCODE." }
 } finally { Pop-Location }
-
-# Stop a legacy RCCService on 64989 if it is still running from the earlier setup.
-$legacy = Get-NetTCPConnection -LocalPort $legacyPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($legacy) {
-    $legacyProcess = Get-Process -Id $legacy.OwningProcess -ErrorAction SilentlyContinue
-    if ($legacyProcess -and $legacyProcess.ProcessName -match "^RCCService") {
-        Write-Host "Stopping the old RCCService instance on port $legacyPort..."
-        Stop-Process -Id $legacy.OwningProcess -Force
-    }
-}
 
 # Only stop an existing RCCService process on the four ports we are about to use.
 foreach ($port in $ports) {
@@ -164,6 +153,6 @@ foreach ($port in $ports) {
 }
 
 Write-Host ""
-Write-Host "RCCService 2020 is running on the four OpenPekora render ports: $($started -join ', ')." -ForegroundColor Green
+Write-Host "RCCService 2020 is running on the OpenPekora SOAP port: $($started -join ', ')." -ForegroundColor Green
 Write-Host "Inbound firewall blocks were added. Renderer connections must use 127.0.0.1."
 Write-Host "The renderer config and TypeScript build are ready. Start the secured renderer process next."
