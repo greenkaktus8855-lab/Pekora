@@ -8,6 +8,15 @@ const ITEM_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 const beginView=()=>++activeView;
 const isActiveView=view=>view===activeView;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function currencyIconMarkup(currencyCode){
+ const code=currencyCode==="Tix"?"Tix":"P$";
+ if(code==="Tix")return '<svg class="currency-icon currency-icon-tix" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v3a2.5 2.5 0 0 0 0 5v3H4v-3a2.5 2.5 0 0 0 0-5z" fill="currentColor"/><path d="M10 7.5v9" stroke="#17131f" stroke-width="1.6" stroke-dasharray="1.8 1.8" opacity=".75"/></svg>';
+ return '<svg class="currency-icon currency-icon-robux" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3.5h12.5L20 20.5H7.5z" fill="currentColor"/><path d="M9.1 8h4.6l.8 4.5H10z" fill="#17131f"/></svg>';
+}
+function currencyMarkup(amount,currencyCode="P$",extraClass=""){
+ const code=currencyCode==="Tix"?"Tix":"P$";
+ return '<span class="currency-inline '+esc(extraClass)+'">'+currencyIconMarkup(code)+'<b>'+Number(amount||0).toLocaleString()+'</b><span>'+code+'</span></span>';
+}
 async function api(path,options={}){
  const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});
  let data={};try{data=await res.json()}catch{}
@@ -30,10 +39,10 @@ function renderSidebar(active="home"){
   ["home","icon-nav-home","Home"],
   ["profile","icon-nav-profile","Profile"],
   ["friends","icon-nav-friends","Friends"],
-  ["trades","icon-nav-friends","Trades"],
+  ["trades","icon-nav-trade","Trades"],
   ["inventory","icon-nav-inventory","Inventory"],
   ["avatar","icon-nav-profile","Avatar"],
-  ["groups","icon-nav-friends","Groups"],
+  ["groups","icon-nav-group","Groups"],
   ["currency","icon-nav-robux","Currency"],
   ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
@@ -57,7 +66,7 @@ function setUser(user){
  accountArea.innerHTML=user
   ? '<a class="account-name" href="/#profile?id='+encodeURIComponent(user.publicId||"")+'" data-page="profile">'+esc(user.username)+(user.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</a><button id="logoutBtn" type="button">Log out</button>'
   : '<button id="loginBtn" type="button">Login</button><button id="registerBtn" type="button">Sign Up</button>';
- currency.textContent=user?Number(user.balance||0).toLocaleString()+" P$":"";
+ currency.innerHTML=user?'<span class="header-wallets">'+currencyMarkup(user.balance,"P$","wallet-chip")+currencyMarkup(user.tixBalance,"Tix","wallet-chip")+'</span>':"";
  document.getElementById("logoutBtn")?.addEventListener("click",logout);
  document.getElementById("loginBtn")?.addEventListener("click",()=>page("login"));
  document.getElementById("registerBtn")?.addEventListener("click",()=>page("register"));
@@ -100,7 +109,7 @@ function home(){
  }
  const name=esc(me.username);
  app.innerHTML='<div class="op-dashboard"><div id="accountWarnings"></div>'+
-  '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile">'+avatar(me.username)+'</a><div><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><p class="home-balance">'+Number(me.balance||0).toLocaleString()+' P$</p></div></div>'+
+  '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile">'+avatar(me.username)+'</a><div><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><div class="home-balances">'+currencyMarkup(me.balance,"P$","balance-chip")+currencyMarkup(me.tixBalance,"Tix","balance-chip")+'</div></div></div>'+
   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Items</h3><a href="#inventory" data-page="inventory">See All</a></div><div id="homeItems" class="op-section-content"><div class="op-empty">Loading inventory...</div></div></section>'+
   '</div>';
@@ -154,7 +163,7 @@ function itemStockText(x){
  const stock=itemStockState(x);
  return stock.finite?stock.sold+"/"+stock.total+" sold":stock.sold+" sold · unlimited stock";
 }
-function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+itemBadgeMarkup(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+(Number(x.stock_limit)>0?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'</article>'}
+function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+itemBadgeMarkup(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(Number(x.stock_limit)>0?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'</article>'}
 async function showItem(itemId,updateHistory=true){
  const view=beginView();
  const requestedUserId=me?.id||null;
@@ -194,7 +203,7 @@ async function showItem(itemId,updateHistory=true){
  const isOwned=ownedItemIds.has(item.id),isOffsale=Number(item.is_offsale)===1,stock=itemStockState(item);
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+currencyMarkup(item.price,item.currency||"P$")+'</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
   '</div></div>';
  if(!isOwned&&!isOffsale&&!stock.soldOut&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
  document.getElementById("copyItemLink")?.addEventListener("click",async()=>{const shareUrl=new URL("/item/"+encodeURIComponent(item.id),location.origin).href;try{await navigator.clipboard.writeText(shareUrl);toast("Item link copied")}catch{toast("Could not copy link. Copy it from the address bar.")}});
@@ -304,7 +313,7 @@ function drawCatalog(category,q){
  count.textContent=list.length+" items";
  el.innerHTML=list.length?list.map(x=>{
   const stock=itemStockState(x);
-  return '<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+itemBadgeMarkup(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div>'+(stock.finite?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'<div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':Number(x.is_offsale)===1?'<button class="button secondary offsale-button" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" type="button" disabled>Sold Out</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>';
+  return '<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+itemBadgeMarkup(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div>'+(stock.finite?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':Number(x.is_offsale)===1?'<button class="button secondary offsale-button" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" type="button" disabled>Sold Out</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>';
  }).join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
 
@@ -321,7 +330,7 @@ function drawCatalog(category,q){
  try{
   const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});
   if(!me||me.id!==userId)return;
-  me.balance=d.balance;ownedItemIds.add(itemId);ownershipLoaded=true;
+  me.balance=d.balance;me.tixBalance=d.tixBalance;ownedItemIds.add(itemId);ownershipLoaded=true;
   const purchasedItem=items.find(item=>item.id===itemId);
   if(purchasedItem)purchasedItem.stock_sold=Number(purchasedItem.stock_sold||0)+1;
   setUser(me);toast("Item purchased");
@@ -346,7 +355,7 @@ function auth(kind){
  const view=beginView();
  renderSidebar("");
  const reg=kind==="register";
- app.innerHTML='<div class="form"><h2>'+(reg?"Create your Sakura account":"Log in to Sakura")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="1" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="8" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error"></div></form><p class="muted">'+(reg?'Already have an account? <a href="#login" data-page="login">Log in</a>':'New to Sakura? <a href="#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="#owner-recovery" data-page="owner-recovery">Recover PekoraAdmin account</a></p>')+'</div>';
+ app.innerHTML='<div class="form"><h2>'+(reg?"Create your Sakura account":"Log in to Sakura")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="'+(reg?"3":"1")+'" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="8" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error"></div></form><p class="muted">'+(reg?'Already have an account? <a href="#login" data-page="login">Log in</a>':'New to Sakura? <a href="#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="#owner-recovery" data-page="owner-recovery">Recover PekoraAdmin account</a></p>')+'</div>';
  document.getElementById("authForm").addEventListener("submit",async e=>{
   e.preventDefault();const f=new FormData(e.target);
   try{
@@ -384,7 +393,7 @@ function inventorySellCard(item,selectedId){
   '<div class="item-image">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
   '<h3>'+esc(item.name)+'</h3>'+
   '<div class="muted">'+esc(item.category)+'</div>'+
-  '<div class="inventory-item-price">Current value: '+Number(item.price||0).toLocaleString()+' P$</div>'+
+  '<div class="inventory-item-price">Current value: '+currencyMarkup(item.price,item.currency||"P$")+'</div>'+
   '<button class="button secondary inventory-select-button" type="button" data-select-inventory="'+esc(item.id)+'" aria-pressed="'+(selected?'true':'false')+'">'+(selected?'Selected':'Select item')+'</button>'+
   '</article>';
 }
@@ -406,7 +415,7 @@ async function inventory(){
   });
   if(!selected){panel.hidden=true;panel.innerHTML="";return}
   panel.hidden=false;
-  panel.innerHTML='<div class="inventory-sell-summary"><strong>'+esc(selected.name)+'</strong><p>You will receive <b>'+Number(selected.price||0).toLocaleString()+' P$</b> at the current listed price.</p><p class="muted">Selling removes this item from your inventory.</p></div><button class="primary inventory-confirm-sell" type="button" data-sell-selected>Sell item</button>';
+  panel.innerHTML='<div class="inventory-sell-summary"><strong>'+esc(selected.name)+'</strong><p>You will receive '+currencyMarkup(selected.price,selected.currency||"P$")+' at the current listed price.</p><p class="muted">Selling removes this item from your inventory.</p></div><button class="primary inventory-confirm-sell" type="button" data-sell-selected>Sell item</button>';
  }
 
  grid.addEventListener("click",event=>{
@@ -420,16 +429,16 @@ async function inventory(){
   if(!button||!selectedItemId)return;
   const selected=ownedItems.find(item=>item.id===selectedItemId);
   if(!selected)return;
-  const shownPrice=Number(selected.price||0);
-  if(!confirm('Sell "'+selected.name+'" for '+shownPrice.toLocaleString()+' P$? This cannot be undone.'))return;
+  const shownPrice=Number(selected.price||0),shownCurrency=selected.currency==="Tix"?"Tix":"P$";
+  if(!confirm('Sell "'+selected.name+'" for '+shownPrice.toLocaleString()+' '+shownCurrency+'? This cannot be undone.'))return;
   button.disabled=true;
   button.textContent="Selling...";
   try{
    const result=await api("/api/inventory/sell",{method:"POST",body:JSON.stringify({itemId:selected.id})});
-   setUser({...me,balance:result.balance});
+   setUser({...me,balance:result.balance,tixBalance:result.tixBalance});
    selectedItemId=null;
    if(isActiveView(view))await inventory();
-   toast('Sold '+result.item.name+' for '+Number(result.item.price).toLocaleString()+' P$');
+   toast('Sold '+result.item.name+' for '+Number(result.item.price).toLocaleString()+' '+(result.item.currency==="Tix"?"Tix":"P$"));
   }catch(error){
    toast(error.message);
    if(button.isConnected){button.disabled=false;button.textContent="Sell item"}
@@ -502,7 +511,7 @@ async function profile(identifier=me?.username,byId=false){
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
-    '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+Number(p.totalRap||0).toLocaleString()+' P$</b> Total RAP</span></div>'+
+    '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
    '</div></div>'+
    '<section class="op-profile-section"><h2>Inventory</h2>'+
@@ -532,14 +541,14 @@ async function loadProfileFriendAction(username){
 async function currencyPage(){
  const view=beginView();
  renderSidebar("currency");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your Sakura balance.</div>';return}
- app.innerHTML='<div class="currency-page"><h1 class="page-title">Sakura Currency</h1><section class="info-panel currency-balance-panel"><h2>Your balance</h2><strong class="currency-balance-value">'+Number(me.balance||0).toLocaleString()+' P$</strong><p class="muted">P$ is a virtual balance used only on this Sakura website. It has no real-world monetary value and cannot be purchased or withdrawn here.</p></section><section class="owner-section"><h2>Recent purchases</h2><div id="currencyHistory" class="currency-history">Loading purchase history...</div></section><a class="button" href="#catalog" data-page="catalog">Browse Catalog</a></div>';
+ if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your Sakura balances.</div>';return}
+ app.innerHTML='<div class="currency-page"><h1 class="page-title">Sakura Currency</h1><section class="info-panel currency-balance-panel"><h2>Your balances</h2><div class="currency-balances">'+currencyMarkup(me.balance,"P$","currency-large")+currencyMarkup(me.tixBalance,"Tix","currency-large")+'</div><p class="muted">P$ and Tix are virtual Sakura currencies used only on this website. They have no real-world monetary value and cannot be withdrawn.</p></section><section class="owner-section"><h2>Recent purchases</h2><div id="currencyHistory" class="currency-history">Loading purchase history...</div></section><a class="button" href="#catalog" data-page="catalog">Browse Catalog</a></div>';
  try{
   const d=await api("/api/currency/history");
   const host=document.getElementById("currencyHistory");
   if(!isActiveView(view)||!host)return;
   const rows=d.purchases||[];
-  host.innerHTML=rows.length?'<div class="currency-history-list">'+rows.map(x=>'<article class="currency-history-row"><div><strong>'+esc(x.name)+'</strong><span class="muted">'+esc(x.category)+' · '+new Date(x.purchased_at).toLocaleString()+'</span></div><b>−'+Number(x.price||0).toLocaleString()+' P$</b></article>').join("")+'</div>':'<div class="op-empty">No purchases yet.</div>';
+  host.innerHTML=rows.length?'<div class="currency-history-list">'+rows.map(x=>'<article class="currency-history-row"><div><strong>'+esc(x.name)+'</strong><span class="muted">'+esc(x.category)+' · '+new Date(x.purchased_at).toLocaleString()+'</span></div><b>−'+currencyMarkup(x.price,x.currency||"P$")+'</b></article>').join("")+'</div>':'<div class="op-empty">No purchases yet.</div>';
  }catch(e){
   const host=document.getElementById("currencyHistory");
   if(isActiveView(view)&&host)host.textContent=e.message;
@@ -626,7 +635,7 @@ async function groupsPage(){
  const view=beginView();
  renderSidebar("groups");
  app.innerHTML='<div class="groups-page"><h1 class="page-title">Groups</h1>'+
-  (me?'<section class="owner-section"><h2>Create a group</h2><p class="muted">Creating a group costs <strong>100 P$</strong>. The fee is transferred to the Sakura Admin account.</p><form id="groupCreateForm" class="group-create-form"><label>Group name<input name="name" minlength="1" maxlength="32" required placeholder="Your group name"></label><label>Description<textarea name="description" maxlength="300" rows="2" placeholder="What is this group about?"></textarea></label><button class="primary" type="submit">Create group · 100 P$</button><span id="groupCreateMessage" class="muted"></span></form></section>':'<section class="owner-section"><p>Please <a href="#login" data-page="login">log in</a> to create or join groups.</p></section>')+
+  (me?'<section class="owner-section"><h2>Create a group</h2><p class="muted">Creating a group costs <strong>100 P$</strong>. The fee is transferred to the Sakura Admin account.</p><form id="groupCreateForm" class="group-create-form"><label>Group name<input name="name" minlength="3" maxlength="32" required placeholder="Your group name"></label><label>Description<textarea name="description" maxlength="300" rows="2" placeholder="What is this group about?"></textarea></label><button class="primary" type="submit">Create group · 100 P$</button><span id="groupCreateMessage" class="muted"></span></form></section>':'<section class="owner-section"><p>Please <a href="#login" data-page="login">log in</a> to create or join groups.</p></section>')+
   '<section class="owner-section"><h2>All Groups</h2><div id="groupsList" class="groups-list">Loading groups...</div></section></div>';
  const host=document.getElementById("groupsList");
  async function loadGroups(){
@@ -750,7 +759,8 @@ async function owner(){
  '<section class="owner-section"><h2>Catalog Management</h2><p class="muted">Remove every item from the public catalog. Existing owners keep their inventory.</p><p class="muted">Accessories use real GLB/GLTF 3D models. Add a secure HTTPS model URL to enable the interactive preview. Accessories cannot be listed for sale without a model.</p><button class="button secondary" id="clearPublicCatalog" type="button">Remove all items from catalog</button><form id="newItemForm" class="owner-item-form">'+
  '<label>Item name<input name="name" maxlength="80" required></label>'+
  '<label>Category<select name="category">'+ITEM_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
- '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
+ '<label>Item price<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
+  '<label>Price currency<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label>'+
  '<label class="owner-toggle"><span>Limited item</span><input name="is_limited" type="checkbox"></label>'+
  '<label class="owner-toggle"><span>Off Sale (visible, cannot buy)</span><input name="is_offsale" type="checkbox"></label>'+
  ' <label>Total stock (0 = unlimited)<input name="stock_limit" type="number" min="0" max="1000000" value="0" step="1"></label>'+
@@ -799,9 +809,9 @@ async function owner(){
    const d=await api("/api/owner/users/"+encodeURIComponent(userId));
    if(!isActiveView(view))return;
    const u=d.user;
-   userDetails.innerHTML='<div class="owner-user-card"><h3>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h3><div class="muted">User ID: '+esc(u.public_id)+'</div><p>Role: '+esc(u.role)+' · Balance: '+Number(u.balance).toLocaleString()+' P$ · Status: '+(u.is_banned?'BANNED':'Active')+' · Verified: '+(u.is_verified?'Yes':'No')+'</p>'+
+   userDetails.innerHTML='<div class="owner-user-card"><h3>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h3><div class="muted">User ID: '+esc(u.public_id)+'</div><p>Role: '+esc(u.role)+' · '+currencyMarkup(u.balance,"P$")+' · '+currencyMarkup(u.tix_balance,"Tix")+' · Status: '+(u.is_banned?'BANNED':'Active')+' · Verified: '+(u.is_verified?'Yes':'No')+'</p>'+
     (u.role==="OWNER"?'<p class="muted">OWNER accounts cannot be modified.</p>':
-    '<div class="owner-user-actions"><form id="ownerCreditForm" class="owner-item-form"><h4>Give Sakura currency</h4><label>Amount (P$)<input name="amount" type="number" min="1" max="1000000" required></label><label>Note (optional)<input name="reason" maxlength="500"></label><button class="primary" type="submit">Give currency</button></form>'+
+    '<div class="owner-user-actions"><form id="ownerCreditForm" class="owner-item-form"><h4>Give Sakura currency</h4><label>Amount<input name="amount" type="number" min="1" max="1000000" required></label><label>Currency<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label><label>Note (optional)<input name="reason" maxlength="500"></label><button class="primary" type="submit">Give currency</button></form>'+
     '<form id="ownerWarnForm" class="owner-item-form"><h4>Issue warning</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button class="primary" type="submit">Send warning</button></form>'+
     (u.is_banned?'<button type="button" class="button" id="ownerUnban">Unban account</button>':'<form id="ownerBanForm" class="owner-item-form"><h4>Ban account</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button type="submit" class="button secondary">Ban account</button></form>')+'</div>')+
     (u.role==="OWNER"?"":'<form id="ownerVerifyForm" class="owner-item-form owner-verify-form"><h4>Verified badge</h4><p class="muted">'+(u.is_verified?'This user has a verified badge.':'This user is not verified.')+'</p><button class="primary" type="submit">'+(u.is_verified?'Remove verified badge':'Give verified badge')+'</button></form>')+
@@ -810,7 +820,7 @@ async function owner(){
     '<h4>Moderation history</h4>'+(d.logs.length?'<ul>'+d.logs.map(x=>'<li><strong>'+esc(x.action)+'</strong> '+esc(x.details)+' <span class="muted">('+new Date(x.created_at+"Z").toLocaleString()+')</span></li>').join("")+'</ul>':'<p class="muted">No actions recorded.</p>')+'</div>';
    document.getElementById("ownerCreditForm")?.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(e.currentTarget);
-    try{await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:"credit",amount:Number(f.get("amount")),reason:String(f.get("reason")||"")})});toast("Currency granted");await loadOwnerUser(userId);await refreshMe();}
+    try{await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:"credit",amount:Number(f.get("amount")),currency:String(f.get("currency")||"P$"),reason:String(f.get("reason")||"")})});toast("Currency granted");await loadOwnerUser(userId);await refreshMe();}
     catch(err){toast(err.message)}
    });
    document.getElementById("ownerVerifyForm")?.addEventListener("submit",async e=>{
@@ -852,7 +862,7 @@ async function owner(){
   try{
    const d=await api("/api/owner/users?q="+encodeURIComponent(q));
    if(!isActiveView(view))return;
-   userResults.innerHTML=d.users.length?d.users.map(u=>'<button type="button" class="owner-user-result" data-owner-user-id="'+esc(u.id)+'"><strong>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</strong><span>ID '+esc(u.public_id)+' · '+esc(u.role)+' · '+Number(u.balance).toLocaleString()+' P$ · '+(u.is_banned?'BANNED':'Active')+'</span></button>').join(""):'<p class="muted">No matching users.</p>';
+   userResults.innerHTML=d.users.length?d.users.map(u=>'<button type="button" class="owner-user-result" data-owner-user-id="'+esc(u.id)+'"><strong>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</strong><span>ID '+esc(u.public_id)+' · '+esc(u.role)+' · '+Number(u.balance).toLocaleString()+' P$ · '+Number(u.tix_balance||0).toLocaleString()+' Tix · '+(u.is_banned?'BANNED':'Active')+'</span></button>').join(""):'<p class="muted">No matching users.</p>';
    userResults.querySelectorAll("[data-owner-user-id]").forEach(b=>b.addEventListener("click",()=>loadOwnerUser(b.dataset.ownerUserId)));
    userDetails.innerHTML="";
   }catch(err){userResults.textContent=err.message}
@@ -893,13 +903,13 @@ async function owner(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
     '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
-    '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><label class="owner-inline-check"><input name="is_limited" type="checkbox" '+(Number(x.is_limited)===1?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" step="1" value="'+Number(x.stock_limit||0)+'" placeholder="Total stock (0 = unlimited)"><label class="owner-inline-check"><input name="is_offsale" type="checkbox" '+(Number(x.is_offsale)===1?'checked':'')+'> Off Sale</label></div>'+
+    '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><select name="currency"><option value="P$" '+((x.currency||"P$")==="P$"?'selected':'')+'>P$</option><option value="Tix" '+(x.currency==="Tix"?'selected':'')+'>Tix</option></select><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><label class="owner-inline-check"><input name="is_limited" type="checkbox" '+(Number(x.is_limited)===1?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" step="1" value="'+Number(x.stock_limit||0)+'" placeholder="Total stock (0 = unlimited)"><label class="owner-inline-check"><input name="is_offsale" type="checkbox" '+(Number(x.is_offsale)===1?'checked':'')+'> Off Sale</label></div>'+
     '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?(Number(x.is_offsale)===1?'Off Sale':'For sale'):'Removed from catalog')+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
-     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0)};
+     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0)};
      await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(updated)});
      if(!isActiveView(view))return;
      ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated,is_limited:updated.is_limited?1:0,is_offsale:updated.is_offsale?1:0}:item);
@@ -932,7 +942,7 @@ async function owner(){
   newItemForm.addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
-    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0)};
+    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0)};
     const modelFile=f.get("model_file");
     if(modelFile instanceof File && modelFile.size){
      msg.textContent="Uploading 3D model...";
@@ -945,7 +955,7 @@ async function owner(){
     msg.textContent="Saving item...";
     const result=await api("/api/owner/items",{method:"POST",body:JSON.stringify(data)});
     if(!isActiveView(view))return;
-    e.target.reset();e.target.elements.price.value=50;msg.textContent="Item added.";
+    e.target.reset();e.target.elements.price.value=50;e.target.elements.currency.value="P$";msg.textContent="Item added.";
     ownerItems.unshift({id:result.id,...data,is_limited:data.is_limited?1:0,is_offsale:data.is_offsale?1:0,stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:data.category==="Accessories"?"3D":"IMAGE_ONLY"});
     drawOwnerItems();updateOwnerItemCount();
    }catch(err){msg.textContent=err.message}
