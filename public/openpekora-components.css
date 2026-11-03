@@ -1430,3 +1430,31 @@
  #app .owner-promocode-row{align-items:flex-start;flex-wrap:wrap}
  #app .owner-promocode-row button{width:100%}
 }
+
+
+/* Original OpenPekora-style Builders Club membership form */
+#app .membership-original-container{max-width:970px;margin-left:auto;margin-right:auto}
+#app .membership-openpekora-card{
+ padding:22px;background:#15151c!important;color:#f5f3fa!important;
+ border:1px solid #393343;border-radius:6px;box-shadow:none
+}
+#app .membership-openpekora-card h2{margin:0 0 16px;font-size:24px;font-weight:700}
+#app .membership-openpekora-current,
+#app .membership-openpekora-reward{margin:0 0 10px;font-size:15px}
+#app .membership-openpekora-current strong{color:#eadcff!important}
+#app .membership-openpekora-reward strong{display:inline-flex;vertical-align:middle;margin-left:5px}
+#app .membership-openpekora-card select{
+ width:100%;min-height:40px;margin:6px 0 12px;padding:8px 10px;
+ color:#f5f3fa;background:#211b2a;border:1px solid #51445f;border-radius:4px
+}
+#app .membership-openpekora-card select option{background:#211b2a;color:#f5f3fa}
+#app .membership-openpekora-lock-note{
+ margin:7px 0 12px;padding:9px 11px;background:#211a2b;
+ border-left:3px solid #9b66d3;color:#d4c3e9!important;font-size:12px;line-height:1.5
+}
+#app .membership-openpekora-submit{margin-top:5px;min-width:145px}
+#app .membership-openpekora-footnote{margin:16px 0 0;color:#aaa5b5!important;font-size:12px;line-height:1.5}
+@media(max-width:620px){
+ #app .membership-openpekora-card{padding:16px}
+ #app .membership-openpekora-submit{width:100%}
+}
