@@ -19,22 +19,10 @@ async function api(path,options={}){
 }
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
 function avatar(username=me?.username){
- const isKoqumo=String(username||"").toLowerCase()==="koqumo";
- if(!isKoqumo)return '<span class="avatar-render avatar-placeholder" role="img" aria-label="Avatar thumbnail unavailable"><span class="icon-nav-profile"></span></span>';
- return '<img class="avatar-render avatar-real" src="https://tcdn.pekora.pro/images/thumbnails/152d7862464483e0c3989bc1cee7a9d1a954964b95a49f6687945d2c070cb25e_headshot.png" alt="User avatar" loading="lazy">';
+ const label=String(username||"?").trim()||"?";
+ const initials=label.split(/[ _-]+/).filter(Boolean).slice(0,2).map(part=>part[0]).join("").toUpperCase()||"?";
+ return '<span class="avatar-initials" role="img" aria-label="'+esc(label)+'">'+esc(initials)+'</span>';
 }
-document.addEventListener("error",event=>{
- const image=event.target;
- if(!image.classList?.contains("avatar-real"))return;
- const placeholder=document.createElement("span");
- placeholder.className="avatar-render avatar-placeholder";
- placeholder.setAttribute("role","img");
- placeholder.setAttribute("aria-label","Avatar thumbnail unavailable");
- const icon=document.createElement("span");
- icon.className="icon-nav-profile";
- placeholder.append(icon);
- image.replaceWith(placeholder);
-},true);
 function renderSidebar(active="home"){
  if(!me){sidebar.classList.remove("visible","mobile-open");sidebar.innerHTML="";return}
  sidebar.classList.add("visible");
@@ -44,6 +32,8 @@ function renderSidebar(active="home"){
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-friends","Trades"],
   ["inventory","icon-nav-inventory","Inventory"],
+  ["avatar","icon-nav-profile","Avatar"],
+  ["groups","icon-nav-friends","Groups"],
   ["currency","icon-nav-robux","Currency"],
   ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
@@ -454,6 +444,43 @@ async function inventory(){
   renderSelection();
  }catch(e){if(isActiveView(view)&&grid?.isConnected)grid.textContent=e.message}
 }
+async function avatarPage(){
+ const view=beginView();
+ renderSidebar("avatar");
+ if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your avatar items.</div>';return}
+ app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1></div><section class="avatar-wardrobe"><p class="muted">Wear and remove items from your inventory. There is no 3D character preview on this page.</p><div id="avatarWardrobeGrid" class="avatar-wardrobe-grid">Loading your items...</div></section></div>';
+ const grid=document.getElementById("avatarWardrobeGrid");
+ let avatarItems=[],equippedIds=new Set();
+ const allowed=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
+ function drawWardrobe(){
+  const available=avatarItems.filter(item=>allowed.includes(item.category));
+  grid.innerHTML=available.length?available.map(item=>{
+   const wearing=equippedIds.has(item.id);
+   const preview=item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'" loading="lazy">':'<span class="avatar-wardrobe-no-image">'+esc(item.category)+'</span>';
+   return '<article class="avatar-wardrobe-item"><div class="avatar-wardrobe-image">'+preview+'</div><div class="avatar-wardrobe-name">'+esc(item.name)+'</div><div class="muted">'+esc(item.category)+'</div><button class="button '+(wearing?'secondary':'')+'" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+(wearing?'remove':'wear')+'">'+(wearing?'Remove':'Wear')+'</button></article>';
+  }).join(""):'<div class="avatar-wardrobe-empty">You have no wearable items in your inventory yet.</div>';
+ }
+ grid.addEventListener("click",async event=>{
+  const button=event.target.closest("[data-avatar-item]");
+  if(!button)return;
+  const itemId=button.dataset.avatarItem,action=button.dataset.avatarAction;
+  button.disabled=true;
+  try{
+   await api("/api/avatar",{method:"PUT",body:JSON.stringify({itemId,action})});
+   if(action==="wear")equippedIds.add(itemId);else equippedIds.delete(itemId);
+   drawWardrobe();
+   toast(action==="wear"?"Item equipped":"Item removed");
+  }catch(error){toast(error.message);button.disabled=false}
+ });
+ try{
+  const [inventoryData,avatarData]=await Promise.all([api("/api/inventory"),api("/api/avatar")]);
+  if(!isActiveView(view)||!grid.isConnected)return;
+  avatarItems=inventoryData.items||[];
+  equippedIds=new Set((avatarData.equipped||[]).map(item=>item.id));
+  drawWardrobe();
+ }catch(error){if(isActiveView(view)&&grid.isConnected)grid.textContent=error.message}
+}
+
 async function profile(identifier=me?.username,byId=false){
  const view=beginView();
  renderSidebar("profile");
@@ -475,7 +502,7 @@ async function profile(identifier=me?.username,byId=false){
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
-    '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span></div>'+
+    '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+Number(p.totalRap||0).toLocaleString()+' P$</b> Total RAP</span></div>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
    '</div></div>'+
    '<section class="op-profile-section"><h2>Inventory</h2>'+
@@ -550,11 +577,12 @@ async function tradesPage(){
     const incoming=t.recipient_id===me.id;
     const offeredItems=t.offeredItems||[],requestedItems=t.requestedItems||[];
     const storedOffered=JSON.parse(t.offered_items||"[]"),storedRequested=JSON.parse(t.requested_items||"[]");
-    const validLimited=offeredItems.length===storedOffered.length&&requestedItems.length===storedRequested.length&&[...offeredItems,...requestedItems].every(x=>Number(x.is_limited)===1);
-    const items=(label,list)=>'<div class="trade-item-group"><strong>'+label+'</strong><div class="trade-item-list">'+(list.length?list.map(x=>'<span class="trade-item-chip">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="">':'')+esc(x.name)+' <small class="trade-limited-tag">LIMITED</small></span>').join(""):'<span class="muted">No items</span>')+'</div></div>';
+    const validTradeItems=offeredItems.length===storedOffered.length&&requestedItems.length===storedRequested.length&&[...offeredItems,...requestedItems].every(x=>Number(x.is_limited)===1||Number(x.is_offsale)===1);
+    const tradeTag=x=>'<small class="trade-limited-tag">'+(Number(x.is_limited)===1?'LIMITED':'OFF SALE')+'</small>';
+    const items=(label,list)=>'<div class="trade-item-group"><strong>'+label+'</strong><div class="trade-item-list">'+(list.length?list.map(x=>'<span class="trade-item-chip">'+(x.image_url?'<img src="'+esc(x.image_url)+'" alt="">':'')+esc(x.name)+' '+tradeTag(x)+'</span>').join(""):'<span class="muted">No items</span>')+'</div></div>';
     return '<article class="trade-card"><div class="trade-card-heading"><strong>'+(incoming?'From '+esc(t.sender_name):'To '+esc(t.recipient_name))+'</strong><span class="trade-status trade-status-'+esc(t.status.toLowerCase())+'">'+esc(t.status)+'</span></div>'+
      items(incoming?'They offer':'You offered',offeredItems)+items(incoming?'You offer':'They requested',requestedItems)+
-     (t.status==="PENDING"?(incoming?(validLimited?'<div class="trade-actions"><button class="primary" type="button" data-trade-action="accept" data-trade-id="'+esc(t.id)+'">Accept</button><button class="button secondary" type="button" data-trade-action="decline" data-trade-id="'+esc(t.id)+'">Decline</button></div>':'<p class="muted trade-invalid-note">This old offer contains non-Limited items and cannot be accepted. Decline it.</p><div class="trade-actions"><button class="button secondary" type="button" data-trade-action="decline" data-trade-id="'+esc(t.id)+'">Decline</button></div>'):'<div class="trade-actions"><button class="button secondary" type="button" data-trade-action="cancel" data-trade-id="'+esc(t.id)+'">Cancel offer</button></div>'):'')+
+     (t.status==="PENDING"?(incoming?(validTradeItems?'<div class="trade-actions"><button class="primary" type="button" data-trade-action="accept" data-trade-id="'+esc(t.id)+'">Accept</button><button class="button secondary" type="button" data-trade-action="decline" data-trade-id="'+esc(t.id)+'">Decline</button></div>':'<p class="muted trade-invalid-note">This offer contains an item that is no longer Limited or Off Sale and cannot be accepted. Decline it.</p><div class="trade-actions"><button class="button secondary" type="button" data-trade-action="decline" data-trade-id="'+esc(t.id)+'">Decline</button></div>'):'<div class="trade-actions"><button class="button secondary" type="button" data-trade-action="cancel" data-trade-id="'+esc(t.id)+'">Cancel offer</button></div>'):'')+
      '</article>';
    }).join(""):'<div class="empty">You do not have any trades yet.</div>';
    host.querySelectorAll("[data-trade-action]").forEach(button=>button.addEventListener("click",async()=>{
@@ -575,13 +603,13 @@ async function tradesPage(){
    if(!isActiveView(view))return;
    const own=ownData.items||[],target=targetData.items||[];
    if(!target.length)message.textContent="That player has no items available to trade.";
-   const ownLimited=own.filter(item=>Number(item.is_limited)===1),targetLimited=target.filter(item=>Number(item.is_limited)===1);
-   const checks=(items,prefix)=>items.map(item=>'<label class="trade-select-item"><input type="checkbox" value="'+esc(item.id)+'" data-trade-side="'+prefix+'"><span>'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="">':'')+'<span>'+esc(item.name)+' <small class="trade-limited-tag">LIMITED</small></span></span></label>').join("");
-   if(!ownLimited.length&&!targetLimited.length)message.textContent="Trading is limited to Limited items. Neither player has any Limited items available.";
-   else if(!ownLimited.length)message.textContent="You do not have any Limited items to offer.";
-   else if(!targetLimited.length)message.textContent="That player does not have any Limited items to request.";
-   builder.innerHTML='<div class="trade-pick-columns"><div><h3>Your Limited items</h3><div class="trade-pick-list">'+(ownLimited.length?checks(ownLimited,"offered"):'<p class="muted">No Limited items available.</p>')+'</div></div><div><h3>'+esc(username)+' Limited items</h3><div class="trade-pick-list">'+(targetLimited.length?checks(targetLimited,"requested"):'<p class="muted">No Limited items available.</p>')+'</div></div></div><button id="sendTradeOffer" class="primary" type="button" '+(!ownLimited.length&&!targetLimited.length?'disabled':'')+'>Send trade offer</button>';
-   document.getElementById("sendTradeOffer").addEventListener("click",async()=>{
+   const ownEligible=own.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1),targetEligible=target.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1);
+    const checks=(list,prefix)=>list.map(item=>'<label class="trade-select-item"><input type="checkbox" value="'+esc(item.id)+'" data-trade-side="'+prefix+'"><span>'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="">':'')+'<span>'+esc(item.name)+' <small class="trade-limited-tag">'+(Number(item.is_limited)===1?'LIMITED':'OFF SALE')+'</small></span></span></label>').join("");
+    if(!ownEligible.length&&!targetEligible.length)message.textContent="Trading is available for Limited and Off Sale items. Neither player has an eligible item.";
+    else if(!ownEligible.length)message.textContent="You do not have any Limited or Off Sale items to offer.";
+    else if(!targetEligible.length)message.textContent="That player does not have any Limited or Off Sale items to request.";
+    builder.innerHTML='<div class="trade-pick-columns"><div><h3>Your tradeable items</h3><div class="trade-pick-list">'+(ownEligible.length?checks(ownEligible,"offered"):'<p class="muted">No tradeable items available.</p>')+'</div></div><div><h3>'+esc(username)+' tradeable items</h3><div class="trade-pick-list">'+(targetEligible.length?checks(targetEligible,"requested"):'<p class="muted">No tradeable items available.</p>')+'</div></div></div><button id="sendTradeOffer" class="primary" type="button" '+(!ownEligible.length&&!targetEligible.length?'disabled':'')+'>Send trade offer</button>';
+    document.getElementById("sendTradeOffer").addEventListener("click",async()=>{
     const offeredIds=[...builder.querySelectorAll('[data-trade-side="offered"]:checked')].map(x=>x.value);
     const requestedIds=[...builder.querySelectorAll('[data-trade-side="requested"]:checked')].map(x=>x.value);
     if(!offeredIds.length&&!requestedIds.length){message.textContent="Select at least one item.";return}
@@ -593,6 +621,49 @@ async function tradesPage(){
  });
  await loadTrades();
 }
+async function groupsPage(){
+ const view=beginView();
+ renderSidebar("groups");
+ app.innerHTML='<div class="groups-page"><h1 class="page-title">Groups</h1>'+
+  (me?'<section class="owner-section"><h2>Create a group</h2><p class="muted">Creating a group costs <strong>100 P$</strong>. The fee is transferred to the Sakura Admin account.</p><form id="groupCreateForm" class="group-create-form"><label>Group name<input name="name" minlength="3" maxlength="32" required placeholder="Your group name"></label><label>Description<textarea name="description" maxlength="300" rows="2" placeholder="What is this group about?"></textarea></label><button class="primary" type="submit">Create group · 100 P$</button><span id="groupCreateMessage" class="muted"></span></form></section>':'<section class="owner-section"><p>Please <a href="#login" data-page="login">log in</a> to create or join groups.</p></section>')+
+  '<section class="owner-section"><h2>All Groups</h2><div id="groupsList" class="groups-list">Loading groups...</div></section></div>';
+ const host=document.getElementById("groupsList");
+ async function loadGroups(){
+  try{
+   const data=await api("/api/groups");
+   if(!isActiveView(view)||!host?.isConnected)return;
+   const groups=data.groups||[];
+   host.innerHTML=groups.length?groups.map(group=>'<article class="group-card"><div class="group-card-mark">'+esc(String(group.name||"?").slice(0,1).toUpperCase())+'</div><div class="group-card-info"><h3>'+esc(group.name)+'</h3><p>'+esc(group.description||"No description.")+'</p><span class="muted">Owner: '+esc(group.owner_name)+' · '+Number(group.member_count||0).toLocaleString()+' members</span></div>'+(me?(Number(group.is_member)===1?'<button class="button secondary" type="button" disabled>Joined</button>':'<button class="button" type="button" data-join-group="'+esc(group.id)+'">Join</button>'):'')+'</article>').join(""):'<div class="empty">No groups yet. Be the first to create one.</div>';
+  }catch(error){if(host?.isConnected)host.textContent=error.message}
+ }
+ host?.addEventListener("click",async event=>{
+  const button=event.target.closest("[data-join-group]");
+  if(!button)return;
+  button.disabled=true;
+  try{
+   await api("/api/groups/"+encodeURIComponent(button.dataset.joinGroup)+"/join",{method:"POST"});
+   toast("Joined group");
+   await loadGroups();
+  }catch(error){toast(error.message);button.disabled=false}
+ });
+ document.getElementById("groupCreateForm")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const form=event.currentTarget,values=new FormData(form),message=document.getElementById("groupCreateMessage"),button=form.querySelector("button[type=submit]");
+  const data={name:String(values.get("name")||"").trim(),description:String(values.get("description")||"").trim()};
+  if(Number(me?.balance||0)<100){message.textContent="You need at least 100 P$ to create a group.";return}
+  button.disabled=true;message.textContent="Creating group...";
+  try{
+   const result=await api("/api/groups",{method:"POST",body:JSON.stringify(data)});
+   setUser({...me,balance:result.balance});
+   form.reset();message.textContent="Group created. 100 P$ was transferred to Admin.";
+   toast("Group created");
+   await loadGroups();
+  }catch(error){message.textContent=error.message}
+  finally{if(button.isConnected)button.disabled=false}
+ });
+ await loadGroups();
+}
+
 async function settings(){
  const view=beginView();
  renderSidebar("settings");
@@ -890,7 +961,7 @@ function infoPage(type){
  beginView();
  renderSidebar("");
  const pages={
-  about:{title:"About Sakura",body:'<p>Sakura is an independent community revival project. It is not affiliated with or endorsed by Roblox Corporation.</p><p>This build includes account profiles, a virtual catalog, inventory previews and friend requests. Original avatar editing is not connected in this deployment.</p><p>Sakura currency is an in-site balance only. It has no real-world monetary value.</p>'},
+  about:{title:"About Sakura",body:'<p>Sakura is an independent community revival project. It is not affiliated with or endorsed by Roblox Corporation.</p><p>This build includes account profiles, a virtual catalog, inventory previews and friend requests. Avatar wardrobe is available for equipping owned items without a 3D character preview.</p><p>Sakura currency is an in-site balance only. It has no real-world monetary value.</p>'},
   terms:{title:"Terms of Use",body:'<p>Use Sakura respectfully and do not impersonate other users, abuse the service or attempt to access accounts that are not yours.</p><p>Do not use preview image URLs or descriptions that violate the rights or safety of other people. The project owner may remove catalog entries or accounts that abuse the service.</p><p>Virtual currency and catalog items are for use inside this website only. They cannot be exchanged for real money.</p>'},
   privacy:{title:"Privacy",body:'<p>Sakura stores your username, a password hash, session information, profile description, virtual balance, inventory, friend requests and in-site catalog and purchase records so the service can work.</p><p>Passwords are not stored as plain text. Sign-in uses a secure session cookie. This build does not ask for an email address.</p><p>For abuse prevention, the service temporarily stores hashed network-address identifiers and attempt counters for sign-in, registration and owner recovery. Ten attempts in the 15-minute window trigger a 15-minute cooldown. Expired per-address counters reset when that address is used again, and stale rows are removed during Worker setup.</p><p>Do not reuse an important password and do not share your account credentials with anyone.</p>'}
  };
@@ -907,6 +978,8 @@ async function render(name){
  else if(name==="login"||name==="register")auth(name);
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
+ else if(name==="avatar")await avatarPage();
+ else if(name==="groups")await groupsPage();
  else if(name==="profile")await (query.get("id")?profile(query.get("id"),true):profile(query.get("username")||me?.username));
  else if(name==="item")await showItem(query.get("id"),false);
  else if(name==="users"||name==="community")users();
