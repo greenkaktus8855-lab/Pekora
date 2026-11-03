@@ -117,11 +117,19 @@ function home(){
   return;
  }
  const name=esc(me.username);
- app.innerHTML='<div class="op-dashboard"><div id="accountWarnings"></div>'+
-  '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile">'+avatar(me.username)+'</a><div><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><div class="home-balances">'+currencyMarkup(me.balance,"P$","balance-chip")+currencyMarkup(me.tixBalance,"Tix","balance-chip")+'</div></div></div>'+
-  '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
-  '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Items</h3><a href="#inventory" data-page="inventory">See All</a></div><div id="homeItems" class="op-section-content"><div class="op-empty">Loading inventory...</div></div></section>'+
-  '</div>';
+ app.innerHTML='<div class="sakura-home-shell"><div id="accountWarnings"></div>'+
+  '<div class="sakura-home-card">'+
+   '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile">'+avatar(me.username)+'</a><div class="sakura-welcome-copy"><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><div class="home-balances">'+currencyMarkup(me.balance,"P$","balance-chip")+currencyMarkup(me.tixBalance,"Tix","balance-chip")+'</div></div></div>'+
+   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
+   '<div class="sakura-home-columns">'+
+    '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Recently Played</h3><a href="#games" data-page="games">See All</a></div><div id="homeRecentGames" class="sakura-empty-panel">Your recently played games will appear here.</div></section>'+
+    '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Favorites</h3><a href="#catalog" data-page="catalog">See All</a></div><div id="homeFavorites" class="sakura-empty-panel">Your favorite items will appear here.</div></section>'+
+   '</div>'+
+   '<div class="sakura-home-columns sakura-home-bottom">'+
+    '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Feed</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFeed" class="sakura-feed-panel">No posts yet.</div></section>'+
+    '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Blog News</h3></div><div class="sakura-feed-panel sakura-blog-empty">No news found.</div></section>'+
+   '</div>'+
+  '</div></div>';
  loadHomeDashboard(view);
  if(me)api("/api/account/warnings").then(d=>{
   const host=document.getElementById("accountWarnings");
@@ -130,23 +138,17 @@ function home(){
  }).catch(()=>{});
 }
 async function loadHomeDashboard(view=activeView){
- const friendsHost=document.getElementById("homeFriends"),itemsHost=document.getElementById("homeItems");
- if(!friendsHost||!itemsHost||!me)return;
+ const friendsHost=document.getElementById("homeFriends");
+ if(!friendsHost||!me)return;
  try{
-  const [inventoryData,friendsData]=await Promise.all([
-   api("/api/inventory"),
-   api("/api/friends")
-  ]);
+  const friendsData=await api("/api/friends");
   if(!isActiveView(view)||!document.getElementById("homeFriends"))return;
-  const owned=inventoryData.items||[];
   const friends=friendsData.friends||[];
   document.getElementById("homeFriendCount").textContent=friends.length;
   friendsHost.innerHTML=friends.length?'<div class="op-home-friends">'+friends.slice(0,12).map(u=>'<a href="/#profile?id='+encodeURIComponent(u.public_id||"")+'" class="op-home-friend" data-profile="'+esc(u.username)+'">'+avatar(u.username)+'<span>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</span></a>').join("")+'</div>':'<div class="op-empty">You have no friends to display yet.</div>';
-  itemsHost.innerHTML=owned.length?'<div class="op-home-items">'+owned.slice(0,6).map(itemCard).join("")+'</div>':'<div class="op-empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Visit the Catalog</a>.</div>';
  }catch(e){
-  if(!isActiveView(view)||!friendsHost.isConnected||!itemsHost.isConnected)return;
+  if(!isActiveView(view)||!friendsHost.isConnected)return;
   friendsHost.innerHTML='<div class="op-empty">Could not load friends.</div>';
-  itemsHost.innerHTML='<div class="op-empty">Could not load inventory.</div>';
  }
 }
 
