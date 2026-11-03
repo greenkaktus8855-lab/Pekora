@@ -6,10 +6,11 @@ let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set(),ownershipLoa
 let activeView=0;
 const ITEM_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 const MEMBERSHIP_PLANS=[
- {type:"BuildersClub",name:"Builders Club",short:"BC",daily:15,description:"Базовое членство и ежедневная награда"},
- {type:"TurboBuildersClub",name:"Turbo Builders Club",short:"TBC",daily:35,description:"Повышенная ежедневная награда"},
- {type:"OutrageousBuildersClub",name:"Outrageous Builders Club",short:"OBC",daily:85,description:"Максимальный ежедневный бонус"},
- {type:"Premium",name:"Premium",short:"Premium",daily:85,description:"Ежедневная награда уровня Premium"}
+ {type:"None",name:"None",short:"None",daily:0,description:"No membership or daily reward"},
+ {type:"BuildersClub",name:"Builders Club",short:"BC",daily:15,description:"Basic membership and daily reward"},
+ {type:"TurboBuildersClub",name:"Turbo Builders Club",short:"TBC",daily:35,description:"Higher daily reward"},
+ {type:"OutrageousBuildersClub",name:"Outrageous Builders Club",short:"OBC",daily:85,description:"Highest daily reward"},
+ {type:"Premium",name:"Premium",short:"Premium",daily:85,description:"Premium-level daily reward"}
 ];
 const beginView=()=>++activeView;
 const isActiveView=view=>view===activeView;
@@ -569,7 +570,7 @@ async function membershipPage(){
   app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your membership.</div>';
   return;
  }
- app.innerHTML='<div class="membership-page"><h1 class="page-title">Builders Club</h1><p class="muted membership-intro">Выбери членство Sakura и получай ежедневную награду.</p><div class="membership-current-panel">Loading membership...</div></div>';
+ app.innerHTML='<div class="membership-page"><h1 class="page-title">Builders Club</h1><p class="muted membership-intro">Choose a Sakura membership and receive a daily virtual currency reward.</p><div class="membership-current-panel">Loading membership...</div></div>';
  try{
   const data=await api("/api/membership");
   if(!isActiveView(view))return;
@@ -578,24 +579,24 @@ async function membershipPage(){
   const currentPlan=MEMBERSHIP_PLANS.find(plan=>plan.type===current);
   const currentName=currentPlan?.name||"None";
   const lastReward=data.lastRewardDate
-   ? 'Последнее начисление: '+new Date(data.lastRewardDate+"T00:00:00").toLocaleDateString()
-   : "Ежедневных начислений пока не было.";
+   ? 'Last payout: '+new Date(data.lastRewardDate+"T00:00:00").toLocaleDateString()
+   : "No daily payouts yet.";
   const plans=MEMBERSHIP_PLANS.map(plan=>{
    const selected=plan.type===current;
    return '<article class="membership-plan '+(selected?'is-current':'')+'">'+
     '<div class="membership-plan-mark">'+esc(plan.short)+'</div>'+
     '<h2>'+esc(plan.name)+'</h2>'+
     '<p class="membership-plan-description">'+esc(plan.description)+'</p>'+
-    '<div class="membership-plan-reward">'+currencyMarkup(plan.daily,"P$")+'<span>в день</span></div>'+
-    '<button class="'+(selected?'button secondary':'primary')+'" type="button" data-membership="'+esc(plan.type)+'" '+(selected?'disabled':'')+'>'+(selected?'Current Membership':'Выбрать')+'</button>'+
+    '<div class="membership-plan-reward">'+currencyMarkup(plan.daily,"P$")+'<span>per day</span></div>'+
+    '<button class="'+(selected?'button secondary':'primary')+'" type="button" data-membership="'+esc(plan.type)+'" '+(selected?'disabled':'')+'>'+(selected?'Current Membership':'Choose')+'</button>'+
    '</article>';
   }).join("");
   app.innerHTML='<div class="membership-page">'+
    '<h1 class="page-title">Builders Club</h1>'+
-   '<p class="muted membership-intro">Выбери членство Sakura и получай ежедневную награду.</p>'+
-   '<section class="membership-current-panel"><div><span class="membership-current-label">Текущее членство</span><h2>'+esc(currentName)+'</h2><p class="muted">'+lastReward+'</p></div><div class="membership-current-reward"><span>Ежедневная награда</span><strong>'+currencyMarkup(Number(data.dailyRobux||0),"P$")+'</strong></div></section>'+
+   '<p class="muted membership-intro">Choose a Sakura membership and receive a daily virtual currency reward.</p>'+
+   '<section class="membership-current-panel"><div><span class="membership-current-label">Current Membership</span><h2>'+esc(currentName)+'</h2><p class="muted">'+lastReward+'</p></div><div class="membership-current-reward"><span>Daily Reward</span><strong>'+currencyMarkup(Number(data.dailyRobux||0),"P$")+'</strong></div></section>'+
    '<div class="membership-plans">'+plans+'</div>'+
-   '<p class="membership-footnote">Награда автоматически начисляется каждый день в 00:00 по Киеву. Это виртуальные P$ Sakura, а не настоящие Robux Roblox. Членство в Sakura сейчас бесплатное.</p>'+
+   '<p class="membership-footnote">Your reward is credited automatically every day at 00:00 Kyiv time. These are virtual Sakura P$ credits, not real Roblox Robux. Sakura memberships are currently free.</p>'+
    '</div>';
   document.querySelectorAll("[data-membership]").forEach(button=>button.addEventListener("click",async()=>{
    const membershipType=button.dataset.membership;
