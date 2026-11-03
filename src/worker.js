@@ -559,9 +559,9 @@ async function route(request, env) {
 
     try {
       const results = await env.DB.batch([
-        env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=? AND EXISTS (SELECT 1 FROM items WHERE id=? AND price=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)").bind(user.id,itemId,itemId,price,user.id,itemId),
+        env.DB.prepare("DELETE FROM inventory WHERE id=(SELECT id FROM inventory WHERE user_id=? AND item_id=? ORDER BY purchased_at DESC LIMIT 1) AND EXISTS (SELECT 1 FROM items WHERE id=? AND price=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)").bind(user.id,itemId,itemId,price,user.id,itemId),
         env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND changes()=1").bind(price,user.id),
-        env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=? AND changes()=1").bind(user.id,itemId)
+        env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=? AND changes()=1 AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)").bind(user.id,itemId,user.id,itemId)
       ]);
 
       if (!results?.[0]?.meta?.changes) {
@@ -1101,8 +1101,8 @@ async function route(request, env) {
       const changed=await env.DB.prepare("UPDATE trades SET status='ACCEPTED',responded_at=datetime('now') WHERE id=? AND status='PENDING' AND recipient_id=?").bind(trade.id,user.id).run();
       if(!changed?.meta?.changes)return fail("This trade was already answered.",409);
       const statements=[
-        ...offered.map(itemId=>env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=?").bind(trade.sender_id,itemId)),
-        ...requested.map(itemId=>env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=?").bind(trade.recipient_id,itemId)),
+        ...offered.map(itemId=>env.DB.prepare("DELETE FROM inventory WHERE id=(SELECT id FROM inventory WHERE user_id=? AND item_id=? ORDER BY purchased_at DESC LIMIT 1)").bind(trade.sender_id,itemId)),
+        ...requested.map(itemId=>env.DB.prepare("DELETE FROM inventory WHERE id=(SELECT id FROM inventory WHERE user_id=? AND item_id=? ORDER BY purchased_at DESC LIMIT 1)").bind(trade.recipient_id,itemId)),
         ...offered.map(itemId=>env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) VALUES (?,?,?)").bind(id(),trade.recipient_id,itemId)),
         ...requested.map(itemId=>env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) VALUES (?,?,?)").bind(id(),trade.sender_id,itemId)),
         env.DB.prepare("DELETE FROM trade_locks WHERE trade_id=?").bind(trade.id)
