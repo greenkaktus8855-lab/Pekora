@@ -233,3 +233,22 @@ try {
 } catch {
     Show-Notice ("The local Renderer is running, but renderer.mopcblox.online is not responding yet." + [Environment]::NewLine + [Environment]::NewLine + "The Cloudflare Tunnel may still be starting or may point to the wrong local port." + [Environment]::NewLine + [Environment]::NewLine + "Details: " + $_.Exception.Message + [Environment]::NewLine + [Environment]::NewLine + "Renderer logs: " + $logDir) "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Warning)
 }
+
+# Keep the genuine OpenPekora renderer ready automatically after future Windows logons.
+try {
+    $backgroundScript = Join-Path $PSScriptRoot "Start-Sakura-Renderer-Background.ps1"
+    if (-not (Test-Path -LiteralPath $backgroundScript)) {
+        throw "Background startup script is missing: $backgroundScript"
+    }
+    $taskName = "Sakura OpenPekora Renderer"
+    $taskPowerShell = Join-Path $PSHOME "powershell.exe"
+    $taskArguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $backgroundScript + '"'
+    $taskAction = New-ScheduledTaskAction -Execute $taskPowerShell -Argument $taskArguments
+    $taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User $identity.Name
+    $taskPrincipal = New-ScheduledTaskPrincipal -UserId $identity.Name -LogonType Interactive -RunLevel Highest
+    $taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::FromDays(3650)) -RestartCount 10 -RestartInterval ([TimeSpan]::FromMinutes(1))
+    Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Description "Starts Sakura's local OpenPekora RCC and secured renderer at Windows logon." -Force | Out-Null
+    Show-Notice "OpenPekora is running. Automatic startup at Windows logon has also been enabled." "Sakura Renderer"
+} catch {
+    Show-Notice ("The renderer is running now, but automatic startup could not be configured." + [Environment]::NewLine + $_.Exception.Message) "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Warning)
+}
