@@ -571,51 +571,51 @@ async function membershipPage(){
   app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your membership.</div>';
   return;
  }
- app.innerHTML='<div class="membership-page"><h1 class="page-title">Builders Club</h1><p class="muted membership-intro">Choose a Sakura membership and receive a daily virtual currency reward.</p><div class="membership-current-panel">Loading membership...</div></div>';
+ app.innerHTML='<div class="membership-original-container container mt-4"><div class="row"><div class="col-12 col-lg-6 offset-lg-3"><div class="membership-openpekora-card card card-body bg-dark text-light"><h2>Builders Club Membership</h2><p class="muted">Loading membership...</p></div></div></div></div>';
  try{
   const data=await api("/api/membership");
   if(!isActiveView(view))return;
   setUser({...me,balance:Number(data.balance??me.balance),tixBalance:Number(data.tixBalance??me.tixBalance)});
   const current=String(data.membershipType||"None");
-  const currentPlan=MEMBERSHIP_PLANS.find(plan=>plan.type===current);
-  const currentName=currentPlan?.name||"None";
-  const lastReward=data.lastRewardDate
-   ? 'Last payout: '+new Date(data.lastRewardDate+"T00:00:00").toLocaleDateString()
-   : "No daily payouts yet.";
+  const currentPlan=MEMBERSHIP_PLANS.find(plan=>plan.type===current)||MEMBERSHIP_PLANS[0];
   const canUseAdvanced=Boolean(data.canUseAdvancedMemberships);
   const unlockDate=data.membershipUnlockAt?new Date(data.membershipUnlockAt).toLocaleString():null;
-  const plans=MEMBERSHIP_PLANS.map(plan=>{
-   const selected=plan.type===current;
+  const lastReward=data.lastRewardDate
+   ? 'Last daily reward: '+new Date(data.lastRewardDate+"T00:00:00").toLocaleDateString()
+   : "No daily rewards have been recorded yet.";
+  const options=MEMBERSHIP_PLANS.map(plan=>{
    const advanced=plan.type==="OutrageousBuildersClub"||plan.type==="Premium";
    const locked=advanced&&!canUseAdvanced;
-   return '<article class="membership-plan '+(selected?'is-current':'')+(locked?' is-locked':'')+'">'+
-    '<div class="membership-plan-mark">'+esc(plan.short)+'</div>'+
-    '<h2>'+esc(plan.name)+'</h2>'+
-    '<p class="membership-plan-description">'+esc(plan.description)+'</p>'+
-    (locked?'<p class="membership-locked-note">Unlocks after your account is more than 3 days old'+(unlockDate?' · '+esc(unlockDate):'')+'</p>':'')+
-    '<div class="membership-plan-reward">'+currencyMarkup(plan.daily,"P$")+'<span>per day</span></div>'+
-    '<button class="'+(selected||locked?'button secondary':'primary')+'" type="button" data-membership="'+esc(plan.type)+'" '+(selected||locked?'disabled':'')+'>'+(selected?'Current Membership':locked?'Locked':'Choose')+'</button>'+
-   '</article>';
+   const label=plan.type==="BuildersClub"?"BC":plan.type==="TurboBuildersClub"?"TBC":plan.type==="OutrageousBuildersClub"?"OBC":plan.name;
+   return '<option value="'+esc(plan.type)+'" '+(locked?'disabled ':'')+(plan.type===current?'selected':'')+'>'+esc(label)+(locked?' — locked':'')+'</option>';
   }).join("");
-  app.innerHTML='<div class="membership-page">'+
-   '<h1 class="page-title">Builders Club</h1>'+
-   '<p class="muted membership-intro">Choose a Sakura membership and receive a daily virtual currency reward.</p>'+
-   '<section class="membership-current-panel"><div><span class="membership-current-label">Current Membership</span><h2>'+esc(currentName)+'</h2><p class="muted">'+lastReward+'</p></div><div class="membership-current-reward"><span>Daily Reward</span><strong>'+currencyMarkup(Number(data.dailyRobux||0),"P$")+'</strong></div></section>'+
-   '<div class="membership-plans">'+plans+'</div>'+
-   '<p class="membership-footnote">Your reward is credited automatically every day at 00:00 Kyiv time. These are virtual Sakura P$ credits, not real Roblox Robux. Sakura memberships are currently free. Premium and OBC require an account older than 3 days.</p>'+
-   '</div>';
-  document.querySelectorAll("[data-membership]").forEach(button=>button.addEventListener("click",async()=>{
-   const membershipType=button.dataset.membership;
+  app.innerHTML='<div class="membership-original-container container mt-4"><div class="row"><div class="col-12 col-lg-6 offset-lg-3"><div class="membership-openpekora-card card card-body bg-dark text-light">'+
+   '<h2>Builders Club Membership</h2>'+
+   '<p class="membership-openpekora-current">Current Membership: <strong>'+esc(currentPlan.name)+'</strong></p>'+
+   '<p class="membership-openpekora-reward">Daily Reward: <strong>'+currencyMarkup(currentPlan.daily,"P$")+'</strong></p>'+
+   '<p class="muted">'+esc(lastReward)+'</p>'+
+   '<form id="membershipForm" method="post" autocomplete="off"><select class="form-control" name="membershipType">'+options+'</select>'+
+   (!canUseAdvanced?'<p class="membership-openpekora-lock-note">OBC and Premium unlock after your account is more than 3 days old'+(unlockDate?' · '+esc(unlockDate):'')+'</p>':'')+
+   '<button class="primary membership-openpekora-submit" type="submit">Submit Changes</button></form>'+
+   '<p class="membership-openpekora-footnote">Memberships are currently free. Daily rewards are virtual Sakura P$ credits, not real Roblox Robux, and are credited at 00:00 Kyiv time.</p>'+
+   '</div></div></div></div>';
+  const form=document.getElementById("membershipForm");
+  form.elements.membershipType.value=current;
+  form.addEventListener("submit",async e=>{
+   e.preventDefault();
+   const membershipType=String(new FormData(form).get("membershipType")||"");
+   const button=form.querySelector("button[type=submit]");
    button.disabled=true;
    try{
     await api("/api/membership",{method:"POST",body:JSON.stringify({membershipType})});
     if(!isActiveView(view))return;
     toast("Membership updated");
+    await refreshMe();
     await membershipPage();
    }catch(error){
     if(isActiveView(view)){toast(error.message);button.disabled=false}
    }
-  }));
+  });
  }catch(error){
   if(isActiveView(view))app.innerHTML='<div class="empty">Could not load membership: '+esc(error.message)+'</div>';
  }
