@@ -953,7 +953,7 @@ async function route(request, env) {
     const data = await body(request);
     const name = String(data?.name||"").trim();
     const description = String(data?.description||"").trim();
-    if (!/^[a-z0-9а-яёіїєґ _.-]{3,32}$/i.test(name)) return fail("Group name must be 3–32 characters and use letters, numbers, spaces, dots, underscores or hyphens.");
+    if (!/^[a-z0-9а-яёіїєґ _.-]{1,32}$/i.test(name)) return fail("Group name must be 1–32 characters and use letters, numbers, spaces, dots, underscores or hyphens.");
     if (description.length>300) return fail("Group description must be 300 characters or less.");
     const admin = await env.DB.prepare("SELECT id FROM users WHERE username='Admin' COLLATE NOCASE AND is_banned=0").first();
     if (!admin) return fail("The Admin account could not be found. Group creation is temporarily unavailable.",503);
@@ -1067,9 +1067,7 @@ async function route(request, env) {
     };
     if(!(await checkOwned(user.id,offered)))return fail("You can only offer Limited or Off Sale items that are in your inventory.",409);
     if(!(await checkOwned(recipient.id,requested)))return fail("You can only request Limited or Off Sale items that are in that player's inventory.",409);
-    const ownsIncoming=async(ownerId,ids)=>ids.length?await checkOwned(ownerId,ids):false;
-    if(await ownsIncoming(recipient.id,offered))return fail("That player already owns an item you offered.",409);
-    if(await ownsIncoming(user.id,requested))return fail("You already own an item requested in this trade.",409);
+    // Duplicate Limited/Off Sale items are allowed in trades so users can send gifts.
     const tradeId=id();
     const statements=[env.DB.prepare("INSERT INTO trades (id,sender_id,recipient_id,offered_items,requested_items) VALUES (?,?,?,?,?)").bind(tradeId,user.id,recipient.id,JSON.stringify(offered),JSON.stringify(requested))];
     for(const itemId of offered) statements.push(env.DB.prepare("INSERT INTO trade_locks (owner_id,item_id,trade_id) VALUES (?,?,?)").bind(user.id,itemId,tradeId));
@@ -1099,7 +1097,7 @@ async function route(request, env) {
         return (rows.results||[]).length===ids.length;
       };
       if(!(await owned(trade.sender_id,offered))||!(await owned(trade.recipient_id,requested)))return fail("Only Limited or Off Sale items can be traded. This offer is no longer valid; cancel it and create a new trade.",409);
-      if((offered.length&&await owned(trade.recipient_id,offered))||(requested.length&&await owned(trade.sender_id,requested)))return fail("One player already owns an incoming item. Trade cannot be completed.",409);
+      // Do not reject incoming items already owned; receiving duplicates is allowed for gifts.
       const changed=await env.DB.prepare("UPDATE trades SET status='ACCEPTED',responded_at=datetime('now') WHERE id=? AND status='PENDING' AND recipient_id=?").bind(trade.id,user.id).run();
       if(!changed?.meta?.changes)return fail("This trade was already answered.",409);
       const statements=[
