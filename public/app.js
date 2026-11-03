@@ -149,14 +149,14 @@ function itemPreview(x,extraClass=""){
  }
  return x?.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name||"Item")+'" loading="lazy">':'◇';
 }
-const LIMITED_OVERLAY_URL="https://raw.githubusercontent.com/Blue7366/OpenSakura/main/frontend/public/img/CatalogOverlays/Limited.png";
+const LIMITED_OVERLAY_CLASS="icon-labels Limited";
 function itemStockState(x){
  const total=Math.max(0,Number(x?.stock_limit||0)),sold=Math.max(0,Number(x?.stock_sold||0));
  return {limited:Number(x?.is_limited)===1,total,sold,finite:total>0,remaining:Math.max(0,total-sold),soldOut:total>0&&sold>=total};
 }
 function itemBadgeMarkup(x){
  const stock=itemStockState(x);
- return (stock.limited?'<img class="limited-overlay" src="'+LIMITED_OVERLAY_URL+'" alt="Limited" loading="lazy">':"")+
+ return (stock.limited?'<span class="limited-overlay icon-labels Limited" role="img" aria-label="Limited"></span>':"")+
   (stock.finite?'<span class="stock-overlay '+(stock.soldOut?'sold-out':'')+'">'+(stock.soldOut?'Sold out':stock.remaining+' left')+'</span>':"");
 }
 function itemStockText(x){
