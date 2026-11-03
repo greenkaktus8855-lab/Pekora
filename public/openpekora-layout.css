@@ -420,3 +420,18 @@ input:focus,textarea:focus,select:focus{
 .op-account button:not(#logoutBtn):active{
   transform:translateY(1px);
 }
+
+
+/* Keep labels and icons inside white buttons violet for proper contrast */
+#app .button :where(*),
+#app .primary :where(*),
+.op-account button:not(#logoutBtn) :where(*),
+.account-area button:not(#logoutBtn) :where(*){
+  color:inherit!important;
+}
+#app .button :where(svg),
+#app .primary :where(svg),
+.op-account button:not(#logoutBtn) :where(svg){
+  fill:currentColor;
+  stroke:currentColor;
+}
