@@ -503,8 +503,8 @@ async function avatarPage(){
   try{
    if(!window.__sakuraThree){
     window.__sakuraThree=(async()=>{
-     const THREE=await import("https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js");
-     const controlsModule=await import("https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js");
+     const THREE=await import("https://cdn.jsdelivr.net/npm/three@0.170.0/+esm");
+     const controlsModule=await import("https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js/+esm");
      return {THREE,OrbitControls:controlsModule.OrbitControls};
     })();
    }
