@@ -24,8 +24,15 @@ if (-not (Test-Path -LiteralPath $rccSetup) -or -not (Test-Path -LiteralPath $re
     exit
 }
 
+$settingsDir = Join-Path $env:LOCALAPPDATA "SakuraRenderer"
+New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
+$rootPathFile = Join-Path $settingsDir "openpekora-root.txt"
+$rememberedRoot = ""
+if (Test-Path -LiteralPath $rootPathFile) {
+    $rememberedRoot = [string](Get-Content -LiteralPath $rootPathFile -Raw -ErrorAction SilentlyContinue).Trim()
+}
 $openPekoraRoot = [string]$env:SAKURA_OPENPEKORA_ROOT
-$candidates = @($openPekoraRoot, "C:\Pekora-RCC-Host\OpenPekora")
+$candidates = @($openPekoraRoot, $rememberedRoot, "C:\Pekora-RCC-Host\OpenPekora")
 foreach ($candidate in $candidates) {
     if (-not [string]::IsNullOrWhiteSpace($candidate) -and
         (Test-Path -LiteralPath (Join-Path $candidate "game-renderer\config.json")) -and
@@ -47,7 +54,26 @@ if (-not (Test-Path -LiteralPath (Join-Path $openPekoraRoot "game-renderer\confi
     Show-Notice "That folder does not contain the OpenPekora renderer and RCCService 2020. Choose the OpenPekora folder, not the Sakura folder." "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Error)
     exit
 }
+$openPekoraRoot = (Resolve-Path -LiteralPath $openPekoraRoot).Path
+[System.IO.File]::WriteAllText($rootPathFile, $openPekoraRoot, [System.Text.UTF8Encoding]::new($false))
 
+$secretStorePath = Join-Path $settingsDir "renderer-secret.dpapi"
+$secret = [string]$env:PEKORA_RENDERER_SECRET
+if ([string]::IsNullOrWhiteSpace($secret) -and (Test-Path -LiteralPath $secretStorePath)) {
+    try {
+        $storedSecureSecret = Get-Content -LiteralPath $secretStorePath -Raw | ConvertTo-SecureString
+        $storedSecretPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($storedSecureSecret)
+        try {
+            $secret = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($storedSecretPointer)
+        } finally {
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($storedSecretPointer)
+        }
+    } catch {
+        $secret = ""
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($secret)) {
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Start Sakura Renderer"
 $form.StartPosition = "CenterScreen"
@@ -89,9 +115,19 @@ if ($form.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { exit }
 $secret = $secretBox.Text
 $secretBox.Clear()
 $form.Dispose()
+}
 if ([string]::IsNullOrWhiteSpace($secret) -or $secret.Length -lt 24) {
     Show-Notice "The key must be at least 24 characters and must exactly match the Cloudflare Worker secret AVATAR_RENDERER_SECRET." "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Error)
     exit
+}
+if (-not (Test-Path -LiteralPath $secretStorePath)) {
+    try {
+        $secureToStore = ConvertTo-SecureString -String $secret -AsPlainText -Force
+        $protectedSecret = ConvertFrom-SecureString -SecureString $secureToStore
+        [System.IO.File]::WriteAllText($secretStorePath, $protectedSecret, [System.Text.UTF8Encoding]::new($false))
+    } catch {
+        Show-Notice "The renderer key could not be saved securely. It will be requested again next time." "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Warning)
+    }
 }
 
 $npm = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
