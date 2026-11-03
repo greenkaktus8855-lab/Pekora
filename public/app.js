@@ -60,6 +60,7 @@ function renderSidebar(active="home"){
   '<a class="side-user" href="/#profile?id='+encodeURIComponent(me.publicId||"")+'" data-page="profile"><span class="side-avatar">'+avatar()+'</span><span><span class="side-username">'+esc(me.username)+(me.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</span><span class="side-role">Account</span></span></a>'+
   '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span></a>').join("")+
   '<div class="side-separator"></div>'+
+  '<a href="#promocodes" data-page="promocodes" class="side-promo-button '+(active==="promocodes"?"active":"")+'">Promo Codes</a>'+
   (me.role==="OWNER"?'<a href="#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':'')+
   '</nav></div>';
 }
@@ -581,14 +582,19 @@ async function membershipPage(){
   const lastReward=data.lastRewardDate
    ? 'Last payout: '+new Date(data.lastRewardDate+"T00:00:00").toLocaleDateString()
    : "No daily payouts yet.";
+  const canUseAdvanced=Boolean(data.canUseAdvancedMemberships);
+  const unlockDate=data.membershipUnlockAt?new Date(data.membershipUnlockAt).toLocaleString():null;
   const plans=MEMBERSHIP_PLANS.map(plan=>{
    const selected=plan.type===current;
-   return '<article class="membership-plan '+(selected?'is-current':'')+'">'+
+   const advanced=plan.type==="OutrageousBuildersClub"||plan.type==="Premium";
+   const locked=advanced&&!canUseAdvanced;
+   return '<article class="membership-plan '+(selected?'is-current':'')+(locked?' is-locked':'')+'">'+
     '<div class="membership-plan-mark">'+esc(plan.short)+'</div>'+
     '<h2>'+esc(plan.name)+'</h2>'+
     '<p class="membership-plan-description">'+esc(plan.description)+'</p>'+
+    (locked?'<p class="membership-locked-note">Unlocks after your account is more than 3 days old'+(unlockDate?' · '+esc(unlockDate):'')+'</p>':'')+
     '<div class="membership-plan-reward">'+currencyMarkup(plan.daily,"P$")+'<span>per day</span></div>'+
-    '<button class="'+(selected?'button secondary':'primary')+'" type="button" data-membership="'+esc(plan.type)+'" '+(selected?'disabled':'')+'>'+(selected?'Current Membership':'Choose')+'</button>'+
+    '<button class="'+(selected||locked?'button secondary':'primary')+'" type="button" data-membership="'+esc(plan.type)+'" '+(selected||locked?'disabled':'')+'>'+(selected?'Current Membership':locked?'Locked':'Choose')+'</button>'+
    '</article>';
   }).join("");
   app.innerHTML='<div class="membership-page">'+
@@ -596,7 +602,7 @@ async function membershipPage(){
    '<p class="muted membership-intro">Choose a Sakura membership and receive a daily virtual currency reward.</p>'+
    '<section class="membership-current-panel"><div><span class="membership-current-label">Current Membership</span><h2>'+esc(currentName)+'</h2><p class="muted">'+lastReward+'</p></div><div class="membership-current-reward"><span>Daily Reward</span><strong>'+currencyMarkup(Number(data.dailyRobux||0),"P$")+'</strong></div></section>'+
    '<div class="membership-plans">'+plans+'</div>'+
-   '<p class="membership-footnote">Your reward is credited automatically every day at 00:00 Kyiv time. These are virtual Sakura P$ credits, not real Roblox Robux. Sakura memberships are currently free.</p>'+
+   '<p class="membership-footnote">Your reward is credited automatically every day at 00:00 Kyiv time. These are virtual Sakura P$ credits, not real Roblox Robux. Sakura memberships are currently free. Premium and OBC require an account older than 3 days.</p>'+
    '</div>';
   document.querySelectorAll("[data-membership]").forEach(button=>button.addEventListener("click",async()=>{
    const membershipType=button.dataset.membership;
@@ -614,6 +620,53 @@ async function membershipPage(){
   if(isActiveView(view))app.innerHTML='<div class="empty">Could not load membership: '+esc(error.message)+'</div>';
  }
 }
+async function promocodesPage(){
+ const view=beginView();
+ renderSidebar("promocodes");
+ if(!me){
+  app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to redeem promo codes.</div>';
+  return;
+ }
+ app.innerHTML='<div class="promocodes-page"><h1 class="page-title">Promo Codes</h1><p class="muted">Enter a code to claim its Sakura currency or item rewards.</p>'+
+  '<section class="promocode-redeem-panel"><form id="promocodeRedeemForm" class="promocode-redeem-form"><label for="promocodeInput">Promo code</label><div class="promocode-redeem-row"><input id="promocodeInput" name="code" minlength="3" maxlength="32" autocomplete="off" placeholder="ENTER CODE" required><button class="primary" type="submit">Redeem</button></div><p id="promocodeMessage" class="muted" role="status"></p></form></section>'+
+  '<section class="promocode-history-section"><h2>Redeemed Codes</h2><div id="promocodeHistory" class="promocode-history">Loading...</div></section></div>';
+ const form=document.getElementById("promocodeRedeemForm");
+ const message=document.getElementById("promocodeMessage");
+ const historyHost=document.getElementById("promocodeHistory");
+ async function loadClaims(){
+  try{
+   const data=await api("/api/promocodes");
+   if(!isActiveView(view)||!historyHost?.isConnected)return;
+   const claims=data.claims||[];
+   historyHost.innerHTML=claims.length?claims.map(claim=>'<article class="promocode-claim"><div><strong>'+esc(claim.code)+'</strong><span class="muted">'+new Date(claim.claimed_at+"Z").toLocaleString()+'</span></div><p>'+(Number(claim.reward_amount)>0?currencyMarkup(claim.reward_amount,claim.reward_currency||"P$"):'')+(claim.item_names?'<span class="promocode-items-reward">'+esc(claim.item_names)+'</span>':'')+'</p></article>').join(""):'<div class="empty">You have not redeemed any promo codes yet.</div>';
+  }catch(error){if(isActiveView(view)&&historyHost)historyHost.textContent=error.message}
+ }
+ form.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const input=form.elements.code;
+  const code=String(input.value||"").trim().toUpperCase();
+  const button=form.querySelector("button[type=submit]");
+  button.disabled=true;
+  message.textContent="Checking code...";
+  try{
+   const result=await api("/api/promocodes/redeem",{method:"POST",body:JSON.stringify({code})});
+   if(!isActiveView(view))return;
+   const reward=result.reward||{};
+   const rewardText=[];
+   if(Number(reward.amount)>0)rewardText.push(Number(reward.amount).toLocaleString()+" "+(reward.currency||"P$"));
+   if((reward.items||[]).length)rewardText.push(reward.items.join(", "));
+   message.textContent="Code redeemed! Reward: "+rewardText.join(" + ");
+   input.value="";
+   await refreshMe();
+   await loadClaims();
+   toast("Promo code redeemed");
+  }catch(error){
+   if(isActiveView(view))message.textContent=error.message;
+  }finally{button.disabled=false}
+ });
+ await loadClaims();
+}
+
 async function gamesPage(){
  const view=beginView();
  renderSidebar("games");
@@ -834,6 +887,82 @@ async function owner(){
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>'+
  '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Sakura currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="1" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
+ app.insertAdjacentHTML("beforeend",
+  '<section class="owner-section owner-promocode-section"><h2>Promo Code Management</h2><p class="muted">Create codes that grant Sakura currency and one or more items from the catalog. Set a total claim limit and optional expiry date.</p>'+
+  '<form id="ownerPromoForm" class="owner-item-form owner-promo-form">'+
+  '<label>Promo code<input name="code" minlength="3" maxlength="32" pattern="[A-Za-z0-9_-]+" placeholder="SAKURA2026" required></label>'+
+  '<label>Currency reward amount<input name="reward_amount" type="number" min="0" max="1000000" step="1" value="0"></label>'+
+  '<label>Currency<select name="reward_currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label>'+
+  '<label>Reward items (you can select several)<select id="ownerPromoItems" name="item_ids" multiple size="8"></select></label>'+
+  '<p class="muted">Leave the amount at 0 to make this an item-only code. You can combine items and currency.</p>'+
+  '<label>Maximum total uses<input name="max_uses" type="number" min="1" max="1000000" step="1" placeholder="Unlimited"></label>'+
+  '<label>Expires at (optional)<input name="expires_at" type="datetime-local"></label>'+
+  '<button class="primary" type="submit">Create promo code</button><span id="ownerPromoMessage" class="muted" role="status"></span>'+
+  '</form><div id="ownerPromoList" class="owner-promocode-list">Loading promo codes...</div></section>'
+ );
+ const promoForm=document.getElementById("ownerPromoForm");
+ const promoItemSelect=document.getElementById("ownerPromoItems");
+ const promoList=document.getElementById("ownerPromoList");
+ const promoMessage=document.getElementById("ownerPromoMessage");
+ async function loadOwnerPromocodes(){
+  if(!promoList)return;
+  try{
+   const data=await api("/api/owner/promocodes");
+   if(!isActiveView(view))return;
+   const itemsData=data.items||[];
+   promoItemSelect.innerHTML=itemsData.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.name)+' · '+esc(item.category)+'</option>').join("");
+   const codes=data.promocodes||[];
+   promoList.innerHTML=codes.length?codes.map(code=>{
+    const uses=Number(code.usage_count||0);
+    const max=code.max_uses===null||code.max_uses===undefined?"Unlimited":Number(code.max_uses).toLocaleString();
+    const expiry=code.expires_at?new Date(code.expires_at).toLocaleString():"No expiry";
+    const rewards=[];
+    if(Number(code.reward_amount)>0)rewards.push(Number(code.reward_amount).toLocaleString()+" "+(code.reward_currency||"P$"));
+    if(code.item_names)rewards.push(code.item_names);
+    return '<article class="owner-promocode-row"><div class="owner-promocode-details"><strong>'+esc(code.code)+'</strong><span class="muted">'+esc(rewards.join(" + ")||"No rewards")+'</span><span class="muted">Uses: '+uses.toLocaleString()+' / '+max+' · '+esc(expiry)+'</span></div><span class="owner-promocode-status '+(Number(code.is_active)===1?'is-active':'is-disabled')+'">'+(Number(code.is_active)===1?'Active':'Disabled')+'</span><button class="button secondary" type="button" data-toggle-promo="'+esc(code.code)+'" data-next-active="'+(Number(code.is_active)===1?'false':'true')+'">'+(Number(code.is_active)===1?'Disable':'Enable')+'</button></article>';
+   }).join(""):'<p class="muted">No promo codes created yet.</p>';
+   promoList.querySelectorAll("[data-toggle-promo]").forEach(button=>button.addEventListener("click",async()=>{
+    button.disabled=true;
+    try{
+     await api("/api/owner/promocodes/"+encodeURIComponent(button.dataset.togglePromo),{method:"PATCH",body:JSON.stringify({is_active:button.dataset.nextActive==="true"})});
+     await loadOwnerPromocodes();
+     toast("Promo code status updated");
+    }catch(error){toast(error.message);button.disabled=false}
+   }));
+  }catch(error){if(promoList)promoList.textContent=error.message}
+ }
+ promoForm?.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const values=new FormData(promoForm);
+  const code=String(values.get("code")||"").trim().toUpperCase();
+  const itemIds=[...promoItemSelect.selectedOptions].map(option=>option.value);
+  const rawExpiry=String(values.get("expires_at")||"");
+  let expiresAt=null;
+  if(rawExpiry){
+   const expiryDate=new Date(rawExpiry);
+   if(!Number.isFinite(expiryDate.getTime())){promoMessage.textContent="Choose a valid expiry date.";return}
+   expiresAt=expiryDate.toISOString();
+  }
+  const data={
+   code,
+   reward_amount:Number(values.get("reward_amount")||0),
+   reward_currency:String(values.get("reward_currency")||"P$"),
+   item_ids:itemIds,
+   max_uses:String(values.get("max_uses")||"").trim()||null,
+   expires_at:expiresAt
+  };
+  const button=promoForm.querySelector("button[type=submit]");
+  button.disabled=true;promoMessage.textContent="Creating promo code...";
+  try{
+   await api("/api/owner/promocodes",{method:"POST",body:JSON.stringify(data)});
+   promoForm.reset();
+   promoMessage.textContent="Promo code created.";
+   await loadOwnerPromocodes();
+   toast("Promo code created");
+  }catch(error){promoMessage.textContent=error.message}
+  finally{button.disabled=false}
+ });
+ loadOwnerPromocodes();
  const userSearch=document.getElementById("ownerUserSearch");
  const userResults=document.getElementById("ownerUserResults");
  const userDetails=document.getElementById("ownerUserDetails");
@@ -1058,6 +1187,7 @@ async function render(name){
  else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
  else if(name==="currency")await currencyPage();
  else if(name==="membership")await membershipPage();
+ else if(name==="promocodes")await promocodesPage();
  else if(name==="games")await gamesPage();
  else if(name==="trades")await tradesPage();
  else if(name==="settings")await settings();
