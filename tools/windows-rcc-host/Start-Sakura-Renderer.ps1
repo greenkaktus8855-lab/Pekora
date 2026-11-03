@@ -124,8 +124,16 @@ try {
         $ownerInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $($existing.OwningProcess)" -ErrorAction SilentlyContinue
         $ownerCommand = [string]$ownerInfo.CommandLine
         if ($owner -and $owner.ProcessName -match "^node" -and $ownerCommand -match "(?i)Main\.js|game-renderer") {
-            Write-Host "OpenPekora Renderer is already listening on port $rendererPort. Reusing the running process."
-            $rendererAlreadyRunning = $true
+            Write-Host "Stopping the existing OpenPekora Renderer so it reloads the updated RCC port configuration."
+            Stop-Process -Id $existing.OwningProcess -Force
+            $released = $false
+            for ($wait = 0; $wait -lt 20; $wait++) {
+                Start-Sleep -Seconds 1
+                $stillListening = Get-NetTCPConnection -LocalPort $rendererPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+                if (-not $stillListening) { $released = $true; break }
+            }
+            if (-not $released) { throw "The old OpenPekora Renderer did not release port $rendererPort." }
+            $rendererAlreadyRunning = $false
         } else {
             $processLabel = if ($owner) { $owner.ProcessName } else { "unknown process" }
             throw "Port $rendererPort is occupied by $processLabel (PID $($existing.OwningProcess)), but it does not look like the OpenPekora Renderer. Close that app before starting Sakura."
