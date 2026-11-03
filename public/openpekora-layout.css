@@ -585,3 +585,217 @@ input:focus,textarea:focus,select:focus{
   align-items:center;
 }
 .owner-item-subfields select[name="currency"]{min-width:88px}
+
+
+/* Original OpenPekora 2016 button components adapted without redesign */
+#app .primary,
+.op-account #registerBtn,
+.account-area #registerBtn{
+  -webkit-user-select:none;
+  -moz-user-select:none;
+  -ms-user-select:none;
+  user-select:none;
+  transition:box-shadow .2s ease-in-out;
+  border:1px solid #02b757;
+  background:#02b757;
+  color:#fff;
+  cursor:pointer;
+  display:inline-block;
+  font-weight:400;
+  height:auto;
+  text-align:center;
+  white-space:nowrap;
+  vertical-align:middle;
+  padding:7px 7px;
+  font-size:16px;
+  line-height:100%;
+  border-radius:3px;
+  box-shadow:none;
+  text-decoration:none;
+}
+#app .primary:hover,
+#app .primary:focus,
+.op-account #registerBtn:hover,
+.op-account #registerBtn:focus{
+  background:#3fc679;
+  box-shadow:0 1px 3px rgba(150,150,150,.74);
+  border-color:#3fc679;
+  color:#fff;
+  cursor:pointer;
+}
+#app .primary:active,
+.op-account #registerBtn:active{
+  box-shadow:none;
+  background:#3fc679;
+  color:#fff;
+}
+#app .primary:disabled,
+#app .primary.disabled,
+.op-account #registerBtn:disabled{
+  opacity:1;
+  background:#a3e2bd;
+  border-color:#a3e2bd;
+  color:#fff;
+  cursor:default;
+}
+
+#app .button.secondary,
+#app button.button.secondary{
+  -webkit-user-select:none;
+  user-select:none;
+  transition:box-shadow .2s ease-in-out;
+  border:1px solid #00a2ff;
+  background:#00a2ff;
+  color:#fff;
+  cursor:pointer;
+  display:inline-block;
+  font-weight:400;
+  height:auto;
+  text-align:center;
+  white-space:nowrap;
+  vertical-align:middle;
+  padding:7px 7px;
+  font-size:16px;
+  line-height:100%;
+  border-radius:3px;
+  box-shadow:none;
+  text-decoration:none;
+}
+#app .button.secondary:hover,
+#app .button.secondary:focus{
+  background:#32b5ff;
+  box-shadow:0 1px 3px rgba(150,150,150,.74);
+  border-color:#32b5ff;
+  color:#fff;
+}
+#app .button.secondary:active{
+  box-shadow:none;
+  background:#32b5ff;
+  color:#fff;
+}
+#app .button.secondary:disabled,
+#app .button.secondary.disabled{
+  opacity:1;
+  background:#99daff;
+  border-color:#99daff;
+  color:#fff;
+  cursor:default;
+}
+
+#app .button:not(.secondary):not([data-buy]),
+#app .catalog-search-button,
+.op-account #loginBtn,
+.op-account #logoutBtn,
+.account-area #loginBtn,
+.account-area #logoutBtn{
+  -webkit-user-select:none;
+  user-select:none;
+  transition:box-shadow .2s ease-in-out;
+  border:1px solid #b8b8b8;
+  background:#fff;
+  color:#191919;
+  cursor:pointer;
+  display:inline-block;
+  font-weight:400;
+  height:auto;
+  text-align:center;
+  white-space:nowrap;
+  vertical-align:middle;
+  padding:7px 7px;
+  font-size:16px;
+  line-height:100%;
+  border-radius:3px;
+  box-shadow:none;
+  text-decoration:none;
+}
+#app .button:not(.secondary):not([data-buy]):hover,
+#app .button:not(.secondary):not([data-buy]):focus,
+#app .catalog-search-button:hover,
+#app .catalog-search-button:focus,
+.op-account #loginBtn:hover,
+.op-account #loginBtn:focus,
+.op-account #logoutBtn:hover,
+.op-account #logoutBtn:focus{
+  background:#fff;
+  box-shadow:0 1px 3px rgba(150,150,150,.74);
+  border-color:#b8b8b8;
+  color:#191919;
+}
+#app .button:not(.secondary):not([data-buy]):active,
+#app .catalog-search-button:active,
+.op-account #loginBtn:active,
+.op-account #logoutBtn:active{
+  box-shadow:none;
+  background:#fff;
+  color:#191919;
+}
+#app .button:not(.secondary):not([data-buy]):disabled,
+#app .catalog-search-button:disabled,
+.op-account #loginBtn:disabled,
+.op-account #logoutBtn:disabled{
+  opacity:1;
+  background:#fff;
+  border-color:#b8b8b8;
+  color:#b8b8b8;
+  cursor:default;
+}
+
+#app .button[data-buy]{
+  -webkit-user-select:none;
+  user-select:none;
+  transition:box-shadow .2s ease-in-out;
+  border:1px solid #b8b8b8;
+  background:#fff;
+  color:#757575;
+  cursor:pointer;
+  display:inline-block;
+  font-weight:400;
+  height:auto;
+  text-align:center;
+  white-space:nowrap;
+  vertical-align:middle;
+  padding:7px 7px;
+  font-size:16px;
+  line-height:100%;
+  border-radius:3px;
+  box-shadow:none;
+  text-decoration:none;
+}
+#app .button[data-buy]:hover,
+#app .button[data-buy]:focus{
+  background:#3fc679;
+  box-shadow:0 1px 3px rgba(150,150,150,.74);
+  border-color:#3fc679;
+  color:#fff;
+}
+#app .button[data-buy]:active{
+  box-shadow:none;
+  background:#3fc679;
+  color:#fff;
+}
+#app .button[data-buy]:disabled{
+  opacity:1;
+  background:#fff;
+  border-color:#b8b8b8;
+  color:#b8b8b8;
+  cursor:default;
+}
+#app .button :where(*),#app .primary :where(*){
+  color:inherit!important;
+}
+#app .button:focus-visible,
+#app .primary:focus-visible,
+#app .catalog-search-button:focus-visible,
+.op-account button:focus-visible{
+  outline:0;
+  box-shadow:0 1px 3px rgba(150,150,150,.74);
+}
+#app .game-locked-button,
+#app .game-locked-button:disabled{
+  opacity:1!important;
+  background:#fff!important;
+  background-image:none!important;
+  border:1px solid #b8b8b8!important;
+  color:#b8b8b8!important;
+  cursor:default!important;
+}
