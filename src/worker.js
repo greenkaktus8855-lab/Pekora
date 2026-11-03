@@ -434,7 +434,7 @@ async function runDailyMembershipPayout(controller,env) {
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
-  const avatarSupportRoute = path === "/v1.1/avatar-fetch" || path.toLowerCase() === "/asset/bodycolors.ashx" || /^\/asset\/?$/i.test(path);
+  const avatarSupportRoute = path === "/v1.1/avatar-fetch" || path.toLowerCase() === "/asset/bodycolors.ashx" || path.toLowerCase() === "/asset" || path.toLowerCase() === "/asset/";
   const apiRoute = path.startsWith("/api/");
   if ((apiRoute && path !== "/api/health" || avatarSupportRoute) && !env.DB) {
     return json({ error:"D1 binding DB is missing." },503);
@@ -741,7 +741,7 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -1647,7 +1647,7 @@ export default {
   },
   async fetch(request, env) {
     const url = new URL(request.url);
-    const avatarSupportRoute = url.pathname === "/v1.1/avatar-fetch" || url.pathname.toLowerCase() === "/asset/bodycolors.ashx" || /^\\/asset\\/?$/i.test(url.pathname);
+    const avatarSupportRoute = url.pathname === "/v1.1/avatar-fetch" || url.pathname.toLowerCase() === "/asset/bodycolors.ashx" || url.pathname.toLowerCase() === "/asset" || url.pathname.toLowerCase() === "/asset/";
     if (url.pathname.startsWith("/api/") || avatarSupportRoute) {
       try { return await route(request,env); }
       catch (error) {
