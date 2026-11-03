@@ -601,3 +601,78 @@
   #app .trade-target-form{align-items:stretch}
   #app .owner-game-row{align-items:flex-start}
 }
+
+
+/* Final pass: flatten the remaining custom inventory and owner controls */
+#app .inventory-sell-card{
+  min-width:0;
+  padding:10px 4px;
+  border:0!important;
+  border-bottom:1px solid var(--op-border)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+#app .inventory-sell-card.is-selected{
+  border:1px solid #533776!important;
+  border-radius:0!important;
+  background:rgba(166,77,255,.08)!important;
+  box-shadow:none!important;
+}
+#app .inventory-sell-panel{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin:18px 0 8px;
+  padding:15px;
+  background:var(--op-surface)!important;
+  border:1px solid var(--op-border)!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+#app .owner-toggle,
+#app .owner-inline-check{
+  border:1px solid var(--op-border)!important;
+  border-radius:0!important;
+  background:var(--op-surface-alt)!important;
+  color:var(--op-copy)!important;
+  box-shadow:none!important;
+}
+#app .avatar-wardrobe-no-image{
+  border-radius:0!important;
+  background:var(--op-surface-alt)!important;
+  color:var(--op-muted)!important;
+}
+#app .avatar-wardrobe-name{
+  min-height:34px;
+  padding:5px 0;
+  overflow-wrap:anywhere;
+}
+#app .inventory-item-price{color:#d9b8ff!important}
+#app .inventory-sell-summary b{color:#d9b8ff!important}
+#app .stock-overlay{border-radius:0!important;box-shadow:none!important}
+#app .account-warning-panel{border-left:1px solid #533776!important}
+#app .owner-user-result{
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+#app .owner-user-result:hover,
+#app .owner-user-result:focus{
+  background:rgba(166,77,255,.08)!important;
+  border-color:#533776!important;
+  box-shadow:none!important;
+}
+#app .owner-item-subfields,
+#app .owner-item-fields,
+#app .owner-user-actions{
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+@media(max-width:560px){
+  #app .inventory-sell-panel{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  #app .inventory-confirm-sell{width:100%}
+}
