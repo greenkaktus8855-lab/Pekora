@@ -49,7 +49,6 @@ function renderSidebar(active="home"){
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-trade","Trades"],
   ["inventory","icon-nav-inventory","Inventory"],
-  ["avatar","icon-nav-profile","Avatar"],
   ["groups","icon-nav-group","Groups"],
   ["currency","icon-nav-robux","Currency"],
   ["membership","icon-nav-robux","Membership"],
@@ -462,97 +461,6 @@ async function inventory(){
   renderSelection();
  }catch(e){if(isActiveView(view)&&grid?.isConnected)grid.textContent=e.message}
 }
-async function avatarPage(){
- const view=beginView();
- renderSidebar("avatar");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your avatar items.</div>';return}
- const publicId=Number(me.publicId||0);
- app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1></div>'+
-  '<div class="avatar-editor-layout">'+
-   '<section class="avatar-preview-panel"><h2>Avatar Preview</h2><div class="avatar-render-frame"><img id="avatarRenderPreview" alt="Your rendered avatar"><div id="avatarRenderStatus" class="avatar-render-status">Connecting to the OpenPekora renderer...</div></div><button class="button secondary avatar-render-refresh" id="refreshAvatarRender" type="button">Refresh Preview</button><p class="muted avatar-render-caption">Rendered by OpenPekora RCCService</p></section>'+
-   '<section class="avatar-wardrobe"><h2>Inventory</h2><p class="muted">Wear and remove items from your inventory. The preview updates after each change.</p><div id="avatarWardrobeGrid" class="avatar-wardrobe-grid">Loading your items...</div></section>'+
-  '</div></div>';
- const grid=document.getElementById("avatarWardrobeGrid");
- const preview=document.getElementById("avatarRenderPreview");
- const status=document.getElementById("avatarRenderStatus");
- let avatarItems=[],equippedIds=new Set(),previewObjectUrl=null,previewRequestId=0;
- const allowed=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
- async function refreshAvatarPreview(){
-  const requestId=++previewRequestId;
-  if(!preview||!status||!Number.isSafeInteger(publicId)||publicId<1){
-   if(status)status.textContent="A valid public user ID is required to render this avatar.";
-   return;
-  }
-  preview.hidden=true;
-  status.hidden=false;
-  status.textContent="Rendering your avatar with OpenPekora RCC...";
-  try{
-   const response=await fetch("/api/avatar/thumbnail/"+encodeURIComponent(String(publicId))+"?v="+Date.now(),{cache:"no-store",credentials:"same-origin"});
-   if(!response.ok){
-    const detail=(await response.text()).trim();
-    throw new Error((detail||"Renderer request failed")+(detail?"":" (HTTP "+response.status+")"));
-   }
-   const contentType=response.headers.get("content-type")||"";
-   if(!contentType.toLowerCase().includes("image/png")){
-    const detail=(await response.text()).trim();
-    throw new Error(detail||"Renderer did not return a PNG image.");
-   }
-   const blob=await response.blob();
-   if(!isActiveView(view)||requestId!==previewRequestId)return;
-   if(previewObjectUrl)URL.revokeObjectURL(previewObjectUrl);
-   previewObjectUrl=URL.createObjectURL(blob);
-   preview.onload=()=>{
-    if(!isActiveView(view)||requestId!==previewRequestId)return;
-    preview.hidden=false;
-    status.textContent="";
-    status.hidden=true;
-   };
-   preview.onerror=()=>{
-    if(!isActiveView(view)||requestId!==previewRequestId)return;
-    preview.hidden=true;
-    status.hidden=false;
-    status.textContent="The returned image could not be displayed.";
-   };
-   preview.src=previewObjectUrl;
-  }catch(error){
-   if(!isActiveView(view)||requestId!==previewRequestId)return;
-   preview.hidden=true;
-   status.hidden=false;
-   status.textContent=String(error?.message||"Avatar rendering failed").slice(0,500);
-  }
- }
- function drawWardrobe(){
-  const available=avatarItems.filter(item=>allowed.includes(item.category));
-  grid.innerHTML=available.length?available.map(item=>{
-   const wearing=equippedIds.has(item.id);
-   const previewMarkup=item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'" loading="lazy">':'<span class="avatar-wardrobe-no-image">'+esc(item.category)+'</span>';
-   return '<article class="avatar-wardrobe-item"><div class="avatar-wardrobe-image">'+previewMarkup+'</div><div class="avatar-wardrobe-name">'+esc(item.name)+'</div><div class="muted">'+esc(item.category)+'</div><button class="button '+(wearing?'secondary':'')+'" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+(wearing?'remove':'wear')+'">'+(wearing?'Remove':'Wear')+'</button></article>';
-  }).join(""):'<div class="avatar-wardrobe-empty">You have no wearable items in your inventory yet.</div>';
- }
- document.getElementById("refreshAvatarRender")?.addEventListener("click",refreshAvatarPreview);
- grid.addEventListener("click",async event=>{
-  const button=event.target.closest("[data-avatar-item]");
-  if(!button)return;
-  const itemId=button.dataset.avatarItem,action=button.dataset.avatarAction;
-  button.disabled=true;
-  try{
-   await api("/api/avatar",{method:"PUT",body:JSON.stringify({itemId,action})});
-   if(action==="wear")equippedIds.add(itemId);else equippedIds.delete(itemId);
-   drawWardrobe();
-   refreshAvatarPreview();
-   toast(action==="wear"?"Item equipped":"Item removed");
-  }catch(error){toast(error.message);button.disabled=false}
- });
- refreshAvatarPreview();
- try{
-  const [inventoryData,avatarData]=await Promise.all([api("/api/inventory"),api("/api/avatar")]);
-  if(!isActiveView(view)||!grid.isConnected)return;
-  avatarItems=inventoryData.items||[];
-  equippedIds=new Set((avatarData.equipped||[]).map(item=>item.id));
-  drawWardrobe();
- }catch(error){if(isActiveView(view)&&grid.isConnected)grid.textContent=error.message}
-}
-
 async function profile(identifier=me?.username,byId=false){
  const view=beginView();
  renderSidebar("profile");
@@ -570,12 +478,8 @@ async function profile(identifier=me?.username,byId=false){
   const publicId=p.publicId??p.id,profileUrl="/#profile?id="+encodeURIComponent(publicId);
   if(!byId&&publicId){history.replaceState({page:"profile",publicId},"",profileUrl)}
   const profileAvatar=avatar(p.username);
-  const renderablePublicId=Number(publicId);
-  const profileRenderImage=Number.isSafeInteger(renderablePublicId)&&renderablePublicId>0
-   ? '<img class="op-profile-render-image" src="/api/avatar/thumbnail/'+encodeURIComponent(String(renderablePublicId))+'" alt="'+esc(p.username)+' avatar" loading="lazy">'
-   : '';
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+profileRenderImage+'</div><div class="op-profile-info">'+
+   '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
@@ -584,7 +488,6 @@ async function profile(identifier=me?.username,byId=false){
    '<section class="op-profile-section"><h2>Inventory</h2>'+
     (owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+
    '</section></div>';
-  document.querySelector(".op-profile-render-image")?.addEventListener("error",event=>event.currentTarget.remove());
   if(!isSelf&&me)loadProfileFriendAction(p.username);
  }catch(e){if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
@@ -1220,7 +1123,7 @@ function infoPage(type){
  beginView();
  renderSidebar("");
  const pages={
-  about:{title:"About Sakura",body:'<p>Sakura is an independent community revival project. It is not affiliated with or endorsed by Roblox Corporation.</p><p>This build includes account profiles, a virtual catalog, inventory previews and friend requests. Avatar wardrobe is available for equipping owned items without a 3D character preview.</p><p>Sakura currency is an in-site balance only. It has no real-world monetary value.</p>'},
+  about:{title:"About Sakura",body:'<p>Sakura is an independent community revival project. It is not affiliated with or endorsed by Roblox Corporation.</p><p>This build includes account profiles, a virtual catalog, inventory previews and friend requests.</p><p>Sakura currency is an in-site balance only. It has no real-world monetary value.</p>'},
   terms:{title:"Terms of Use",body:'<p>Use Sakura respectfully and do not impersonate other users, abuse the service or attempt to access accounts that are not yours.</p><p>Do not use preview image URLs or descriptions that violate the rights or safety of other people. The project owner may remove catalog entries or accounts that abuse the service.</p><p>Virtual currency and catalog items are for use inside this website only. They cannot be exchanged for real money.</p>'},
   privacy:{title:"Privacy",body:'<p>Sakura stores your username, a password hash, session information, profile description, virtual balance, inventory, friend requests and in-site catalog and purchase records so the service can work.</p><p>Passwords are not stored as plain text. Sign-in uses a secure session cookie. This build does not ask for an email address.</p><p>For abuse prevention, the service temporarily stores hashed network-address identifiers and attempt counters for sign-in, registration and owner recovery. Ten attempts in the 15-minute window trigger a 15-minute cooldown. Expired per-address counters reset when that address is used again, and stale rows are removed during Worker setup.</p><p>Do not reuse an important password and do not share your account credentials with anyone.</p>'}
  };
@@ -1237,7 +1140,6 @@ async function render(name){
  else if(name==="login"||name==="register")auth(name);
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
- else if(name==="avatar")await avatarPage();
  else if(name==="groups")await groupsPage();
  else if(name==="profile")await (query.get("id")?profile(query.get("id"),true):profile(query.get("username")||me?.username));
  else if(name==="item")await showItem(query.get("id"),false);
