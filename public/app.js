@@ -49,7 +49,6 @@ function renderSidebar(active="home"){
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-trade","Trades"],
   ["inventory","icon-nav-inventory","Inventory"],
-  ["avatar","icon-nav-profile","Avatar"],
   ["groups","icon-nav-group","Groups"],
   ["currency","icon-nav-robux","Currency"],
   ["membership","icon-nav-robux","Membership"],
@@ -465,172 +464,6 @@ async function inventory(){
  }catch(e){if(isActiveView(view)&&grid?.isConnected)grid.textContent=e.message}
 }
 
-async function avatarPage(){
- const view=beginView();
- renderSidebar("avatar");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your avatar.</div>';return}
- const publicId=Number(me.publicId||0);
- app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar Editor</h1><p class="muted">Customize your Sakura character in an interactive 3D preview.</p></div>'+
-  '<div class="avatar-editor-layout">'+
-   '<div class="avatar-editor-left">'+
-    '<section class="avatar-preview-panel"><h2>Avatar Preview</h2><div class="avatar-render-frame"><canvas id="avatarRenderPreview" class="sakura-avatar-3d" aria-label="Interactive 3D avatar preview"></canvas><div id="avatarRenderStatus" class="avatar-render-status">Preparing your avatar preview...</div></div><button class="button secondary avatar-render-refresh" id="refreshAvatarRender" type="button">Refresh Preview</button><p class="muted avatar-render-caption">3D preview · drag to rotate</p></section>'+
-    '<section class="avatar-preview-panel avatar-appearance-panel"><h2>Appearance</h2>'+
-     '<label class="avatar-setting-label" for="avatarRigType">Avatar type</label><select id="avatarRigType"><option value="R6">R6</option><option value="R15">R15</option></select>'+
-     '<h3>Skin Tone</h3><p class="muted">Choose one tone for the whole body.</p><div id="avatarSkinTones" class="avatar-skin-tones">Loading palette...</div>'+
-     '<button class="button secondary avatar-advanced-toggle" id="avatarAdvancedToggle" type="button" aria-expanded="false">Advanced body colors</button>'+
-     '<div id="avatarAdvancedColors" class="avatar-advanced-colors" hidden><label class="avatar-setting-label" for="avatarBodyPart">Body part</label><select id="avatarBodyPart"><option value="headColorId">Head</option><option value="torsoColorId">Torso</option><option value="leftArmColorId">Left Arm</option><option value="rightArmColorId">Right Arm</option><option value="leftLegColorId">Left Leg</option><option value="rightLegColorId">Right Leg</option></select><div id="avatarPartColors" class="avatar-part-colors"></div></div>'+
-     '<h3 class="avatar-scale-heading">Body scale</h3><div class="avatar-scale-controls"><label>Height <output id="avatarHeightValue">1.00</output><input type="range" min="0.90" max="1.05" step="0.01" value="1" data-avatar-scale="height"></label><label>Width <output id="avatarWidthValue">1.00</output><input type="range" min="0.70" max="1" step="0.01" value="1" data-avatar-scale="width"></label><label>Head <output id="avatarHeadValue">1.00</output><input type="range" min="0.95" max="1" step="0.01" value="1" data-avatar-scale="head"></label></div>'+
-    '</section>'+
-   '</div>'+
-   '<section class="avatar-wardrobe"><h2>Inventory</h2><p class="muted">Wear Roblox catalog assets you own. Items without a Roblox Asset ID cannot be placed on the rendered character.</p><div id="avatarWardrobeGrid" class="avatar-wardrobe-grid">Loading your items...</div></section>'+
-  '</div></div>';
- const grid=document.getElementById("avatarWardrobeGrid");
- const preview=document.getElementById("avatarRenderPreview");
- const status=document.getElementById("avatarRenderStatus");
- const tonesHost=document.getElementById("avatarSkinTones");
- const partHost=document.getElementById("avatarPartColors");
- const bodyPartSelect=document.getElementById("avatarBodyPart");
- const rigSelect=document.getElementById("avatarRigType");
- const allowed=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
- const bodyKeys=["headColorId","torsoColorId","leftArmColorId","rightArmColorId","leftLegColorId","rightLegColorId"];
- const tones=[{"id":364,"name":"Dark taupe","hex":"#5A4C42"},{"id":217,"name":"Brown","hex":"#7C5C46"},{"id":359,"name":"Linen","hex":"#AF9483"},{"id":18,"name":"Nougat","hex":"#CC8E69"},{"id":125,"name":"Light orange","hex":"#EAB892"},{"id":361,"name":"Dirt brown","hex":"#564236"},{"id":192,"name":"Reddish brown","hex":"#694028"},{"id":351,"name":"Cork","hex":"#BC9B5D"},{"id":352,"name":"Burlap","hex":"#C7AC78"},{"id":5,"name":"Brick yellow","hex":"#D7C59A"},{"id":153,"name":"Sand red","hex":"#957977"},{"id":1007,"name":"Dusty Rose","hex":"#A34B4B"},{"id":101,"name":"Medium red","hex":"#DA867A"},{"id":1025,"name":"Pastel orange","hex":"#FFC9C9"},{"id":330,"name":"Carnation pink","hex":"#FF98DC"},{"id":135,"name":"Sand blue","hex":"#74869D"},{"id":305,"name":"Steel blue","hex":"#527CAE"},{"id":11,"name":"Pastel Blue","hex":"#80BBDC"},{"id":1026,"name":"Pastel violet","hex":"#B1A7FF"},{"id":321,"name":"Lilac","hex":"#A75E9B"},{"id":107,"name":"Bright bluish green","hex":"#008F9C"},{"id":310,"name":"Shamrock","hex":"#5B9A4C"},{"id":317,"name":"Moss","hex":"#7C9C6B"},{"id":29,"name":"Medium green","hex":"#A1C48C"},{"id":105,"name":"Br. yellowish orange","hex":"#E29B40"},{"id":24,"name":"Bright yellow","hex":"#F5CD30"},{"id":334,"name":"Daisy orange","hex":"#F8D96D"},{"id":199,"name":"Dark stone grey","hex":"#635F62"},{"id":1002,"name":"Mid gray","hex":"#CDCDCD"},{"id":1001,"name":"Institutional white","hex":"#F8F8F8"}];
- const bodyPalette=[{"id":361,"name":"Dirt brown","hex":"#564236"},{"id":192,"name":"Reddish brown","hex":"#694028"},{"id":217,"name":"Brown","hex":"#7C5C46"},{"id":153,"name":"Sand red","hex":"#957977"},{"id":359,"name":"Linen","hex":"#AF9483"},{"id":352,"name":"Burlap","hex":"#C7AC78"},{"id":5,"name":"Brick yellow","hex":"#D7C59A"},{"id":101,"name":"Medium red","hex":"#DA867A"},{"id":1007,"name":"Dusty Rose","hex":"#A34B4B"},{"id":1014,"name":"CGA brown","hex":"#AA5500"},{"id":38,"name":"Dark orange","hex":"#A05F35"},{"id":18,"name":"Nougat","hex":"#CC8E69"},{"id":125,"name":"Light orange","hex":"#EAB892"},{"id":1030,"name":"Pastel brown","hex":"#FFCC99"},{"id":133,"name":"Neon orange","hex":"#D5733D"},{"id":106,"name":"Bright orange","hex":"#DA8541"},{"id":105,"name":"Br. yellowish orange","hex":"#E29B40"},{"id":1017,"name":"Deep orange","hex":"#FFAF00"},{"id":24,"name":"Bright yellow","hex":"#F5CD30"},{"id":334,"name":"Daisy orange","hex":"#F8D96D"},{"id":226,"name":"Cool yellow","hex":"#FDEA8D"},{"id":141,"name":"Earth green","hex":"#27462D"},{"id":1021,"name":"Camo","hex":"#3A7D15"},{"id":28,"name":"Dark green","hex":"#287F47"},{"id":37,"name":"Bright green","hex":"#4B974B"},{"id":310,"name":"Shamrock","hex":"#5B9A4C"},{"id":317,"name":"Moss","hex":"#7C9C6B"},{"id":119,"name":"Br. yellowish green","hex":"#A4BD47"},{"id":1011,"name":"Navy blue","hex":"#002060"},{"id":1012,"name":"Deep blue","hex":"#2154B9"},{"id":1010,"name":"Really blue","hex":"#0000FF"},{"id":23,"name":"Bright blue","hex":"#0D69AC"},{"id":305,"name":"Steel blue","hex":"#527CAE"},{"id":102,"name":"Medium blue","hex":"#6E99CA"},{"id":45,"name":"Light blue","hex":"#B4D2E4"},{"id":107,"name":"Bright bluish green","hex":"#008F9C"},{"id":1018,"name":"Teal","hex":"#12EED4"},{"id":1027,"name":"Pastel blue-green","hex":"#9FF3E9"},{"id":1019,"name":"Toothpaste","hex":"#00FFFF"},{"id":1013,"name":"Cyan","hex":"#04AFEC"},{"id":11,"name":"Pastel Blue","hex":"#80BBDC"},{"id":1024,"name":"Pastel light blue","hex":"#AFDDFF"},{"id":104,"name":"Bright violet","hex":"#6B327C"},{"id":1023,"name":"Lavender","hex":"#8C5B9F"},{"id":321,"name":"Lilac","hex":"#A75E9B"},{"id":1015,"name":"Magenta","hex":"#AA00AA"},{"id":1031,"name":"Royal purple","hex":"#6225D1"},{"id":1006,"name":"Alder","hex":"#B480FF"},{"id":1026,"name":"Pastel violet","hex":"#B1A7FF"},{"id":21,"name":"Bright red","hex":"#C4281C"},{"id":1004,"name":"Really red","hex":"#FF0000"},{"id":1032,"name":"Hot pink","hex":"#FF00BF"},{"id":1016,"name":"Pink","hex":"#FF66CC"},{"id":330,"name":"Carnation pink","hex":"#FF98DC"},{"id":9,"name":"Light reddish violet","hex":"#E8BAC8"},{"id":1025,"name":"Pastel orange","hex":"#FFC9C9"},{"id":364,"name":"Dark taupe","hex":"#5A4C42"},{"id":351,"name":"Cork","hex":"#BC9B5D"},{"id":1008,"name":"Olive","hex":"#C1BE42"},{"id":29,"name":"Medium green","hex":"#A1C48C"},{"id":1022,"name":"Grime","hex":"#7F8E64"},{"id":151,"name":"Sand green","hex":"#789082"},{"id":135,"name":"Sand blue","hex":"#74869D"},{"id":1020,"name":"Lime green","hex":"#00FF00"},{"id":1028,"name":"Pastel green","hex":"#CCFFCC"},{"id":1009,"name":"New Yeller","hex":"#FFFF00"},{"id":1029,"name":"Pastel yellow","hex":"#FFFFCC"},{"id":1003,"name":"Really black","hex":"#111111"},{"id":26,"name":"Black","hex":"#1B2A35"},{"id":199,"name":"Dark stone grey","hex":"#635F62"},{"id":194,"name":"Medium stone grey","hex":"#A3A2A5"},{"id":1002,"name":"Mid gray","hex":"#CDCDCD"},{"id":208,"name":"Light stone grey","hex":"#E5E4DF"},{"id":1,"name":"White","hex":"#F2F3F3"},{"id":1001,"name":"Institutional white","hex":"#F8F8F8"}];
- let avatarItems=[],equippedIds=new Set(),previewObjectUrl=null,previewRequestId=0;
- let settings={bodyColors:{headColorId:125,torsoColorId:125,leftArmColorId:125,rightArmColorId:125,leftLegColorId:125,rightLegColorId:125},rigType:"R6",scales:{height:1,width:1,head:1,depth:1,proportion:0,bodyType:0}};
- async function refreshAvatarPreview(){
-  if(!preview||!status)return;
-  status.hidden=false;status.textContent="Loading 3D avatar...";
-  try{
-   if(!window.__sakuraThree){
-    window.__sakuraThree=(async()=>{
-     const THREE=await import("https://cdn.jsdelivr.net/npm/three@0.170.0/+esm");
-     const controlsModule=await import("https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js/+esm");
-     return {THREE,OrbitControls:controlsModule.OrbitControls};
-    })();
-   }
-   const {THREE,OrbitControls}=await window.__sakuraThree;
-   if(!isActiveView(view))return;
-   let host=preview.parentElement;
-   let renderer=preview.__renderer;
-   if(!renderer){
-    renderer=new THREE.WebGLRenderer({canvas:preview,antialias:true,alpha:true});
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
-    renderer.setClearColor(0x171020,1);
-    renderer.outputColorSpace=THREE.SRGBColorSpace;
-    preview.__renderer=renderer;
-    const scene=new THREE.Scene();scene.background=new THREE.Color(0x21152e);
-    const camera=new THREE.PerspectiveCamera(32,1,.1,100);camera.position.set(3.5,2.5,5.5);
-    const controls=new OrbitControls(camera,preview);controls.enableDamping=true;controls.target.set(0,1.25,0);controls.minDistance=3;controls.maxDistance=9;
-    scene.add(new THREE.HemisphereLight(0xffffff,0x54405f,2));
-    const key=new THREE.DirectionalLight(0xffffff,2.2);key.position.set(4,7,5);scene.add(key);
-    const fill=new THREE.DirectionalLight(0xc9a5ff,1.1);fill.position.set(-4,3,-3);scene.add(fill);
-    const floor=new THREE.Mesh(new THREE.CircleGeometry(2.4,64),new THREE.MeshStandardMaterial({color:0x38264a,roughness:.9}));
-    floor.rotation.x=-Math.PI/2;floor.position.y=-.035;scene.add(floor);
-    const grid=new THREE.GridHelper(5,20,0x75558d,0x49365a);grid.position.y=-.025;scene.add(grid);
-    const group=new THREE.Group();scene.add(group);preview.__scene=scene;preview.__camera=camera;preview.__controls=controls;preview.__avatar=group;
-    const resize=()=>{const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()};
-    preview.__resize=resize;new ResizeObserver(resize).observe(host);resize();
-    const animate=()=>{if(!preview.isConnected){renderer.dispose();return}requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)};
-    animate();
-   }
-   const group=preview.__avatar;while(group.children.length){const obj=group.children.pop();obj.geometry?.dispose();if(Array.isArray(obj.material))obj.material.forEach(m=>m.dispose());else obj.material?.dispose()}
-   const palette={364:"#5A4C42",217:"#7C5C46",359:"#AF9483",18:"#CC8E69",125:"#EAB892",361:"#564236",192:"#694028",351:"#BC9B5D",352:"#C7AC78",5:"#D7C59A",153:"#957977",1007:"#A34B4B",101:"#DA867A",1025:"#FFC9C9",330:"#FF98DC",135:"#74869D",305:"#527CAE",11:"#80BBDC",1026:"#B1A7FF",321:"#A75E9B",107:"#008F9C",310:"#5B9A4C",317:"#7C9C6B",29:"#A1C48C",105:"#E29B40",24:"#F5CD30",334:"#F8D96D",199:"#635F62",1002:"#CDCDCD",1001:"#F8F8F8"};
-   const body=settings.bodyColors||{},color=k=>new THREE.MeshStandardMaterial({color:palette[body[k]]||"#EAB892",roughness:.82});
-   const scales=settings.scales||{},sx=Math.max(.7,Math.min(1,Number(scales.width)||1)),sy=Math.max(.9,Math.min(1.05,Number(scales.height)||1)),sh=Math.max(.95,Math.min(1,Number(scales.head)||1));
-   const r15=settings.rigType==="R15";
-   function part(w,h,d,x,y,z,key,round=false){
-    const geo=round?new THREE.CapsuleGeometry(w/2,Math.max(.01,h-w),4,8):new THREE.BoxGeometry(w,h,d);
-    const mesh=new THREE.Mesh(geo,color(key));mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);return mesh;
-   }
-   part(.72*sx,.62,.34,0,1.23,0,"torsoColorId",r15);
-   part(.3,.3,.3,-.52*sx,1.26,0,"leftArmColorId",r15);
-   part(.3,.3,.3,.52*sx,1.26,0,"rightArmColorId",r15);
-   part(.3,.64*sy,.3,-.2*sx,.63*sy,0,"leftLegColorId",r15);
-   part(.3,.64*sy,.3,.2*sx,.63*sy,0,"rightLegColorId",r15);
-   part(.48*sh,.48*sh,.42*sh,0,1.83,0,"headColorId",r15);
-   const faceMat=new THREE.MeshStandardMaterial({color:0x28202a,roughness:1});
-   for(const x of [-.105,.105]){const eye=new THREE.Mesh(new THREE.SphereGeometry(.025,10,8),faceMat);eye.position.set(x,1.87,.216*sh);group.add(eye)}
-   const smile=new THREE.Mesh(new THREE.TorusGeometry(.07,.009,6,18,Math.PI),faceMat);smile.position.set(0,1.76,.216*sh);smile.rotation.z=Math.PI;group.add(smile);
-   const groundShadow=new THREE.Mesh(new THREE.CircleGeometry(.48,32),new THREE.MeshBasicMaterial({color:0x090610,transparent:true,opacity:.3}));groundShadow.rotation.x=-Math.PI/2;groundShadow.position.y=.005;group.add(groundShadow);
-   preview.__resize?.();preview.__controls.update();status.hidden=true;
-  }catch(error){
-   status.hidden=false;status.textContent="3D preview could not load. Check your internet connection and WebGL support.";
-   console.error("Sakura 3D avatar preview:",error);
-  }
- }
- function drawSkinTones(){
-  const allSame=bodyKeys.every(key=>settings.bodyColors[key]===settings.bodyColors.headColorId);
-  tonesHost.innerHTML=tones.map(tone=>'<button class="avatar-tone-swatch '+(allSame&&settings.bodyColors.headColorId===tone.id?'selected':'')+'" type="button" data-avatar-tone="'+tone.id+'" title="'+esc(tone.name)+'" aria-label="'+esc(tone.name)+'" style="--tone-color:'+tone.hex+'"></button>').join("");
-  const selectedPart=bodyPartSelect.value||"headColorId";
-  partHost.innerHTML=bodyPalette.map(tone=>'<button class="avatar-tone-swatch avatar-part-swatch '+(settings.bodyColors[selectedPart]===tone.id?'selected':'')+'" type="button" data-avatar-part-tone="'+tone.id+'" title="'+esc(tone.name)+'" aria-label="'+esc(tone.name)+'" style="--tone-color:'+tone.hex+'"></button>').join("");
- }
- function drawScales(){
-  for(const key of ["height","width","head"]){
-   const input=document.querySelector('[data-avatar-scale="'+key+'"]');
-   const output=document.getElementById("avatar"+key[0].toUpperCase()+key.slice(1)+"Value");
-   if(input)input.value=String(settings.scales[key]??1);
-   if(output)output.textContent=Number(settings.scales[key]??1).toFixed(2);
-  }
- }
- function drawWardrobe(){
-  const available=avatarItems.filter(item=>allowed.includes(item.category)&&Number(item.asset_id||0)>0);
-  grid.innerHTML=available.length?available.map(item=>{
-   const wearing=equippedIds.has(item.id);
-   const previewMarkup=item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'" loading="lazy">':'<span class="avatar-wardrobe-no-image">'+esc(item.category)+'</span>';
-   return '<article class="avatar-wardrobe-item"><div class="avatar-wardrobe-image">'+previewMarkup+'</div><div class="avatar-wardrobe-name">'+esc(item.name)+'</div><div class="muted">'+esc(item.category)+'</div><button class="button '+(wearing?'secondary':'')+'" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+(wearing?'remove':'wear')+'">'+(wearing?'Remove':'Wear')+'</button></article>';
-  }).join(""):'<div class="avatar-wardrobe-empty">No renderable catalog assets in your inventory yet. Your appearance changes update the preview instantly. Catalog clothing and accessories are not shown in this basic preview yet.</div>';
- }
- async function saveColors(next){
-  try{
-   const result=await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"colors",bodyColors:next})});
-   settings.bodyColors=result.bodyColors||next;drawSkinTones();await refreshAvatarPreview();toast("Skin tone updated");
-  }catch(error){toast(error.message)}
- }
- tonesHost.addEventListener("click",event=>{
-  const button=event.target.closest("[data-avatar-tone]");if(!button)return;
-  const colorId=Number(button.dataset.avatarTone),next={...settings.bodyColors};
-  for(const key of bodyKeys)next[key]=colorId;
-  saveColors(next);
- });
- partHost.addEventListener("click",event=>{
-  const button=event.target.closest("[data-avatar-part-tone]");if(!button)return;
-  const key=bodyPartSelect.value,next={...settings.bodyColors,[key]:Number(button.dataset.avatarPartTone)};
-  saveColors(next);
- });
- bodyPartSelect.addEventListener("change",drawSkinTones);
- document.getElementById("avatarAdvancedToggle").addEventListener("click",()=>{
-  const panel=document.getElementById("avatarAdvancedColors"),open=panel.hidden;
-  panel.hidden=!open;document.getElementById("avatarAdvancedToggle").setAttribute("aria-expanded",String(open));
- });
- rigSelect.addEventListener("change",async()=>{
-  const button=rigSelect;
-  try{const result=await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"rig",rigType:button.value})});settings.rigType=result.rigType||button.value;await refreshAvatarPreview();toast("Avatar type updated")}
-  catch(error){button.value=settings.rigType;toast(error.message)}
- });
- document.querySelectorAll("[data-avatar-scale]").forEach(input=>input.addEventListener("change",async()=>{
-  const key=input.dataset.avatarScale,next={...settings.scales,[key]:Number(input.value)};
-  try{const result=await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"scales",scales:{[key]:next[key]}})});settings.scales={...settings.scales,...(result.scales||next)};drawScales();await refreshAvatarPreview();toast("Body scale updated")}
-  catch(error){drawScales();toast(error.message)}
- }));
- document.getElementById("refreshAvatarRender")?.addEventListener("click",refreshAvatarPreview);
- grid.addEventListener("click",async event=>{
-  const button=event.target.closest("[data-avatar-item]");if(!button)return;
-  const itemId=button.dataset.avatarItem,action=button.dataset.avatarAction;button.disabled=true;
-  try{
-   await api("/api/avatar",{method:"PUT",body:JSON.stringify({itemId,action})});
-   if(action==="wear")equippedIds.add(itemId);else equippedIds.delete(itemId);
-   drawWardrobe();await refreshAvatarPreview();toast(action==="wear"?"Item equipped":"Item removed");
-  }catch(error){toast(error.message);button.disabled=false}
- });
- try{
-  const [inventoryData,avatarData]=await Promise.all([api("/api/inventory"),api("/api/avatar")]);
-  if(!isActiveView(view)||!grid.isConnected)return;
-  avatarItems=inventoryData.items||[];equippedIds=new Set((avatarData.equipped||[]).map(item=>item.id));
-  settings={...settings,...avatarData,bodyColors:{...settings.bodyColors,...avatarData.bodyColors},scales:{...settings.scales,...avatarData.scales}};
-  rigSelect.value=settings.rigType||"R6";drawWardrobe();drawSkinTones();drawScales();
-  await refreshAvatarPreview();
- }catch(error){if(isActiveView(view)&&grid.isConnected)grid.textContent=error.message}
-}
 
 async function profile(identifier=me?.username,byId=false){
  const view=beginView();
@@ -1316,7 +1149,6 @@ async function render(name){
  else if(name==="login"||name==="register")auth(name);
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
- else if(name==="avatar")await avatarPage();
  else if(name==="groups")await groupsPage();
  else if(name==="profile")await (query.get("id")?profile(query.get("id"),true):profile(query.get("username")||me?.username));
  else if(name==="item")await showItem(query.get("id"),false);
