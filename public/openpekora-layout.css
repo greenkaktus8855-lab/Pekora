@@ -577,3 +577,11 @@ input:focus,textarea:focus,select:focus{
   .currency-inline.wallet-chip .currency-icon{width:13px;height:13px;flex-basis:13px}
   .op-navbar-inner{gap:7px}
 }
+
+
+/* The item editor grows to fit the added currency selector */
+.owner-item-subfields{
+  grid-template-columns:repeat(auto-fit,minmax(135px,1fr))!important;
+  align-items:center;
+}
+.owner-item-subfields select[name="currency"]{min-width:88px}
