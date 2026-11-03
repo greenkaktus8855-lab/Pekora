@@ -33,14 +33,18 @@ catch { throw "game-renderer\config.json is not valid JSON. No changes were made
 
 if (-not $config.Ports) { throw "config.json is missing Ports. Restore the normal OpenPekora renderer config first." }
 if (-not $config.Ports.RCC) { $config.Ports | Add-Member -MemberType NoteProperty -Name RCC -Value ([pscustomobject]@{}) }
-$config.RCCUrl = "http://127.0.0.1"
-$config.Ports.RCC.All = @($ports)
-$config.Ports.RCC.Player = @(1621)
-$config.Ports.RCC.Image = @(2621)
-$config.Ports.RCC.Place = @(3621)
-$config.Ports.RCC.Catalog = @(4621)
+function Set-ConfigValue($Object, [string]$Name, $Value) {
+    if ($Object.PSObject.Properties[$Name]) { $Object.$Name = $Value }
+    else { $Object | Add-Member -MemberType NoteProperty -Name $Name -Value $Value }
+}
+Set-ConfigValue $config "RCCUrl" "http://127.0.0.1"
+Set-ConfigValue $config.Ports.RCC "All" @($ports)
+Set-ConfigValue $config.Ports.RCC "Player" @(1621)
+Set-ConfigValue $config.Ports.RCC "Image" @(2621)
+Set-ConfigValue $config.Ports.RCC "Place" @(3621)
+Set-ConfigValue $config.Ports.RCC "Catalog" @(4621)
 if (-not $config.Paths) { $config | Add-Member -MemberType NoteProperty -Name Paths -Value ([pscustomobject]@{}) }
-$config.Paths.RCCService = "..\RCCService\RCCService2020"
+Set-ConfigValue $config.Paths "RCCService" "..\RCCService\RCCService2020"
 [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 30), [System.Text.UTF8Encoding]::new($false))
 Write-Host "Renderer config now points to the four local RCCService 2020 ports."
 
