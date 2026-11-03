@@ -1,0 +1,603 @@
+/*
+ * OpenPekora component styling port for Sakura.
+ * Adapted from Blue7366/OpenPekora:
+ * - frontend/components/myDashboard/index.js
+ * - frontend/components/navSidebar/index.js
+ * - frontend/components/userProfile/styles/card.js
+ * - frontend/components/userProfile/components/profileHeader.js
+ * - frontend/components/horizontalTabs/index.js
+ * This file restores OpenPekora's simple square sections, rows and form layout.
+ * Sakura's existing dark-violet palette and button colors are intentionally retained.
+ */
+
+:root{
+  --op-surface:#15151c;
+  --op-surface-alt:#202027;
+  --op-border:#30303b;
+  --op-copy:#f1eef7;
+  --op-muted:#aaa5b5;
+  --op-violet:#a64dff;
+  --op-violet-soft:#251a33;
+}
+
+/* OpenPekora dashboard: title rows followed by plain section-content panels */
+#app .op-dashboard{
+  width:100%;
+  max-width:970px;
+  margin:0 auto;
+  padding-top:12px;
+}
+#app .op-dashboard-section{
+  margin:0 0 18px;
+  min-width:0;
+}
+#app .op-section-heading{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:0 0 5px;
+  margin:0;
+  border:0;
+}
+#app .op-section-heading h3{
+  margin:0;
+  font-size:24px;
+  font-weight:700;
+  line-height:1.4;
+}
+#app .op-section-content{
+  background:var(--op-surface)!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:0 1px 4px rgba(0,0,0,.35)!important;
+  padding:15px!important;
+  margin:0 0 18px!important;
+  min-height:72px;
+  text-align:left;
+  font-size:16px;
+  font-weight:400;
+  line-height:1.4;
+}
+#app .op-empty,
+#app .empty,
+#app .op-profile-empty{
+  background:var(--op-surface-alt)!important;
+  color:var(--op-muted)!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  padding:15px;
+  text-align:center;
+  font-size:16px;
+  line-height:1.4;
+}
+
+/* OpenPekora profile structure and headings */
+#app .op-profile{
+  width:100%;
+  max-width:970px;
+  margin:8px auto 24px;
+}
+#app .op-profile-header{
+  display:flex;
+  align-items:flex-start;
+  gap:20px;
+  padding:12px 0 18px;
+  margin:0;
+}
+#app .op-profile-avatar{
+  width:128px;
+  height:128px;
+  flex:0 0 128px;
+  overflow:hidden;
+  border:1px solid var(--op-border)!important;
+  border-radius:50%!important;
+  background:var(--op-surface-alt)!important;
+  box-shadow:none!important;
+}
+#app .op-profile-avatar img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  border-radius:50%;
+}
+#app .op-profile-info{min-width:0}
+#app .op-profile-info h1{
+  margin:0;
+  padding:5px 0;
+  font-size:32px;
+  font-weight:800;
+  line-height:1.1;
+}
+#app .op-profile-info p{
+  margin:8px 0;
+  font-size:16px;
+  line-height:1.4;
+  white-space:pre-wrap;
+}
+#app .op-profile-meta,
+#app .op-profile-id{
+  color:var(--op-muted)!important;
+  font-size:13px;
+}
+#app .op-profile-stats{
+  display:flex;
+  flex-wrap:wrap;
+  gap:20px;
+  font-size:13px;
+  color:var(--op-muted)!important;
+}
+#app .op-profile-stats b{
+  font-size:15px;
+  font-weight:700;
+}
+#app .op-profile-section{
+  margin:0 0 20px;
+  padding:0;
+  background:transparent;
+  border:0;
+  box-shadow:none;
+}
+#app .op-profile-section h2,
+#app .friends-section h2{
+  margin:0 0 8px;
+  padding:0 0 5px;
+  border-bottom:1px solid var(--op-border);
+  font-size:22px;
+  font-weight:700;
+  line-height:1.4;
+}
+#app .op-profile-items{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:12px;
+}
+#app .op-profile-items .item-card{padding:4px}
+#app .op-profile-items .item-image{max-width:132px}
+
+/* Keep thumbnails and player headshots close to original OpenPekora proportions */
+#app .op-home-avatar,
+#app .home-avatar,
+#app .people-avatar,
+#app .op-home-friend img{
+  border-radius:50%;
+}
+#app .side-avatar,
+#app .op-sidebar .side-avatar{
+  border-radius:50%!important;
+  overflow:hidden;
+}
+#app .item-image,
+#app .item-detail-image,
+#app .avatar-wardrobe-image,
+#app .owner-item-thumb,
+#app .owner-game-thumb,
+#app .game-thumbnail,
+#app .game-thumbnail-empty{
+  border-radius:0!important;
+  background:var(--op-surface-alt)!important;
+  border:1px solid var(--op-border)!important;
+  box-shadow:none!important;
+}
+#app .item-image img,
+#app .item-detail-image img,
+#app .avatar-wardrobe-image img,
+#app .owner-item-thumb img,
+#app .owner-game-thumb img,
+#app .game-thumbnail img{
+  border-radius:0!important;
+}
+
+/* Catalog uses the original two-column browse layout, not a floating card grid */
+#app .catalog-page{width:100%;max-width:970px;margin:0 auto}
+#app .catalog-container,
+#app .catalog-layout,
+#app .catalog-results{
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+#app .catalog-container{padding:2px 4px}
+#app .catalog-title-row{
+  display:grid;
+  grid-template-columns:190px minmax(0,1fr);
+  align-items:center;
+  gap:0;
+  margin:8px 0 4px;
+  padding:0 6px;
+}
+#app .catalog-body{
+  display:grid;
+  grid-template-columns:190px minmax(0,1fr);
+  align-items:start;
+}
+#app .catalog-navigation{
+  min-width:0;
+  padding:0 8px 8px 4px;
+  background:transparent!important;
+}
+#app .catalog-navigation .divider-right{
+  min-height:400px;
+  padding-right:8px;
+  border-right:1px solid var(--op-border);
+}
+#app .catalog-browse-title,
+#app .catalog-results-header{
+  border-bottom:1px solid var(--op-border)!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+#app .catalog-results{min-width:0;padding:8px 8px 12px 12px}
+#app .catalog-results .item-grid{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+}
+#app .catalog-results .item-card{
+  padding:0 3px 8px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+#app .catalog-results .item-image{
+  width:100%;
+  max-width:132px;
+  margin:0 auto 5px;
+}
+#app .catalog-categories a{
+  display:block;
+  padding:5px 6px;
+  border-bottom:1px solid rgba(170,165,181,.13);
+  border-radius:0!important;
+  background:transparent;
+}
+#app .catalog-categories a.active{
+  background:rgba(166,77,255,.12)!important;
+  color:var(--op-copy)!important;
+}
+#app .catalog-legend{
+  border-top:1px solid var(--op-border);
+  border-radius:0;
+}
+
+/* Item detail is the original image-and-information split, with square edges */
+#app .item-detail-card{
+  display:grid;
+  grid-template-columns:minmax(220px,320px) minmax(0,1fr);
+  gap:24px;
+  padding:15px;
+  margin:0;
+  background:var(--op-surface)!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:0 1px 4px rgba(0,0,0,.35)!important;
+}
+#app .item-detail-image{
+  min-height:260px;
+  border:1px solid var(--op-border)!important;
+  border-radius:0!important;
+}
+#app .item-detail-info h1{
+  margin:0 0 5px;
+  font-size:28px;
+  font-weight:700;
+  line-height:1.2;
+}
+#app .item-detail-info p{margin:12px 0;line-height:1.4}
+#app .item-detail-price{
+  margin:12px 0;
+  font-size:24px;
+  font-weight:700;
+}
+
+/* Forms: simple OpenPekora form rows and fields instead of layered mini-cards */
+#app .form,
+#app .info-panel,
+#app .info-page,
+#app .owner-section,
+#app .owner-user-card,
+#app .avatar-preview-panel,
+#app .avatar-wardrobe,
+#app .currency-balance-panel{
+  background:var(--op-surface)!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:0 1px 4px rgba(0,0,0,.35)!important;
+  padding:15px!important;
+}
+#app .form{max-width:460px;margin:0 auto}
+#app .form h2,
+#app .owner-section h2,
+#app .avatar-preview-panel h2,
+#app .avatar-wardrobe h2{
+  margin:0 0 12px;
+  padding:0 0 5px;
+  border-bottom:1px solid var(--op-border);
+  font-size:21px;
+  font-weight:700;
+}
+#app .owner-section{
+  margin:18px 0;
+}
+#app .owner-item-form,
+#app .owner-user-actions .owner-item-form,
+#app .owner-verify-form{
+  display:grid;
+  gap:10px;
+  margin:12px 0 18px;
+  padding:15px;
+  background:var(--op-surface-alt)!important;
+  border:1px solid var(--op-border)!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+#app .owner-item-form label{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:13px;
+  font-weight:600;
+}
+#app input:not([type=checkbox]):not([type=radio]):not([type=range]),
+#app textarea,
+#app select{
+  border-radius:3px!important;
+  box-shadow:none!important;
+}
+#app .owner-item-row,
+#app .owner-game-row{
+  display:grid;
+  grid-template-columns:76px minmax(0,1fr) auto;
+  gap:10px;
+  margin:0;
+  padding:10px 0;
+  border:0;
+  border-bottom:1px solid var(--op-border);
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+#app .owner-item-actions{display:flex;flex-direction:column;gap:5px}
+#app .owner-user-details{margin-top:14px}
+#app .owner-user-card h3{margin:0 0 4px}
+#app .owner-user-card h4{margin:14px 0 6px}
+#app .owner-user-card ul{padding-left:20px}
+#app .owner-user-card li{margin:6px 0;overflow-wrap:anywhere}
+
+/* Groups and avatar wardrobe use simple thumbnail rows and square separators */
+#app .groups-list,
+#app .owner-items{display:flex;flex-direction:column;gap:0}
+#app .group-card{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  margin:0;
+  padding:12px 0;
+  background:transparent!important;
+  border:0!important;
+  border-bottom:1px solid var(--op-border)!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+#app .group-card-mark{
+  flex:0 0 54px;
+  width:54px;
+  height:54px;
+  border-radius:0!important;
+  background:var(--op-violet-soft)!important;
+  color:#d9b8ff!important;
+}
+#app .group-card-info{flex:1;min-width:0}
+#app .group-card-info h3{margin:0 0 3px;font-size:18px}
+#app .group-card-info p{margin:0 0 5px;overflow-wrap:anywhere}
+#app .avatar-wardrobe-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+#app .avatar-wardrobe-item{
+  min-width:0;
+  padding:8px 6px;
+  border:0!important;
+  border-bottom:1px solid var(--op-border)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  text-align:center;
+}
+#app .avatar-wardrobe-empty{
+  background:var(--op-surface-alt)!important;
+  border-radius:0!important;
+  padding:24px;
+}
+
+/* Trades and game rows: flat bordered lists, no modern floating cards or pills */
+#app .trade-list{display:grid;gap:0}
+#app .trade-card{
+  padding:14px 0;
+  background:var(--op-surface)!important;
+  border:0!important;
+  border-bottom:1px solid var(--op-border)!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+#app .trade-card-heading{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin:0 0 10px;
+  padding:0 0 6px;
+  border-bottom:1px solid var(--op-border);
+}
+#app .trade-status,
+#app .trade-status-accepted,
+#app .trade-status-declined,
+#app .trade-status-cancelled{
+  display:inline-block;
+  padding:2px 6px;
+  border:1px solid var(--op-border);
+  border-radius:0!important;
+  background:transparent!important;
+  color:var(--op-muted)!important;
+  font-size:12px;
+  font-weight:600;
+}
+#app .trade-status-accepted{color:#8bd7aa!important;border-color:#315a43}
+#app .trade-status-declined,
+#app .trade-status-cancelled{color:#d1b9c0!important;border-color:#5b3c45}
+#app .trade-pick-columns{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:18px;
+}
+#app .trade-pick-list{
+  display:grid;
+  gap:0;
+  max-height:320px;
+  overflow:auto;
+  padding:6px;
+  background:var(--op-surface)!important;
+  border:1px solid var(--op-border)!important;
+  border-radius:0!important;
+}
+#app .trade-select-item{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:7px 4px;
+  background:transparent!important;
+  border:0;
+  border-bottom:1px solid rgba(170,165,181,.13);
+  border-radius:0!important;
+}
+#app .trade-select-item img{border-radius:0!important}
+#app .trade-item-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+#app .trade-item-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 8px;
+  background:var(--op-surface-alt)!important;
+  border:1px solid var(--op-border);
+  border-radius:0!important;
+  font-size:13px;
+}
+#app .game-card{
+  overflow:hidden;
+  background:var(--op-surface)!important;
+  border:0!important;
+  border-bottom:1px solid var(--op-border)!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+#app .game-card-body{padding:12px 0}
+#app .game-card-body h2{font-size:19px;margin:0 0 7px}
+#app .game-card-body p{font-size:14px;min-height:38px;color:var(--op-muted)!important}
+#app .game-thumbnail,
+#app .game-thumbnail-empty{border-radius:0!important}
+
+/* Currency follows the original header treatment: icon and amount, not floating chips */
+#app .currency-inline.wallet-chip,
+#app .currency-inline.balance-chip,
+#app .currency-inline.currency-large{
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+#app .currency-inline.wallet-chip{font-size:13px}
+#app .currency-inline.balance-chip{font-size:14px}
+#app .currency-inline.currency-large{font-size:24px}
+#app .header-wallets,
+#app .home-balances,
+#app .currency-balances{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:12px;
+}
+#app .currency-page .currency-balances{margin:8px 0 12px}
+#app .currency-history-list{display:flex;flex-direction:column;gap:0}
+#app .currency-history-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:10px 0;
+  border:0;
+  border-bottom:1px solid var(--op-border);
+  border-radius:0!important;
+  background:transparent!important;
+}
+
+/* Notices and limited labels are rectangular OpenPekora-style information strips */
+#app .notice,
+#app .offsale-notice,
+#app .trade-invalid-note,
+#app .account-warning-panel,
+#app .trade-limited-tag,
+#app .limited-overlay,
+#app .stock-overlay{
+  border-radius:0!important;
+  box-shadow:none!important;
+}
+#app .notice,
+#app .offsale-notice,
+#app .trade-invalid-note,
+#app .account-warning-panel{
+  background:var(--op-violet-soft)!important;
+  border:1px solid #533776!important;
+  color:#eadcff!important;
+}
+#app .trade-limited-tag,
+#app .limited-overlay,
+#app .stock-overlay{
+  border:1px solid #533776!important;
+  background:rgba(37,26,51,.95)!important;
+  color:#eadcff!important;
+  padding:3px 6px;
+}
+
+/* OpenPekora used a top alert strip instead of a floating bottom-right toast */
+#toast.toast{
+  top:-70px;
+  right:auto;
+  bottom:auto;
+  left:50%;
+  width:calc(100% - 24px);
+  max-width:970px;
+  padding:15px;
+  transform:translateX(-50%);
+  border:0;
+  border-radius:0!important;
+  box-shadow:none!important;
+  background:#6b2eb5!important;
+  color:#fff!important;
+  text-align:center;
+  transition:top .5s ease;
+}
+#toast.toast.show{display:block;top:40px}
+
+/* Keep the original OpenPekora responsive proportions */
+@media(max-width:767px){
+  #app .op-profile-header{flex-direction:column;align-items:flex-start;gap:10px}
+  #app .op-profile-avatar{width:100px;height:100px;flex-basis:100px}
+  #app .op-profile-items{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #app .catalog-title-row{grid-template-columns:1fr;gap:0}
+  #app .catalog-body{grid-template-columns:120px minmax(0,1fr)}
+  #app .catalog-results{padding-left:6px;padding-right:4px}
+  #app .catalog-results .item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #app .item-detail-card{grid-template-columns:1fr;gap:14px}
+  #app .item-detail-image{min-height:190px}
+  #app .trade-pick-columns{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  #app .avatar-wardrobe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #app .group-card{align-items:flex-start;flex-wrap:wrap}
+  #app .group-card-info{flex-basis:calc(100% - 70px)}
+  #app .trade-target-form{align-items:stretch}
+  #app .owner-game-row{align-items:flex-start}
+}
