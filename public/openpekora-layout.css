@@ -255,35 +255,6 @@ input:focus,textarea:focus,select:focus{
   color:#38d879!important;
 }
 
-/* White button backgrounds with readable violet labels */
-#app .button,#app .primary,#app button.button,#app button.primary,
-#app .catalog-search-button,#app input[type="submit"],
-.op-account button,.op-account #registerBtn{
-  background:#fff!important;
-  background-image:none!important;
-  border:1px solid #fff!important;
-  color:#6b2eb5!important;
-  font-weight:700;
-  box-shadow:0 1px 3px rgba(0,0,0,.25);
-}
-#app .button:hover,#app .primary:hover,#app button.button:hover,
-#app button.primary:hover,#app .catalog-search-button:hover,
-.op-account button:hover,.op-account #registerBtn:hover{
-  background:#eee6fa!important;
-  border-color:#d7c4f0!important;
-  color:#54228c!important;
-}
-#app .button:disabled,#app .primary:disabled,
-.op-account button:disabled{
-  background:#d8d4df!important;
-  border-color:#d8d4df!important;
-  color:#777181!important;
-  opacity:1;
-}
-#app .button.secondary{
-  background:#fff!important;
-  color:#6b2eb5!important;
-}
 #app .trade-actions .button,#app .trade-actions .primary{
   min-height:34px;
 }
@@ -322,82 +293,6 @@ input:focus,textarea:focus,select:focus{
 .sidebar .side-nav a.active .side-icon{
   opacity:1;
 }
-.op-account #logoutBtn,
-.account-area #logoutBtn{
-  background:#512080!important;
-  background-image:none!important;
-  color:#fff!important;
-  border:1px solid rgba(255,255,255,.65)!important;
-  border-radius:4px!important;
-  font-weight:700!important;
-  box-shadow:0 1px 3px rgba(0,0,0,.2);
-}
-.op-account #logoutBtn:hover,
-.account-area #logoutBtn:hover{
-  background:#3f1766!important;
-  border-color:#fff!important;
-  color:#fff!important;
-}
-.op-account #logoutBtn:focus-visible,
-.account-area #logoutBtn:focus-visible{
-  outline:2px solid #fff!important;
-  outline-offset:2px;
-}
-
-
-/* Final unified Sakura control pass */
-#app .button,
-#app .primary,
-#app button.button,
-#app button.primary,
-#app .catalog-search-button,
-#app input[type="submit"],
-.op-account button:not(#logoutBtn),
-.op-account #registerBtn,
-.account-area button:not(#logoutBtn),
-.account-area #registerBtn{
-  background:#fff!important;
-  background-image:none!important;
-  border:1px solid #fff!important;
-  color:#6b2eb5!important;
-  font-weight:700!important;
-  text-decoration:none!important;
-}
-#app .button:hover,
-#app .primary:hover,
-#app button.button:hover,
-#app button.primary:hover,
-#app .catalog-search-button:hover,
-.op-account button:not(#logoutBtn):hover,
-.op-account #registerBtn:hover,
-.account-area button:not(#logoutBtn):hover,
-.account-area #registerBtn:hover{
-  background:#eee6fa!important;
-  border-color:#d7c4f0!important;
-  color:#54228c!important;
-}
-#app .button:disabled,
-#app .primary:disabled,
-.op-account button:disabled,
-.account-area button:disabled{
-  background:#d8d4df!important;
-  border-color:#d8d4df!important;
-  color:#777181!important;
-  opacity:1;
-  cursor:not-allowed!important;
-}
-#app .game-locked-button,
-#app button.game-locked-button:disabled{
-  background:#fff!important;
-  border:1px solid #d8cde8!important;
-  color:#7a6892!important;
-  opacity:.72;
-  cursor:not-allowed!important;
-}
-#app .game-locked-button .game-lock-icon{
-  color:#7a6892!important;
-}
-
 /* The search icon uses the legacy SVG sprite's black variant */
 .op-search .icon-nav-search,
 .global-search .icon-nav-search{
@@ -422,7 +317,7 @@ input:focus,textarea:focus,select:focus{
 }
 
 
-/* Keep labels and icons inside white buttons violet for proper contrast */
+/* Keep labels and icons inside buttons in the selected original control color */
 #app .button :where(*),
 #app .primary :where(*),
 .op-account button:not(#logoutBtn) :where(*),
@@ -721,4 +616,19 @@ input:focus,textarea:focus,select:focus{
   .currency-inline.wallet-chip{font-size:11px;padding:3px 5px}
   .currency-inline.wallet-chip .currency-icon{width:13px;height:13px;flex-basis:13px}
   .op-navbar-inner{gap:7px}
+}
+
+
+/* Original OpenPekora focus treatment */
+#app button:focus-visible,
+#app a.button:focus-visible,
+.op-account button:focus-visible{
+  outline:0!important;
+  box-shadow:0 1px 3px rgba(150,150,150,.74)!important;
+}
+.op-account #loginBtn,
+.op-account #logoutBtn,
+.account-area #loginBtn,
+.account-area #logoutBtn{
+  color:#191919!important;
 }
