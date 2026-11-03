@@ -201,12 +201,12 @@ async function showItem(itemId,updateHistory=true){
  }
  if(!isActiveView(view))return;
  if(!item){app.innerHTML='<div class="empty">Item not found. <a href="#catalog" data-page="catalog">Back to Catalog</a></div>';return}
- const isOwned=ownedItemIds.has(item.id),stock=itemStockState(item);
+ const isOwned=ownedItemIds.has(item.id),isOffsale=Number(item.is_offsale)===1,stock=itemStockState(item);
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+Number(item.price||0).toLocaleString()+' P$</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
   '</div></div>';
- if(!isOwned&&!stock.soldOut&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
+ if(!isOwned&&!isOffsale&&!stock.soldOut&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
  document.getElementById("copyItemLink")?.addEventListener("click",async()=>{const shareUrl=new URL("/item/"+encodeURIComponent(item.id),location.origin).href;try{await navigator.clipboard.writeText(shareUrl);toast("Item link copied")}catch{toast("Could not copy link. Copy it from the address bar.")}});
 }
 
@@ -314,7 +314,7 @@ function drawCatalog(category,q){
  count.textContent=list.length+" items";
  el.innerHTML=list.length?list.map(x=>{
   const stock=itemStockState(x);
-  return '<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+itemBadgeMarkup(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div>'+(stock.finite?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'<div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':stock.soldOut?'<button class="button secondary" type="button" disabled>Sold Out</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>';
+  return '<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+itemBadgeMarkup(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div>'+(stock.finite?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'<div class="price">'+Number(x.price||0).toLocaleString()+' P$</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':Number(x.is_offsale)===1?'<button class="button secondary offsale-button" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" type="button" disabled>Sold Out</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>';
  }).join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
 
@@ -680,7 +680,8 @@ async function owner(){
  '<label>Category<select name="category">'+ITEM_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
  '<label>Price (P$)<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
  '<label class="owner-toggle"><span>Limited item</span><input name="is_limited" type="checkbox"></label>'+
- '<label>Total stock (0 = unlimited)<input name="stock_limit" type="number" min="0" max="1000000" value="0" step="1"></label>'+
+ '<label class="owner-toggle"><span>Off Sale (visible, cannot buy)</span><input name="is_offsale" type="checkbox"></label>'+
+ ' <label>Total stock (0 = unlimited)<input name="stock_limit" type="number" min="0" max="1000000" value="0" step="1"></label>'+
  '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
  '<label>3D model file (.glb, max 1 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
  '<label>Or existing 3D model URL<input name="model_url" type="url" maxlength="1000" placeholder="https://...model.glb"></label>'+
@@ -820,16 +821,16 @@ async function owner(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
     '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
-    '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><label class="owner-inline-check"><input name="is_limited" type="checkbox" '+(Number(x.is_limited)===1?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" step="1" value="'+Number(x.stock_limit||0)+'" placeholder="Total stock (0 = unlimited)"></div>'+
-    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?'For sale':'Removed from catalog')+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+'</span></div>'+
+    '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><label class="owner-inline-check"><input name="is_limited" type="checkbox" '+(Number(x.is_limited)===1?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" step="1" value="'+Number(x.stock_limit||0)+'" placeholder="Total stock (0 = unlimited)"><label class="owner-inline-check"><input name="is_offsale" type="checkbox" '+(Number(x.is_offsale)===1?'checked':'')+'> Off Sale</label></div>'+
+    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?(Number(x.is_offsale)===1?'Off Sale':'For sale'):'Removed from catalog')+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
-     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",stock_limit:Number(f.get("stock_limit")||0)};
+     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0)};
      await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(updated)});
      if(!isActiveView(view))return;
-     ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated,is_limited:updated.is_limited?1:0}:item);
+     ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated,is_limited:updated.is_limited?1:0,is_offsale:updated.is_offsale?1:0}:item);
      drawOwnerItems();updateOwnerItemCount();toast("Item saved");
     }catch(err){toast(err.message)}
    }));
@@ -859,7 +860,7 @@ async function owner(){
   newItemForm.addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
-    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",stock_limit:Number(f.get("stock_limit")||0)};
+    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0)};
     const modelFile=f.get("model_file");
     if(modelFile instanceof File && modelFile.size){
      msg.textContent="Uploading 3D model...";
@@ -873,7 +874,7 @@ async function owner(){
     const result=await api("/api/owner/items",{method:"POST",body:JSON.stringify(data)});
     if(!isActiveView(view))return;
     e.target.reset();e.target.elements.price.value=50;msg.textContent="Item added.";
-    ownerItems.unshift({id:result.id,...data,is_limited:data.is_limited?1:0,stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:data.category==="Accessories"?"3D":"IMAGE_ONLY"});
+    ownerItems.unshift({id:result.id,...data,is_limited:data.is_limited?1:0,is_offsale:data.is_offsale?1:0,stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:data.category==="Accessories"?"3D":"IMAGE_ONLY"});
     drawOwnerItems();updateOwnerItemCount();
    }catch(err){msg.textContent=err.message}
   });
