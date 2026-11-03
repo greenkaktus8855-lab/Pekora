@@ -561,6 +561,7 @@ async function profile(identifier=me?.username,byId=false){
    '<section class="op-profile-section"><h2>Inventory</h2>'+
     (owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+
    '</section></div>';
+  document.querySelector(".op-profile-render-image")?.addEventListener("error",event=>event.currentTarget.remove());
   if(!isSelf&&me)loadProfileFriendAction(p.username);
  }catch(e){if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
