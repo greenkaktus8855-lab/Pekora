@@ -659,3 +659,10 @@ input:focus,textarea:focus,select:focus{
   color:#b8b8b8!important;
   cursor:default!important;
 }
+
+.op-account #loginBtn:hover,
+.op-account #logoutBtn:hover,
+.account-area #loginBtn:hover,
+.account-area #logoutBtn:hover{
+  color:#191919!important;
+}
