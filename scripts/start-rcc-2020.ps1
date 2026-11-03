@@ -24,10 +24,10 @@ if (Test-Path -LiteralPath $baseControllerPath) {
     $source = [System.IO.File]::ReadAllText($baseControllerPath)
     $oldCall = "    const response: any = await RCCRequest(port, xml, request.jobExpiration);"
     $newCall = @(
-        "    const response: any = await RCCRequest(port, xml, request.jobExpiration);",
-        "    if (typeof response !== \"string\" || !response.trim()) {",
-        "        return Resp(res, 503, \"RCCService did not return a SOAP response. Check RCCService 2020 and port 64989.\", false);",
-        "    }"
+        '    const response: any = await RCCRequest(port, xml, request.jobExpiration);',
+        '    if (typeof response !== "string" || !response.trim()) {',
+        '        return Resp(res, 503, "RCCService did not return a SOAP response. Check RCCService 2020 and port 64989.", false);',
+        '    }'
     ) -join "`r`n"
     if ($source.Contains($oldCall) -and -not $source.Contains("RCCService did not return a SOAP response.")) {
         $backup = "$baseControllerPath.backup"
