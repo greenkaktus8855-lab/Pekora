@@ -70,6 +70,7 @@ if ([string]::IsNullOrWhiteSpace($secret) -and (Test-Path -LiteralPath $secretSt
         }
     } catch {
         $secret = ""
+        Remove-Item -LiteralPath $secretStorePath -Force -ErrorAction SilentlyContinue
     }
 }
 
