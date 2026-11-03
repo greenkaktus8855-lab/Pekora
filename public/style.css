@@ -670,3 +670,35 @@ model-viewer.pekora-model{display:block;width:100%;height:100%;min-height:150px;
 .group-card-info .muted{font-size:12px}
 .group-card>button{flex:0 0 auto}
 @media(max-width:560px){.group-card{align-items:flex-start;flex-wrap:wrap}.group-card-info{flex-basis:calc(100% - 70px)}.group-card>button{margin-left:68px}}
+
+
+/* Sakura classic community home inspired by the supplied Pekora reference */
+.sakura-home-shell{width:100%;max-width:970px;margin:18px auto 34px}
+.sakura-home-card{padding:14px 18px 24px;background:#e7e7e9;color:#171717;min-height:680px;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.sakura-home-card .op-home-header{display:flex;align-items:center;gap:16px;margin:0 0 12px;padding:0 0 2px}
+.sakura-home-card .op-home-avatar>.avatar-initials{width:100px;height:100px;border-radius:50%;border:2px solid #c9c9ce;background:#eee5f8;color:#6b2eb5}
+.sakura-welcome-copy h1{margin:0 0 7px;font-size:28px;font-weight:900;line-height:1.2}
+.sakura-welcome-copy h1 a{color:#171717;text-decoration:none}
+.sakura-home-card .home-balances{display:flex;gap:10px;flex-wrap:wrap}
+.sakura-home-card .op-dashboard-section{margin:10px 0 14px}
+.sakura-home-card .op-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 5px}
+.sakura-home-card .op-section-heading h3{margin:0;font-size:17px;font-weight:800}
+.sakura-home-card .op-section-heading>a{padding:4px 12px;background:#8b42d1;color:#fff;border-radius:3px;font-size:11px;font-weight:700;text-decoration:none}
+.sakura-home-card .op-section-heading>a:hover{background:#6b2eb5}
+.sakura-home-card .op-section-content,.sakura-feed-panel,.sakura-empty-panel{min-height:76px;padding:10px 12px;background:#fff;border:1px solid #d0d0d2;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.sakura-home-card .op-home-friends{gap:10px;flex-wrap:nowrap;overflow-x:auto;padding:1px 0 5px}
+.sakura-home-card .op-home-friend{flex:0 0 58px;width:58px;color:#343039;font-size:11px}
+.sakura-home-card .op-home-friend>.avatar-initials{width:52px;height:52px;border-radius:50%;font-size:17px}
+.sakura-home-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.sakura-empty-panel,.sakura-feed-panel{font-size:13px;color:#35313a}
+.sakura-feed-panel{min-height:112px}
+.sakura-blog-empty{text-align:center}
+.sakura-home-bottom{margin-top:4px}
+@media(max-width:767px){
+ .sakura-home-shell{margin:10px auto 24px}
+ .sakura-home-card{padding:12px;min-height:0}
+ .sakura-home-card .op-home-avatar>.avatar-initials{width:76px;height:76px}
+ .sakura-welcome-copy h1{font-size:22px}
+ .sakura-home-columns{grid-template-columns:1fr;gap:0}
+ .sakura-home-card .op-home-friends{gap:8px}
+}
