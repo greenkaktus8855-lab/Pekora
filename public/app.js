@@ -5,6 +5,12 @@ const sidebar=document.getElementById("sidebar");
 let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set(),ownershipLoaded=true,ownershipUserId=null,pendingPurchases=new Set();
 let activeView=0;
 const ITEM_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
+const MEMBERSHIP_PLANS=[
+ {type:"BuildersClub",name:"Builders Club",short:"BC",daily:15,description:"Базовое членство и ежедневная награда"},
+ {type:"TurboBuildersClub",name:"Turbo Builders Club",short:"TBC",daily:35,description:"Повышенная ежедневная награда"},
+ {type:"OutrageousBuildersClub",name:"Outrageous Builders Club",short:"OBC",daily:85,description:"Максимальный ежедневный бонус"},
+ {type:"Premium",name:"Premium",short:"Premium",daily:85,description:"Ежедневная награда уровня Premium"}
+];
 const beginView=()=>++activeView;
 const isActiveView=view=>view===activeView;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -45,6 +51,7 @@ function renderSidebar(active="home"){
   ["avatar","icon-nav-profile","Avatar"],
   ["groups","icon-nav-group","Groups"],
   ["currency","icon-nav-robux","Currency"],
+  ["membership","icon-nav-robux","Membership"],
   ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
  ];
@@ -553,6 +560,58 @@ async function currencyPage(){
   const host=document.getElementById("currencyHistory");
   if(isActiveView(view)&&host)host.textContent=e.message;
  }
+
+}
+async function membershipPage(){
+ const view=beginView();
+ renderSidebar("membership");
+ if(!me){
+  app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your membership.</div>';
+  return;
+ }
+ app.innerHTML='<div class="membership-page"><h1 class="page-title">Builders Club</h1><p class="muted membership-intro">Выбери членство Sakura и получай ежедневную награду.</p><div class="membership-current-panel">Loading membership...</div></div>';
+ try{
+  const data=await api("/api/membership");
+  if(!isActiveView(view))return;
+  setUser({...me,balance:Number(data.balance??me.balance),tixBalance:Number(data.tixBalance??me.tixBalance)});
+  const current=String(data.membershipType||"None");
+  const currentPlan=MEMBERSHIP_PLANS.find(plan=>plan.type===current);
+  const currentName=currentPlan?.name||"None";
+  const lastReward=data.lastRewardDate
+   ? 'Последнее начисление: '+new Date(data.lastRewardDate+"T00:00:00").toLocaleDateString()
+   : "Ежедневных начислений пока не было.";
+  const plans=MEMBERSHIP_PLANS.map(plan=>{
+   const selected=plan.type===current;
+   return '<article class="membership-plan '+(selected?'is-current':'')+'">'+
+    '<div class="membership-plan-mark">'+esc(plan.short)+'</div>'+
+    '<h2>'+esc(plan.name)+'</h2>'+
+    '<p class="membership-plan-description">'+esc(plan.description)+'</p>'+
+    '<div class="membership-plan-reward">'+currencyMarkup(plan.daily,"P$")+'<span>в день</span></div>'+
+    '<button class="'+(selected?'button secondary':'primary')+'" type="button" data-membership="'+esc(plan.type)+'" '+(selected?'disabled':'')+'>'+(selected?'Current Membership':'Выбрать')+'</button>'+
+   '</article>';
+  }).join("");
+  app.innerHTML='<div class="membership-page">'+
+   '<h1 class="page-title">Builders Club</h1>'+
+   '<p class="muted membership-intro">Выбери членство Sakura и получай ежедневную награду.</p>'+
+   '<section class="membership-current-panel"><div><span class="membership-current-label">Текущее членство</span><h2>'+esc(currentName)+'</h2><p class="muted">'+lastReward+'</p></div><div class="membership-current-reward"><span>Ежедневная награда</span><strong>'+currencyMarkup(Number(data.dailyRobux||0),"P$")+'</strong></div></section>'+
+   '<div class="membership-plans">'+plans+'</div>'+
+   '<p class="membership-footnote">Награда автоматически начисляется каждый день в 00:00 по Киеву. Это виртуальные P$ Sakura, а не настоящие Robux Roblox. Членство в Sakura сейчас бесплатное.</p>'+
+   '</div>';
+  document.querySelectorAll("[data-membership]").forEach(button=>button.addEventListener("click",async()=>{
+   const membershipType=button.dataset.membership;
+   button.disabled=true;
+   try{
+    await api("/api/membership",{method:"POST",body:JSON.stringify({membershipType})});
+    if(!isActiveView(view))return;
+    toast("Membership updated");
+    await membershipPage();
+   }catch(error){
+    if(isActiveView(view)){toast(error.message);button.disabled=false}
+   }
+  }));
+ }catch(error){
+  if(isActiveView(view))app.innerHTML='<div class="empty">Could not load membership: '+esc(error.message)+'</div>';
+ }
 }
 async function gamesPage(){
  const view=beginView();
@@ -997,6 +1056,7 @@ async function render(name){
  else if(name==="friends")await friends();
  else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
  else if(name==="currency")await currencyPage();
+ else if(name==="membership")await membershipPage();
  else if(name==="games")await gamesPage();
  else if(name==="trades")await tradesPage();
  else if(name==="settings")await settings();
