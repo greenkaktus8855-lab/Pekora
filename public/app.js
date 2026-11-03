@@ -470,10 +470,10 @@ async function avatarPage(){
  renderSidebar("avatar");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your avatar.</div>';return}
  const publicId=Number(me.publicId||0);
- app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar Editor</h1><p class="muted">Customize your Sakura character and preview it instantly in your browser.</p></div>'+
+ app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar Editor</h1><p class="muted">Customize your Sakura character in an interactive 3D preview.</p></div>'+
   '<div class="avatar-editor-layout">'+
    '<div class="avatar-editor-left">'+
-    '<section class="avatar-preview-panel"><h2>Avatar Preview</h2><div class="avatar-render-frame"><img id="avatarRenderPreview" alt="Your rendered avatar" hidden><div id="avatarRenderStatus" class="avatar-render-status">Preparing your avatar preview...</div></div><button class="button secondary avatar-render-refresh" id="refreshAvatarRender" type="button">Refresh Preview</button><p class="muted avatar-render-caption">Live preview · runs inside Sakura</p></section>'+
+    '<section class="avatar-preview-panel"><h2>Avatar Preview</h2><div class="avatar-render-frame"><canvas id="avatarRenderPreview" class="sakura-avatar-3d" aria-label="Interactive 3D avatar preview"></canvas><div id="avatarRenderStatus" class="avatar-render-status">Preparing your avatar preview...</div></div><button class="button secondary avatar-render-refresh" id="refreshAvatarRender" type="button">Refresh Preview</button><p class="muted avatar-render-caption">3D preview · drag to rotate</p></section>'+
     '<section class="avatar-preview-panel avatar-appearance-panel"><h2>Appearance</h2>'+
      '<label class="avatar-setting-label" for="avatarRigType">Avatar type</label><select id="avatarRigType"><option value="R6">R6</option><option value="R15">R15</option></select>'+
      '<h3>Skin Tone</h3><p class="muted">Choose one tone for the whole body.</p><div id="avatarSkinTones" class="avatar-skin-tones">Loading palette...</div>'+
@@ -499,36 +499,64 @@ async function avatarPage(){
  let settings={bodyColors:{headColorId:125,torsoColorId:125,leftArmColorId:125,rightArmColorId:125,leftLegColorId:125,rightLegColorId:125},rigType:"R6",scales:{height:1,width:1,head:1,depth:1,proportion:0,bodyType:0}};
  async function refreshAvatarPreview(){
   if(!preview||!status)return;
-  const colorById={364:"#5A4C42",217:"#7C5C46",359:"#AF9483",18:"#CC8E69",125:"#EAB892",361:"#564236",192:"#694028",351:"#BC9B5D",352:"#C7AC78",5:"#D7C59A",153:"#957977",1007:"#A34B4B",101:"#DA867A",1025:"#FFC9C9",330:"#FF98DC",135:"#74869D",305:"#527CAE",11:"#80BBDC",1026:"#B1A7FF",321:"#A75E9B",107:"#008F9C",310:"#5B9A4C",317:"#7C9C6B",29:"#A1C48C",105:"#E29B40",24:"#F5CD30",334:"#F8D96D",199:"#635F62",1002:"#CDCDCD",1001:"#F8F8F8"};
-  const colors=settings.bodyColors||{};
-  const head=colorById[colors.headColorId]||"#EAB892";
-  const torso=colorById[colors.torsoColorId]||head;
-  const leftArm=colorById[colors.leftArmColorId]||head;
-  const rightArm=colorById[colors.rightArmColorId]||head;
-  const leftLeg=colorById[colors.leftLegColorId]||head;
-  const rightLeg=colorById[colors.rightLegColorId]||head;
-  const scale=settings.scales||{};
-  const width=Math.max(.7,Math.min(1,Number(scale.width)||1));
-  const height=Math.max(.9,Math.min(1.05,Number(scale.height)||1));
-  const headScale=Math.max(.95,Math.min(1,Number(scale.head)||1));
-  const headW=36*headScale, headX=100-headW/2, bodyW=48*width, bodyX=100-bodyW/2;
-  const isR15=settings.rigType==="R15";
-  const gap=isR15?5:0;
-  const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 260" role="img" aria-label="Sakura avatar preview">'+
-   '<defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#2a183d"/><stop offset="1" stop-color="#120d1c"/></linearGradient><linearGradient id="shine" x2="1" y2="1"><stop stop-color="#ffffff" stop-opacity=".22"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs>'+
-   '<rect width="200" height="260" rx="16" fill="url(#bg)"/><ellipse cx="100" cy="239" rx="53" ry="9" fill="#000" opacity=".3"/>'+
-   '<g stroke="#17121d" stroke-width="2" stroke-linejoin="round">'+
-   '<rect x="'+(61-bodyW*.18)+'" y="124" width="'+(bodyW*.38)+'" height="'+(48*height)+'" rx="'+(isR15?8:2)+'" fill="'+leftLeg+'"/>'+
-   '<rect x="'+(100+bodyW*.0)+'" y="124" width="'+(bodyW*.38)+'" height="'+(48*height)+'" rx="'+(isR15?8:2)+'" fill="'+rightLeg+'"/>'+
-   '<rect x="'+(bodyX-13)+'" y="66" width="20" height="'+(58*height)+'" rx="'+(isR15?10:2)+'" fill="'+leftArm+'"/>'+
-   '<rect x="'+(bodyX+bodyW-7)+'" y="66" width="20" height="'+(58*height)+'" rx="'+(isR15?10:2)+'" fill="'+rightArm+'"/>'+
-   '<rect x="'+bodyX+'" y="66" width="'+bodyW+'" height="62" rx="'+(isR15?10:3)+'" fill="'+torso+'"/>'+
-   '<rect x="'+headX+'" y="24" width="'+headW+'" height="38" rx="'+(isR15?headW*.42:3)+'" fill="'+head+'"/>'+
-   '</g><g fill="#29202a"><circle cx="91" cy="42" r="2.4"/><circle cx="109" cy="42" r="2.4"/><path d="M94 52 Q100 56 106 52" fill="none" stroke="#29202a" stroke-width="1.8" stroke-linecap="round"/></g>'+
-   '<path d="M'+bodyX+' 68 h'+bodyW+' v16 h-'+bodyW+'z" fill="url(#shine)" opacity=".55"/>'+
-   '<text x="100" y="252" text-anchor="middle" fill="#d8c5ed" font-family="Arial,sans-serif" font-size="8" letter-spacing="2">SAKURA</text></svg>';
-  preview.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
-  preview.hidden=false;status.hidden=true;
+  status.hidden=false;status.textContent="Loading 3D avatar...";
+  try{
+   if(!window.__sakuraThree){
+    window.__sakuraThree=(async()=>{
+     const THREE=await import("https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js");
+     const controlsModule=await import("https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js");
+     return {THREE,OrbitControls:controlsModule.OrbitControls};
+    })();
+   }
+   const {THREE,OrbitControls}=await window.__sakuraThree;
+   if(!isActiveView(view))return;
+   let host=preview.parentElement;
+   let renderer=preview.__renderer;
+   if(!renderer){
+    renderer=new THREE.WebGLRenderer({canvas:preview,antialias:true,alpha:true});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+    renderer.setClearColor(0x171020,1);
+    renderer.outputColorSpace=THREE.SRGBColorSpace;
+    preview.__renderer=renderer;
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0x21152e);
+    const camera=new THREE.PerspectiveCamera(32,1,.1,100);camera.position.set(3.5,2.5,5.5);
+    const controls=new OrbitControls(camera,preview);controls.enableDamping=true;controls.target.set(0,1.25,0);controls.minDistance=3;controls.maxDistance=9;
+    scene.add(new THREE.HemisphereLight(0xffffff,0x54405f,2));
+    const key=new THREE.DirectionalLight(0xffffff,2.2);key.position.set(4,7,5);scene.add(key);
+    const fill=new THREE.DirectionalLight(0xc9a5ff,1.1);fill.position.set(-4,3,-3);scene.add(fill);
+    const floor=new THREE.Mesh(new THREE.CircleGeometry(2.4,64),new THREE.MeshStandardMaterial({color:0x38264a,roughness:.9}));
+    floor.rotation.x=-Math.PI/2;floor.position.y=-.035;scene.add(floor);
+    const grid=new THREE.GridHelper(5,20,0x75558d,0x49365a);grid.position.y=-.025;scene.add(grid);
+    const group=new THREE.Group();scene.add(group);preview.__scene=scene;preview.__camera=camera;preview.__controls=controls;preview.__avatar=group;
+    const resize=()=>{const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()};
+    preview.__resize=resize;new ResizeObserver(resize).observe(host);resize();
+    const animate=()=>{if(!preview.isConnected){renderer.dispose();return}requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)};
+    animate();
+   }
+   const group=preview.__avatar;while(group.children.length){const obj=group.children.pop();obj.geometry?.dispose();if(Array.isArray(obj.material))obj.material.forEach(m=>m.dispose());else obj.material?.dispose()}
+   const palette={364:"#5A4C42",217:"#7C5C46",359:"#AF9483",18:"#CC8E69",125:"#EAB892",361:"#564236",192:"#694028",351:"#BC9B5D",352:"#C7AC78",5:"#D7C59A",153:"#957977",1007:"#A34B4B",101:"#DA867A",1025:"#FFC9C9",330:"#FF98DC",135:"#74869D",305:"#527CAE",11:"#80BBDC",1026:"#B1A7FF",321:"#A75E9B",107:"#008F9C",310:"#5B9A4C",317:"#7C9C6B",29:"#A1C48C",105:"#E29B40",24:"#F5CD30",334:"#F8D96D",199:"#635F62",1002:"#CDCDCD",1001:"#F8F8F8"};
+   const body=settings.bodyColors||{},color=k=>new THREE.MeshStandardMaterial({color:palette[body[k]]||"#EAB892",roughness:.82});
+   const scales=settings.scales||{},sx=Math.max(.7,Math.min(1,Number(scales.width)||1)),sy=Math.max(.9,Math.min(1.05,Number(scales.height)||1)),sh=Math.max(.95,Math.min(1,Number(scales.head)||1));
+   const r15=settings.rigType==="R15";
+   function part(w,h,d,x,y,z,key,round=false){
+    const geo=round?new THREE.CapsuleGeometry(w/2,Math.max(.01,h-w),4,8):new THREE.BoxGeometry(w,h,d);
+    const mesh=new THREE.Mesh(geo,color(key));mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);return mesh;
+   }
+   part(.72*sx,.62,.34,0,1.23,0,"torsoColorId",r15);
+   part(.3,.3,.3,-.52*sx,1.26,0,"leftArmColorId",r15);
+   part(.3,.3,.3,.52*sx,1.26,0,"rightArmColorId",r15);
+   part(.3,.64*sy,.3,-.2*sx,.63*sy,0,"leftLegColorId",r15);
+   part(.3,.64*sy,.3,.2*sx,.63*sy,0,"rightLegColorId",r15);
+   part(.48*sh,.48*sh,.42*sh,0,1.83,0,"headColorId",r15);
+   const faceMat=new THREE.MeshStandardMaterial({color:0x28202a,roughness:1});
+   for(const x of [-.105,.105]){const eye=new THREE.Mesh(new THREE.SphereGeometry(.025,10,8),faceMat);eye.position.set(x,1.87,.216*sh);group.add(eye)}
+   const smile=new THREE.Mesh(new THREE.TorusGeometry(.07,.009,6,18,Math.PI),faceMat);smile.position.set(0,1.76,.216*sh);smile.rotation.z=Math.PI;group.add(smile);
+   const groundShadow=new THREE.Mesh(new THREE.CircleGeometry(.48,32),new THREE.MeshBasicMaterial({color:0x090610,transparent:true,opacity:.3}));groundShadow.rotation.x=-Math.PI/2;groundShadow.position.y=.005;group.add(groundShadow);
+   preview.__resize?.();preview.__controls.update();status.hidden=true;
+  }catch(error){
+   status.hidden=false;status.textContent="3D preview could not load. Check your internet connection and WebGL support.";
+   console.error("Sakura 3D avatar preview:",error);
+  }
  }
  function drawSkinTones(){
   const allSame=bodyKeys.every(key=>settings.bodyColors[key]===settings.bodyColors.headColorId);
