@@ -196,7 +196,10 @@ try {
 
 try {
     $tunnelService = Get-Service -Name "cloudflared" -ErrorAction SilentlyContinue
-    if ($tunnelService -and $tunnelService.Status -ne "Running") { Start-Service -Name "cloudflared" }
+    if ($tunnelService) {
+        Set-Service -Name "cloudflared" -StartupType Automatic -ErrorAction SilentlyContinue
+        if ($tunnelService.Status -ne "Running") { Start-Service -Name "cloudflared" }
+    }
 } catch {}
 
 $ready = [bool]$rendererAlreadyRunning
