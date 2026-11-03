@@ -117,16 +117,27 @@ try {
     $rendererPort = [int]$config.Ports.Process
     if ($rendererPort -lt 1 -or $rendererPort -gt 65535) { throw "The Renderer port in config.json is invalid." }
 
+    $rendererAlreadyRunning = $false
     $existing = Get-NetTCPConnection -LocalPort $rendererPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($existing) {
         $owner = Get-Process -Id $existing.OwningProcess -ErrorAction SilentlyContinue
-        throw "Port $rendererPort is already used by $($owner.ProcessName). Close the old Renderer process, then open this launcher again."
+        $ownerInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $($existing.OwningProcess)" -ErrorAction SilentlyContinue
+        $ownerCommand = [string]$ownerInfo.CommandLine
+        if ($owner -and $owner.ProcessName -match "^node" -and $ownerCommand -match "(?i)Main\.js|game-renderer") {
+            Write-Host "OpenPekora Renderer is already listening on port $rendererPort. Reusing the running process."
+            $rendererAlreadyRunning = $true
+        } else {
+            $processLabel = if ($owner) { $owner.ProcessName } else { "unknown process" }
+            throw "Port $rendererPort is occupied by $processLabel (PID $($existing.OwningProcess)), but it does not look like the OpenPekora Renderer. Close that app before starting Sakura."
+        }
     }
 
-    $env:PEKORA_RENDERER_SECRET = $secret
-    $powershell = Join-Path $PSHOME "powershell.exe"
-    $rendererArguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $rendererSetup + '"'
-    $rendererProcess = Start-Process -FilePath $powershell -ArgumentList $rendererArguments -WorkingDirectory $repoRoot -WindowStyle Hidden -RedirectStandardOutput $rendererOut -RedirectStandardError $rendererErr -PassThru
+    if (-not $rendererAlreadyRunning) {
+        $env:PEKORA_RENDERER_SECRET = $secret
+        $powershell = Join-Path $PSHOME "powershell.exe"
+        $rendererArguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $rendererSetup + '"'
+        $rendererProcess = Start-Process -FilePath $powershell -ArgumentList $rendererArguments -WorkingDirectory $repoRoot -WindowStyle Hidden -RedirectStandardOutput $rendererOut -RedirectStandardError $rendererErr -PassThru
+    }
 } catch {
     Remove-Item Env:PEKORA_RENDERER_SECRET -ErrorAction SilentlyContinue
     Remove-Item Env:SAKURA_OPENPEKORA_ROOT -ErrorAction SilentlyContinue
@@ -143,13 +154,15 @@ try {
     if ($tunnelService -and $tunnelService.Status -ne "Running") { Start-Service -Name "cloudflared" }
 } catch {}
 
-$ready = $false
-for ($attempt = 0; $attempt -lt 120; $attempt++) {
-    Start-Sleep -Seconds 1
-    $rendererProcess.Refresh()
-    $listener = Get-NetTCPConnection -LocalPort $rendererPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($listener) { $ready = $true; break }
-    if ($rendererProcess.HasExited) { break }
+$ready = [bool]$rendererAlreadyRunning
+if (-not $ready) {
+    for ($attempt = 0; $attempt -lt 120; $attempt++) {
+        Start-Sleep -Seconds 1
+        $rendererProcess.Refresh()
+        $listener = Get-NetTCPConnection -LocalPort $rendererPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($listener) { $ready = $true; break }
+        if ($rendererProcess.HasExited) { break }
+    }
 }
 
 Remove-Item Env:SAKURA_OPENPEKORA_ROOT -ErrorAction SilentlyContinue
