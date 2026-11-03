@@ -59,7 +59,7 @@ const checks = [
   ["trade acceptance rechecks Limited or Off Sale status", worker.includes("Only Limited or Off Sale items can be traded") && worker.includes("(i.is_limited=1 OR i.is_offsale=1)")],
   ["trade picker only displays Limited or Off Sale items", app.includes("items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1)") && app.includes("ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target)")],
   ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
-  ["Sakura asset cache versions are refreshed", index.includes("app.js?v=20261103-openpekora-rcc-render-5") && index.includes("openpekora-components.css?v=20261103-openpekora-rcc-render-5")],
+  ["Sakura asset cache versions are refreshed", index.includes("app.js?v=20261103-openpekora-rcc-render-6") && index.includes("openpekora-components.css?v=20261103-openpekora-rcc-render-5")],
   ["Sakura theme primary accents are violet", globals.includes("rgb(166, 77, 255)") && globals.includes("rgba(106,27,177,1)") && !globals.includes("rgb(0, 162, 255)") && !globals.includes("rgba(8,79,192,1)")],
   ["promo codes can grant currency and multiple catalog items", worker.includes("CREATE TABLE IF NOT EXISTS promo_code_items") && worker.includes("reward_currency") && app.includes("ownerPromoItems")],
   ["promo codes enforce use limits and expiry", worker.includes("max_uses IS NULL") && worker.includes("expires_at") && app.includes('name="max_uses"') && app.includes('type="datetime-local"')],
