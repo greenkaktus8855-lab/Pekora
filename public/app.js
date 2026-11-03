@@ -466,18 +466,47 @@ async function avatarPage(){
  const view=beginView();
  renderSidebar("avatar");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your avatar items.</div>';return}
- app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1></div><section class="avatar-wardrobe"><p class="muted">Wear and remove items from your inventory. There is no 3D character preview on this page.</p><div id="avatarWardrobeGrid" class="avatar-wardrobe-grid">Loading your items...</div></section></div>';
+ const publicId=Number(me.publicId||0);
+ app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar</h1></div>'+
+  '<div class="avatar-editor-layout">'+
+   '<section class="avatar-preview-panel"><h2>Avatar Preview</h2><div class="avatar-render-frame"><img id="avatarRenderPreview" alt="Your rendered avatar"><div id="avatarRenderStatus" class="avatar-render-status">Connecting to the OpenPekora renderer...</div></div><button class="button secondary avatar-render-refresh" id="refreshAvatarRender" type="button">Refresh Preview</button><p class="muted avatar-render-caption">Rendered by OpenPekora RCCService</p></section>'+
+   '<section class="avatar-wardrobe"><h2>Inventory</h2><p class="muted">Wear and remove items from your inventory. The preview updates after each change.</p><div id="avatarWardrobeGrid" class="avatar-wardrobe-grid">Loading your items...</div></section>'+
+  '</div></div>';
  const grid=document.getElementById("avatarWardrobeGrid");
+ const preview=document.getElementById("avatarRenderPreview");
+ const status=document.getElementById("avatarRenderStatus");
  let avatarItems=[],equippedIds=new Set();
  const allowed=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
+ function refreshAvatarPreview(){
+  if(!preview||!status||!Number.isSafeInteger(publicId)||publicId<1){
+   if(status)status.textContent="A valid public user ID is required to render this avatar.";
+   return;
+  }
+  preview.hidden=true;
+  status.textContent="Rendering your avatar with OpenPekora RCC...";
+  preview.onload=()=>{
+   if(!isActiveView(view))return;
+   preview.hidden=false;
+   status.textContent="";
+   status.hidden=true;
+  };
+  preview.onerror=()=>{
+   if(!isActiveView(view))return;
+   preview.hidden=true;
+   status.hidden=false;
+   status.textContent="The OpenPekora renderer did not return an image. Check that the renderer and RCCService are running.";
+  };
+  preview.src="/api/avatar/thumbnail/"+encodeURIComponent(String(publicId))+"?v="+Date.now();
+ }
  function drawWardrobe(){
   const available=avatarItems.filter(item=>allowed.includes(item.category));
   grid.innerHTML=available.length?available.map(item=>{
    const wearing=equippedIds.has(item.id);
-   const preview=item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'" loading="lazy">':'<span class="avatar-wardrobe-no-image">'+esc(item.category)+'</span>';
-   return '<article class="avatar-wardrobe-item"><div class="avatar-wardrobe-image">'+preview+'</div><div class="avatar-wardrobe-name">'+esc(item.name)+'</div><div class="muted">'+esc(item.category)+'</div><button class="button '+(wearing?'secondary':'')+'" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+(wearing?'remove':'wear')+'">'+(wearing?'Remove':'Wear')+'</button></article>';
+   const previewMarkup=item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'" loading="lazy">':'<span class="avatar-wardrobe-no-image">'+esc(item.category)+'</span>';
+   return '<article class="avatar-wardrobe-item"><div class="avatar-wardrobe-image">'+previewMarkup+'</div><div class="avatar-wardrobe-name">'+esc(item.name)+'</div><div class="muted">'+esc(item.category)+'</div><button class="button '+(wearing?'secondary':'')+'" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+(wearing?'remove':'wear')+'">'+(wearing?'Remove':'Wear')+'</button></article>';
   }).join(""):'<div class="avatar-wardrobe-empty">You have no wearable items in your inventory yet.</div>';
  }
+ document.getElementById("refreshAvatarRender")?.addEventListener("click",refreshAvatarPreview);
  grid.addEventListener("click",async event=>{
   const button=event.target.closest("[data-avatar-item]");
   if(!button)return;
@@ -487,9 +516,11 @@ async function avatarPage(){
    await api("/api/avatar",{method:"PUT",body:JSON.stringify({itemId,action})});
    if(action==="wear")equippedIds.add(itemId);else equippedIds.delete(itemId);
    drawWardrobe();
+   refreshAvatarPreview();
    toast(action==="wear"?"Item equipped":"Item removed");
   }catch(error){toast(error.message);button.disabled=false}
  });
+ refreshAvatarPreview();
  try{
   const [inventoryData,avatarData]=await Promise.all([api("/api/inventory"),api("/api/avatar")]);
   if(!isActiveView(view)||!grid.isConnected)return;
@@ -516,8 +547,12 @@ async function profile(identifier=me?.username,byId=false){
   const publicId=p.publicId??p.id,profileUrl="/#profile?id="+encodeURIComponent(publicId);
   if(!byId&&publicId){history.replaceState({page:"profile",publicId},"",profileUrl)}
   const profileAvatar=avatar(p.username);
+  const renderablePublicId=Number(publicId);
+  const profileRenderImage=Number.isSafeInteger(renderablePublicId)&&renderablePublicId>0
+   ? '<img class="op-profile-render-image" src="/api/avatar/thumbnail/'+encodeURIComponent(String(renderablePublicId))+'" alt="'+esc(p.username)+' avatar" loading="lazy">'
+   : '';
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
+   '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+profileRenderImage+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
