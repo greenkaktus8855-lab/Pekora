@@ -86,6 +86,31 @@ const DEFAULT_AVATAR_BODY_COLORS = Object.freeze({headColorId:125,torsoColorId:1
 const AVATAR_COLOR_IDS = new Set([364,217,359,18,125,1030,361,192]);
 const DEFAULT_AVATAR_SCALES = Object.freeze({height:1,width:1,head:1,depth:1,proportion:0,bodyType:0});
 const AVATAR_COLOR_KEYS = Object.keys(DEFAULT_AVATAR_BODY_COLORS);
+async function loadAvatarSettings(env,userId) {
+  const row = await env.DB.prepare("SELECT body_colors,rig_type,scales_json FROM avatar_settings WHERE user_id=?").bind(userId).first();
+  const bodyColors = {...DEFAULT_AVATAR_BODY_COLORS};
+  const scales = {...DEFAULT_AVATAR_SCALES};
+  try {
+    const parsed = JSON.parse(row?.body_colors || "{}");
+    for (const key of AVATAR_COLOR_KEYS) {
+      const value = Number(parsed[key]);
+      if (AVATAR_COLOR_IDS.has(value)) bodyColors[key] = value;
+    }
+  } catch {}
+  try {
+    const parsed = JSON.parse(row?.scales_json || "{}");
+    for (const key of Object.keys(DEFAULT_AVATAR_SCALES)) {
+      const value = Number(parsed[key]);
+      if (Number.isFinite(value)) scales[key] = value;
+    }
+  } catch {}
+  return {bodyColors,rigType:row?.rig_type === "R15" ? "R15" : "R6",scales};
+}
+async function saveAvatarSettings(env,userId,settings) {
+  await env.DB.prepare("INSERT INTO avatar_settings (user_id,body_colors,rig_type,scales_json,updated_at) VALUES (?,?,?,?,datetime('now')) ON CONFLICT(user_id) DO UPDATE SET body_colors=excluded.body_colors,rig_type=excluded.rig_type,scales_json=excluded.scales_json,updated_at=datetime('now')")
+    .bind(userId,JSON.stringify(settings.bodyColors),settings.rigType,JSON.stringify(settings.scales)).run();
+}
+
 
 const MEMBERSHIP_REWARDS = Object.freeze({
   None:0,
