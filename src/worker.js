@@ -824,6 +824,7 @@ async function route(request, env) {
     const rendererBase = String(env.AVATAR_RENDERER_URL || "https://renderer.mopcblox.online").trim().replace(/\/+$/,"");
     if (!/^https:\/\//i.test(rendererBase)) return fail("Avatar renderer URL must use HTTPS.",503);
     const rendererHeaders = {"content-type":"application/json"};
+    if (env.AVATAR_RENDERER_SECRET) rendererHeaders["X-Pekora-Renderer-Secret"] = String(env.AVATAR_RENDERER_SECRET);
     if (env.AVATAR_RENDERER_ACCESS_ID && env.AVATAR_RENDERER_ACCESS_SECRET) {
       rendererHeaders["CF-Access-Client-Id"] = String(env.AVATAR_RENDERER_ACCESS_ID);
       rendererHeaders["CF-Access-Client-Secret"] = String(env.AVATAR_RENDERER_ACCESS_SECRET);
