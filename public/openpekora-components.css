@@ -1495,3 +1495,43 @@
  #app .avatar-editor-layout{grid-template-columns:1fr}
  #app .avatar-preview-panel{width:100%;max-width:350px;margin:0 auto}
 }
+
+
+/* Fix the bright panel on Sakura Home without changing other pages */
+#app .sakura-home-card{
+  background:#15151c!important;
+  color:#f5f3fa!important;
+  border:1px solid #34343f!important;
+  box-shadow:0 3px 14px rgba(0,0,0,.28)!important;
+}
+#app .sakura-home-card .sakura-welcome-copy h1,
+#app .sakura-home-card .sakura-welcome-copy h1 a,
+#app .sakura-home-card .op-section-heading h3{
+  color:#f5f3fa!important;
+}
+#app .sakura-home-card .op-section-content,
+#app .sakura-home-card .sakura-empty-panel,
+#app .sakura-home-card .sakura-feed-panel{
+  background:#202027!important;
+  border:1px solid #383842!important;
+  color:#dcd5e8!important;
+  box-shadow:none!important;
+}
+#app .sakura-home-card .op-empty{
+  background:#25212d!important;
+  border:1px solid #40364b!important;
+  color:#c8bdd8!important;
+}
+#app .sakura-home-card .op-home-friend,
+#app .sakura-home-card .op-home-friend span{
+  color:#d6c6e8!important;
+}
+#app .sakura-home-card .op-home-avatar{
+  background:#25212d!important;
+  border:1px solid #40364b!important;
+}
+#app .sakura-home-card .home-balances .currency-inline{
+  background:#21192c!important;
+  border-color:#4b3860!important;
+  color:#f5f3fa!important;
+}
