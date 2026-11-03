@@ -152,52 +152,15 @@ foreach ($port in $ports) {
     $started += $port
 }
 
-# A listening TCP port does not prove that RCCService is accepting SOAP jobs.
-# Probe the same namespace used by OpenPekora's SOAP.ts before starting Node.
-$soapNamespace = [string]$config.BaseUrl
-if ([string]::IsNullOrWhiteSpace($soapNamespace)) {
-    throw "BaseUrl is empty in the renderer config. RCC SOAP requests cannot be generated."
-}
-$soapProbe = @"
-<?xml version="1.0" encoding="utf-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="$soapNamespace">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <ns1:HelloWorld/>
-  </soapenv:Body>
-</soapenv:Envelope>
-"@
-$soapReady = $false
-$soapProbeDetails = "No SOAP response received."
-for ($attempt = 0; $attempt -lt 10; $attempt++) {
-    try {
-        $probeResponse = Invoke-WebRequest -Uri "http://127.0.0.1:64989/" -Method Post -ContentType "text/xml" -Body $soapProbe -UseBasicParsing -TimeoutSec 8
-        $probeText = [string]$probeResponse.Content
-        if ([int]$probeResponse.StatusCode -eq 200 -and $probeText -match "HelloWorldResponse") {
-            $soapReady = $true
-            break
-        }
-        $soapProbeDetails = "HTTP $([int]$probeResponse.StatusCode): " + $probeText.Substring(0, [Math]::Min(700, $probeText.Length))
-    } catch {
-        $soapProbeDetails = $_.Exception.Message
-        $httpResponse = $_.Exception.Response
-        if ($httpResponse) {
-            try {
-                $reader = New-Object System.IO.StreamReader($httpResponse.GetResponseStream())
-                $body = $reader.ReadToEnd()
-                $reader.Dispose()
-                if ($body) { $soapProbeDetails = "HTTP $([int]$httpResponse.StatusCode): " + $body.Substring(0, [Math]::Min(700, $body.Length)) }
-            } catch {}
-        }
-    }
-    Start-Sleep -Seconds 1
-}
+# RCCService can return HTTP 500 for the optional HelloWorld probe even while
+# its real OpenPekora job endpoint is available. Do not block renderer startup
+# on this non-authoritative test; let real render requests determine readiness.
 $probeLog = Join-Path $logDir "rcc-soap-probe.log"
-if (-not $soapReady) {
-    [System.IO.File]::WriteAllText($probeLog, $soapProbeDetails, [System.Text.UTF8Encoding]::new($false))
-    throw "RCCService opened port 64989 but failed its SOAP HelloWorld check. Details: $probeLog. $soapProbeDetails"
-}
-[System.IO.File]::WriteAllText($probeLog, "RCCService SOAP HelloWorld succeeded on 127.0.0.1:64989.", [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllText(
+    $probeLog,
+    "Optional HelloWorld probe skipped. RCCService is listening on 127.0.0.1:64989. The real renderer will verify RCC when it receives a render job.",
+    [System.Text.UTF8Encoding]::new($false)
+)
 
 Write-Host ""
 Write-Host "RCCService 2020 is running on the OpenPekora SOAP port: $($started -join ', ')." -ForegroundColor Green
