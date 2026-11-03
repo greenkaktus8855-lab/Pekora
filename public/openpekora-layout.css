@@ -343,3 +343,80 @@ input:focus,textarea:focus,select:focus{
   outline:2px solid #fff!important;
   outline-offset:2px;
 }
+
+
+/* Final unified Sakura control pass */
+#app .button,
+#app .primary,
+#app button.button,
+#app button.primary,
+#app .catalog-search-button,
+#app input[type="submit"],
+.op-account button:not(#logoutBtn),
+.op-account #registerBtn,
+.account-area button:not(#logoutBtn),
+.account-area #registerBtn{
+  background:#fff!important;
+  background-image:none!important;
+  border:1px solid #fff!important;
+  color:#6b2eb5!important;
+  font-weight:700!important;
+  text-decoration:none!important;
+}
+#app .button:hover,
+#app .primary:hover,
+#app button.button:hover,
+#app button.primary:hover,
+#app .catalog-search-button:hover,
+.op-account button:not(#logoutBtn):hover,
+.op-account #registerBtn:hover,
+.account-area button:not(#logoutBtn):hover,
+.account-area #registerBtn:hover{
+  background:#eee6fa!important;
+  border-color:#d7c4f0!important;
+  color:#54228c!important;
+}
+#app .button:disabled,
+#app .primary:disabled,
+.op-account button:disabled,
+.account-area button:disabled{
+  background:#d8d4df!important;
+  border-color:#d8d4df!important;
+  color:#777181!important;
+  opacity:1;
+  cursor:not-allowed!important;
+}
+#app .game-locked-button,
+#app button.game-locked-button:disabled{
+  background:#fff!important;
+  border:1px solid #d8cde8!important;
+  color:#7a6892!important;
+  opacity:.72;
+  cursor:not-allowed!important;
+}
+#app .game-locked-button .game-lock-icon{
+  color:#7a6892!important;
+}
+
+/* The search icon uses the legacy SVG sprite's black variant */
+.op-search .icon-nav-search,
+.global-search .icon-nav-search{
+  filter:brightness(0) invert(1)!important;
+  opacity:1!important;
+}
+
+/* Keyboard focus and press states */
+#app button:focus-visible,
+#app a.button:focus-visible,
+.op-account button:focus-visible,
+.op-navigation a:focus-visible,
+.op-sidebar .side-nav a:focus-visible,
+.op-search button:focus-visible{
+  outline:2px solid #c18aff!important;
+  outline-offset:2px;
+}
+#app .button:active,
+#app .primary:active,
+.op-account button:not(#logoutBtn):active{
+  transform:translateY(1px);
+}
