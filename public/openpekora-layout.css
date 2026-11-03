@@ -287,3 +287,59 @@ input:focus,textarea:focus,select:focus{
 #app .trade-actions .button,#app .trade-actions .primary{
   min-height:34px;
 }
+
+
+/* Small verified badges, visible navigation icons and a non-white logout action */
+.verified-badge,
+.op-home-friend img.verified-badge{
+  display:inline-block!important;
+  width:16px!important;
+  height:16px!important;
+  min-width:16px!important;
+  max-width:16px!important;
+  min-height:16px!important;
+  max-height:16px!important;
+  flex:0 0 16px!important;
+  object-fit:contain!important;
+  border-radius:0!important;
+  background:transparent!important;
+  vertical-align:-3px!important;
+  margin:0 0 0 4px!important;
+}
+.op-home-friend .verified-badge{
+  width:16px!important;
+  height:16px!important;
+}
+.op-sidebar .side-icon,
+.sidebar .side-icon,
+.op-mobile-menu .icon-nav-menu{
+  filter:brightness(0) invert(1);
+  opacity:.96;
+}
+.op-sidebar .side-nav a:hover .side-icon,
+.op-sidebar .side-nav a.active .side-icon,
+.sidebar .side-nav a:hover .side-icon,
+.sidebar .side-nav a.active .side-icon{
+  opacity:1;
+}
+.op-account #logoutBtn,
+.account-area #logoutBtn{
+  background:#512080!important;
+  background-image:none!important;
+  color:#fff!important;
+  border:1px solid rgba(255,255,255,.65)!important;
+  border-radius:4px!important;
+  font-weight:700!important;
+  box-shadow:0 1px 3px rgba(0,0,0,.2);
+}
+.op-account #logoutBtn:hover,
+.account-area #logoutBtn:hover{
+  background:#3f1766!important;
+  border-color:#fff!important;
+  color:#fff!important;
+}
+.op-account #logoutBtn:focus-visible,
+.account-area #logoutBtn:focus-visible{
+  outline:2px solid #fff!important;
+  outline-offset:2px;
+}
