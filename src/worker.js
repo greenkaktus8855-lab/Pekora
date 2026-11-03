@@ -83,7 +83,7 @@ async function body(request) {
 const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:Number(u.balance||0), tixBalance:Number(u.tix_balance||0), createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified) });
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 const DEFAULT_AVATAR_BODY_COLORS = Object.freeze({headColorId:125,torsoColorId:125,leftArmColorId:125,rightArmColorId:125,leftLegColorId:125,rightLegColorId:125});
-const AVATAR_COLOR_IDS = new Set([364,217,359,18,125,1030,361,192]);
+const AVATAR_COLOR_IDS = new Set([361,192,217,153,359,352,5,101,1007,1014,38,18,125,1030,133,106,105,1017,24,334,226,141,1021,28,37,310,317,119,1011,1012,1010,23,305,102,45,107,1018,1027,1019,1013,11,1024,104,1023,321,1015,1031,1006,1026,21,1004,1032,1016,330,9,1025,364,351,1008,29,1022,151,135,1020,1028,1009,1029,1003,26,199,194,1002,208,1,1001]);
 const DEFAULT_AVATAR_SCALES = Object.freeze({height:1,width:1,head:1,depth:1,proportion:0,bodyType:0});
 const AVATAR_COLOR_KEYS = Object.keys(DEFAULT_AVATAR_BODY_COLORS);
 async function loadAvatarSettings(env,userId) {
