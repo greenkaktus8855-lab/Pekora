@@ -745,6 +745,141 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
+  if (request.method === "GET" && path.startsWith("/api/avatar/thumbnail/")) {
+    const match = path.match(/^\/api\/avatar\/thumbnail\/([0-9]{1,10})$/);
+    if (!match) return fail("Invalid avatar id.",400);
+    const publicId = Number(match[1]);
+    const target = await env.DB.prepare("SELECT id,public_id FROM users WHERE public_id=? AND is_banned=0").bind(publicId).first();
+    if (!target) return fail("Avatar not found.",404);
+    const [itemRows,settings] = await Promise.all([env.DB.prepare("SELECT i.id,i.asset_id,i.asset_type_id,i.category FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(target.id).all(),loadAvatarSettings(env,target.id)]);
+    const sourceHash = await digest(JSON.stringify({items:(itemRows.results||[]).map(item=>[item.id,item.asset_id,item.asset_type_id,item.category]),bodyColors:settings.bodyColors,rigType:settings.rigType,scales:settings.scales}));
+    const cached = await env.DB.prepare("SELECT source_hash,thumbnail_data FROM avatar_render_cache WHERE user_id=?").bind(target.id).first();
+    if (cached?.source_hash === sourceHash && cached.thumbnail_data) {
+      const cachedBytes = cached.thumbnail_data instanceof Uint8Array ? cached.thumbnail_data : new Uint8Array(cached.thumbnail_data);
+      if (cachedBytes.byteLength > 8) return new Response(cachedBytes,{status:200,headers:{"content-type":"image/png","cache-control":"public, max-age=300, s-maxage=300, stale-while-revalidate=3600","x-avatar-renderer":"OpenPekora-RCC"}});
+    }
+    const rendererBase = String(env.AVATAR_RENDERER_URL || "https://renderer.mopcblox.online").trim().replace(/\/+$/,"");
+    if (!/^https:\/\//i.test(rendererBase)) return fail("Avatar renderer URL must use HTTPS.",503);
+    const rendererSecret = String(env.AVATAR_RENDERER_SECRET || "").trim();
+    if (!rendererSecret) return new Response("Avatar renderer secret is not configured in the Cloudflare Worker.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+    const rendererHeaders = {"content-type":"application/json","X-Pekora-Renderer-Secret":rendererSecret};
+    if (env.AVATAR_RENDERER_ACCESS_ID && env.AVATAR_RENDERER_ACCESS_SECRET) {
+      rendererHeaders["CF-Access-Client-Id"] = String(env.AVATAR_RENDERER_ACCESS_ID);
+      rendererHeaders["CF-Access-Client-Secret"] = String(env.AVATAR_RENDERER_ACCESS_SECRET);
+    }
+    let rendererResponse;
+    try {
+      rendererResponse = await fetch(rendererBase+"/player/thumbnail",{
+        method:"POST",
+        headers:rendererHeaders,
+        body:JSON.stringify({userId:publicId,jobExpiration:60}),
+        signal:AbortSignal.timeout(90000)
+      });
+    } catch (error) {
+      console.error("[Sakura avatar] Renderer connection failed:",error);
+      return new Response("OpenPekora renderer is offline. Start the renderer and RCCService on the host PC.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+    }
+    if (!rendererResponse.ok) {
+      const detail=(await rendererResponse.text()).slice(0,500);
+      const safeDetail=detail.replace(/(secret|token|authorization)(\\s*[:=]\\s*)[^,\\s"]+/gi,"$1$2[redacted]");
+      console.error("[Sakura avatar] Renderer returned an error:",rendererResponse.status,safeDetail);
+      return new Response("OpenPekora renderer returned HTTP "+rendererResponse.status+": "+(safeDetail || "No additional renderer details."),{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store","x-sakura-renderer-status":String(rendererResponse.status)}});
+    }
+    let rendererPayload;
+    try { rendererPayload=await rendererResponse.json(); }
+    catch { return new Response("OpenPekora renderer returned invalid JSON.",{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}}); }
+    const encoded=typeof rendererPayload?.data==="string"?rendererPayload.data:
+      typeof rendererPayload?.data?.data==="string"?rendererPayload.data.data:null;
+    if (!rendererPayload?.success || !encoded || encoded.length>8*1024*1024) {
+      console.error("[Sakura avatar] Renderer response did not contain a valid PNG.");
+      return new Response("OpenPekora renderer did not return an avatar image. Check avatar-fetch and RCC logs.",{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+    }
+    let imageBytes;
+    try {
+      const binary=atob(encoded.replace(/\s/g,""));
+      if (binary.length<8 || binary.length>6*1024*1024) throw new Error("PNG size is outside the allowed range.");
+      imageBytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++) imageBytes[i]=binary.charCodeAt(i);
+      if (imageBytes[0]!==137 || imageBytes[1]!==80 || imageBytes[2]!==78 || imageBytes[3]!==71) throw new Error("Renderer data is not a PNG image.");
+    } catch (error) {
+      console.error("[Sakura avatar] Invalid renderer image:",error);
+      return new Response("OpenPekora renderer returned an invalid image.",{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+    }
+    if (imageBytes.byteLength<=1500000) {
+      await env.DB.prepare("INSERT INTO avatar_render_cache (user_id,source_hash,thumbnail_data,rendered_at) VALUES (?,?,?,datetime('now')) ON CONFLICT(user_id) DO UPDATE SET source_hash=excluded.source_hash,thumbnail_data=excluded.thumbnail_data,rendered_at=excluded.rendered_at")
+        .bind(target.id,sourceHash,imageBytes).run();
+    }
+    return new Response(imageBytes,{status:200,headers:{"content-type":"image/png","cache-control":"public, max-age=300, s-maxage=300","x-avatar-renderer":"OpenPekora-RCC"}});
+  }
+
+  if (path === "/api/avatar" && request.method === "GET") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const [rows,settings] = await Promise.all([env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(user.id).all(),loadAvatarSettings(env,user.id)]);
+    return json({enabled:true,equipped:rows.results||[],...settings});
+  }
+
+
+  if (path === "/api/avatar" && request.method === "PUT") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const data = await body(request);
+    if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid avatar update.");
+    const action = String(data.action||"");
+    const settings = await loadAvatarSettings(env,user.id);
+
+    if (action === "colors") {
+      if (!data.bodyColors || typeof data.bodyColors !== "object" || Array.isArray(data.bodyColors)) return fail("Choose a valid body color.");
+      const next = {...settings.bodyColors};
+      for (const [key,value] of Object.entries(data.bodyColors)) {
+        const colorId = Number(value);
+        if (!AVATAR_COLOR_KEYS.includes(key) || !Number.isSafeInteger(colorId) || !AVATAR_COLOR_IDS.has(colorId)) return fail("Choose a skin tone from the Sakura palette.");
+        next[key] = colorId;
+      }
+      settings.bodyColors = next;
+      await saveAvatarSettings(env,user.id,settings);
+      return json({ok:true,bodyColors:settings.bodyColors});
+    }
+
+    if (action === "rig") {
+      if (!["R6","R15"].includes(data.rigType)) return fail("Choose R6 or R15.");
+      settings.rigType = data.rigType;
+      await saveAvatarSettings(env,user.id,settings);
+      return json({ok:true,rigType:settings.rigType});
+    }
+
+    if (action === "scales") {
+      const ranges = {height:[0.9,1.05],width:[0.7,1],head:[0.95,1],depth:[0.7,1],proportion:[0,1],bodyType:[0,1]};
+      const next = {...settings.scales};
+      for (const [key,value] of Object.entries(data.scales||{})) {
+        const range=ranges[key],number=Number(value);
+        if (!range || !Number.isFinite(number) || number<range[0] || number>range[1]) return fail("Avatar scale is outside the allowed range.");
+        next[key]=Math.round(number*100)/100;
+      }
+      settings.scales = next;
+      await saveAvatarSettings(env,user.id,settings);
+      return json({ok:true,scales:settings.scales});
+    }
+
+    const itemId = String(data.itemId||"");
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId) || !["wear","remove"].includes(action)) return fail("Choose an inventory item and a valid avatar action.");
+    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
+    if (!item) return fail("You can only equip items in your inventory.",404);
+    if (!["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category)) return fail("This item category cannot be equipped on the avatar.");
+    if (action === "remove") {
+      await env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=?").bind(user.id,itemId).run();
+      return json({ok:true,action,equipped:false});
+    }
+    if (!Number(item.asset_id||0)) return fail("This item has no Roblox asset ID, so the 3D renderer cannot equip it.",409);
+    const statements = [];
+    if (["Hair","Faces","Shirts","Pants"].includes(item.category)) {
+      statements.push(env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND category=?").bind(user.id,item.category));
+    }
+    statements.push(env.DB.prepare("INSERT OR IGNORE INTO equipped_items (user_id,item_id,category) VALUES (?,?,?)").bind(user.id,item.id,item.category));
+    await env.DB.batch(statements);
+    return json({ok:true,action,equipped:true});
+  }
+
   if (request.method === "GET" && path.startsWith("/api/profile/")) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
