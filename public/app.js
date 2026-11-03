@@ -1280,6 +1280,7 @@ async function render(name){
  else if(name==="login"||name==="register")auth(name);
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
+ else if(name==="avatar")await avatarPage();
  else if(name==="groups")await groupsPage();
  else if(name==="profile")await (query.get("id")?profile(query.get("id"),true):profile(query.get("username")||me?.username));
  else if(name==="item")await showItem(query.get("id"),false);
