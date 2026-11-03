@@ -434,11 +434,12 @@ async function runDailyMembershipPayout(controller,env) {
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
+  const avatarSupportRoute = path === "/v1.1/avatar-fetch" || path.toLowerCase() === "/asset/bodycolors.ashx" || /^\/asset\/?$/i.test(path);
   const apiRoute = path.startsWith("/api/");
-  if (apiRoute && path !== "/api/health" && !env.DB) {
+  if ((apiRoute && path !== "/api/health" || avatarSupportRoute) && !env.DB) {
     return json({ error:"D1 binding DB is missing." },503);
   }
-  if (apiRoute && path !== "/api/health" && env.DB) {
+  if ((apiRoute && path !== "/api/health" || avatarSupportRoute) && env.DB) {
     try { await ensureSiteSettings(env); }
     catch (error) {
       console.error("[Pekora setup] Site settings setup failed:", error);
