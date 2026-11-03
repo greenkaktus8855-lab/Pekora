@@ -92,7 +92,7 @@ function validItem(data, allowLegacyHttp = false) {
   if ((typeof rawPrice !== "number" && typeof rawPrice !== "string") ||
       (typeof rawPrice === "string" && !/^\d+$/.test(rawPrice.trim())) ||
       !Number.isSafeInteger(Number(rawPrice)) || Number(rawPrice) < 0 || Number(rawPrice) > 1000000) {
-    return "Price must be between 0 and 1,000,000 P$.";
+    return "Price must be between 0 and 1,000,000 " + currency + ".";
   }
   if (typeof (data.description ?? "") !== "string" || (data.description ?? "").length > 500) return "Description must be 500 characters or less.";
 
