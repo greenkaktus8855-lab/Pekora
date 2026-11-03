@@ -187,7 +187,7 @@ try {
     Remove-Item Env:PEKORA_RENDERER_SECRET -ErrorAction SilentlyContinue
     Remove-Item Env:SAKURA_OPENPEKORA_ROOT -ErrorAction SilentlyContinue
     Remove-Item Env:SAKURA_RENDERER_LOG_DIR -ErrorAction SilentlyContinue
-    Show-Notice ("Could not start the avatar renderer." + [Environment]::NewLine + [Environment]::NewLine + $_.Exception.Message + [Environment]::NewLine + [Environment]::NewLine + "Logs: " + $logDir) "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Error)
+    Show-Notice ("Could not start the OpenPekora renderer." + [Environment]::NewLine + [Environment]::NewLine + $_.Exception.Message + [Environment]::NewLine + [Environment]::NewLine + "Logs: " + $logDir) "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Error)
     exit
 } finally {
     $secret = $null
