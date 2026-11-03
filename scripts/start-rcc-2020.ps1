@@ -2,10 +2,11 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $candidateRoots = @(
+    $env:SAKURA_OPENPEKORA_ROOT,
     $repoRoot,
     (Join-Path $repoRoot "OpenPekora"),
     "C:\Pekora-RCC-Host\OpenPekora"
-) | Select-Object -Unique
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 $openPekoraRoot = $null
 foreach ($candidate in $candidateRoots) {
     $candidateRenderer = Join-Path $candidate "game-renderer"
@@ -138,12 +139,18 @@ foreach ($port in $ports) {
 }
 Start-Sleep -Seconds 2
 
+$logDir = [string]$env:SAKURA_RENDERER_LOG_DIR
+if ([string]::IsNullOrWhiteSpace($logDir)) {
+    $logDir = Join-Path $env:LOCALAPPDATA "SakuraRenderer\logs"
+}
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+
 $started = @()
 foreach ($port in $ports) {
     Write-Host "Starting RCCService 2020 on 127.0.0.1:$port..."
     $process = Start-Process -FilePath $rccExe -ArgumentList @(
         "-Console", "-verbose", "-settingsfile", "Settings.json", "-port", "$port"
-    ) -WorkingDirectory $rccDir -PassThru
+    ) -WorkingDirectory $rccDir -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDir "rcc-$port-out.log") -RedirectStandardError (Join-Path $logDir "rcc-$port-error.log") -PassThru
     $ready = $false
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
         Start-Sleep -Seconds 1
