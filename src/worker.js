@@ -38,7 +38,7 @@ async function currentUser(request, env) {
   const token = getCookie(request, "pekora_session");
   if (!token) return null;
   const tokenHash = await digest(token);
-  const row = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.created_at,u.is_banned,u.public_id,u.is_verified
+  const row = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.tix_balance,u.created_at,u.is_banned,u.public_id,u.is_verified
     FROM sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=? AND s.expires_at > datetime('now')`).bind(tokenHash).first();
   if (!row || row.is_banned) return null;
@@ -80,12 +80,14 @@ async function body(request) {
     return null;
   }
 }
-const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:u.balance, createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified) });
+const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:Number(u.balance||0), tixBalance:Number(u.tix_balance||0), createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified) });
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 function validItem(data, allowLegacyHttp = false) {
   if (!data || typeof data !== "object" || Array.isArray(data)) return "Invalid item details.";
   if (typeof data.name !== "string" || !data.name.trim() || data.name.trim().length > 80) return "Item name must be 1–80 characters.";
   if (!ITEM_CATEGORIES.includes(data.category)) return "Choose a valid item category.";
+  const currency = String(data.currency ?? "P$");
+  if (!["P$","Tix"].includes(currency)) return "Choose P$ or Tix as the item currency.";
   const rawPrice = data.price;
   if ((typeof rawPrice !== "number" && typeof rawPrice !== "string") ||
       (typeof rawPrice === "string" && !/^\d+$/.test(rawPrice.trim())) ||
@@ -167,6 +169,16 @@ async function ensureSiteSettings(env) {
       if (!(userColumns.results || []).some(column => column.name === "is_verified")) {
         await env.DB.prepare("ALTER TABLE users ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0").run();
       }
+      if (!(userColumns.results || []).some(column => column.name === "tix_balance")) {
+        await env.DB.prepare("ALTER TABLE users ADD COLUMN tix_balance INTEGER NOT NULL DEFAULT 0").run();
+      }
+      const tixInitialization = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='tix_initial_balances_2026_11_03'").first();
+      if (!tixInitialization) {
+        await env.DB.batch([
+          env.DB.prepare("UPDATE users SET tix_balance=0"),
+          env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('tix_initial_balances_2026_11_03','done')")
+        ]);
+      }
       // Use SQLite's stable rowid as the public numeric User ID for existing accounts.
       await env.DB.prepare("UPDATE users SET public_id=rowid WHERE public_id IS NULL").run();
       await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_public_id ON users(public_id)").run();
@@ -189,6 +201,13 @@ async function ensureSiteSettings(env) {
       }
       if (!(itemColumns.results || []).some(column => column.name === "is_offsale")) {
         await env.DB.prepare("ALTER TABLE items ADD COLUMN is_offsale INTEGER NOT NULL DEFAULT 0").run();
+      }
+      if (!(itemColumns.results || []).some(column => column.name === "currency")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN currency TEXT NOT NULL DEFAULT 'P$'").run();
+      }
+      const purchaseColumns = await env.DB.prepare("PRAGMA table_info(purchases)").all();
+      if (!(purchaseColumns.results || []).some(column => column.name === "currency")) {
+        await env.DB.prepare("ALTER TABLE purchases ADD COLUMN currency TEXT NOT NULL DEFAULT 'P$'").run();
       }
       // Backfill historical purchases once so they count toward finite stock.
       const stockBackfill = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='stock_sold_backfill_2026_11'").first();
@@ -279,7 +298,7 @@ async function announceLimitedItem(item, env, siteOrigin) {
     url:itemUrl,
     color:0x9B59B6,
     fields:[
-      {name:"Price",value:Number(item.price || 0).toLocaleString("en-US") + " P$",inline:true},
+      {name:"Price",value:Number(item.price || 0).toLocaleString("en-US") + " " + (item.currency||"P$"),inline:true},
       {name:"Stock",value:String(Number(item.stock_limit || 0)),inline:true},
       {name:"Category",value:String(item.category || "Other"),inline:true}
     ],
@@ -312,9 +331,9 @@ async function announcePriceIncrease(item, oldPrice, newPrice, env, siteOrigin) 
     url:itemUrl,
     color:0xE67E22,
     fields:[
-      {name:"Previous price",value:previous.toLocaleString("en-US") + " P$",inline:true},
-      {name:"New price",value:current.toLocaleString("en-US") + " P$",inline:true},
-      {name:"Increase",value:"+" + difference.toLocaleString("en-US") + " P$",inline:true}
+      {name:"Previous price",value:previous.toLocaleString("en-US") + " " + (item.currency||"P$"),inline:true},
+      {name:"New price",value:current.toLocaleString("en-US") + " " + (item.currency||"P$"),inline:true},
+      {name:"Increase",value:"+" + difference.toLocaleString("en-US") + " " + (item.currency||"P$"),inline:true}
     ],
     image:item.image_url && /^https:\/\//i.test(String(item.image_url)) ? {url:String(item.image_url)} : undefined,
     footer:{text:"Sakura • Price update"},
@@ -334,7 +353,7 @@ async function announcePriceIncrease(item, oldPrice, newPrice, env, siteOrigin) 
 
 async function announceMissingLimitedItems(env, siteOrigin) {
   if (!env.DISCORD_LIMITED_WEBHOOK) return {sent:0,skipped:true};
-  const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.price,i.image_url,i.stock_limit FROM items i LEFT JOIN discord_limited_announcements a ON a.item_id=i.id WHERE i.is_limited=1 AND a.item_id IS NULL ORDER BY i.created_at ASC LIMIT 50").all();
+  const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.price,i.currency,i.image_url,i.stock_limit FROM items i LEFT JOIN discord_limited_announcements a ON a.item_id=i.id WHERE i.is_limited=1 AND a.item_id IS NULL ORDER BY i.created_at ASC LIMIT 50").all();
   let sent=0;
   for (const item of rows.results || []) {
     const result=await announceLimitedItem(item,env,siteOrigin);
@@ -369,12 +388,12 @@ async function route(request, env) {
         return json({ ok:false, site:"Sakura", database:true, schema:false, error:"D1 is reachable, but the Sakura migrations are missing or incomplete." },503);
       }
       const requiredColumns = [
-        "SELECT id,username,password_hash,password_salt,role,balance,created_at,is_banned FROM users LIMIT 0",
+        "SELECT id,username,password_hash,password_salt,role,balance,tix_balance,created_at,is_banned FROM users LIMIT 0",
         "SELECT token_hash,user_id,expires_at FROM sessions LIMIT 0",
         "SELECT user_id,description,avatar_json FROM profiles LIMIT 0",
-        "SELECT id,name,description,category,price,image_url,model_url,is_limited,is_for_sale,is_offsale,created_at FROM items LIMIT 0",
+        "SELECT id,name,description,category,price,currency,image_url,model_url,is_limited,is_for_sale,is_offsale,created_at FROM items LIMIT 0",
         "SELECT id,user_id,item_id,purchased_at FROM inventory LIMIT 0",
-        "SELECT id,user_id,item_id,price,purchased_at FROM purchases LIMIT 0",
+        "SELECT id,user_id,item_id,price,currency,purchased_at FROM purchases LIMIT 0",
         "SELECT user_id,friend_id,status,created_at FROM friends LIMIT 0"
       ];
       try {
@@ -400,7 +419,7 @@ async function route(request, env) {
     const data = await body(request);
     if (!data || typeof data.username !== "string" || typeof data.password !== "string") return registrationFailure("Enter a username and password.");
     const username = data.username.trim();
-    if (!/^[A-Za-z0-9_]{1,20}$/.test(username)) return registrationFailure("Username must be 1–20 characters and use only letters, numbers or _.");
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return registrationFailure("New usernames must be 3–20 characters and use only letters, numbers or _.");
     if (username.toLowerCase() === "pekoraadmin") return registrationFailure("That username is reserved.");
     if (data.password.length < 8 || data.password.length > 128) return registrationFailure("Password must be at least 8 characters.");
     const exists = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first();
@@ -492,7 +511,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
     return json({ items:rows.results || [] });
   }
 
@@ -504,15 +523,19 @@ async function route(request, env) {
     const item = await env.DB.prepare("SELECT * FROM items WHERE id=? AND is_for_sale=1").bind(data.itemId).first();
     if (!item) return fail("Item not found or unavailable.",404);
     if (Number(item.is_offsale) === 1) return fail("This item is Off Sale and cannot be purchased.",409);
-    if (item.price > user.balance) return fail("Not enough Sakura currency.",400);
+    const currencyCode = item.currency === "Tix" ? "Tix" : "P$";
+    const walletColumn = currencyCode === "Tix" ? "tix_balance" : "balance";
+    const available = Number(user[walletColumn] || 0);
+    const price = Number(item.price || 0);
+    if (available < price) return fail("Not enough " + currencyCode + ".",400);
     if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
     const purchaseId=id(), inventoryId=id();
     try {
       const results = await env.DB.batch([
-        env.DB.prepare("UPDATE items SET stock_sold=stock_sold+1 WHERE id=? AND is_for_sale=1 AND is_offsale=0 AND (stock_limit=0 OR stock_sold<stock_limit) AND EXISTS (SELECT 1 FROM users WHERE id=? AND balance>=?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)").bind(item.id,user.id,item.price,user.id,item.id),
-        env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND changes()=1").bind(item.price,user.id,item.price),
+        env.DB.prepare(`UPDATE items SET stock_sold=stock_sold+1 WHERE id=? AND is_for_sale=1 AND is_offsale=0 AND (stock_limit=0 OR stock_sold<stock_limit) AND EXISTS (SELECT 1 FROM users WHERE id=? AND ${walletColumn}>=?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)`).bind(item.id,user.id,price,user.id,item.id),
+        env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}-? WHERE id=? AND ${walletColumn}>=? AND changes()=1`).bind(price,user.id,price),
         env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE changes()=1").bind(inventoryId,user.id,item.id),
-        env.DB.prepare("INSERT INTO purchases (id,user_id,item_id,price) SELECT ?,?,?,? WHERE changes()=1").bind(purchaseId,user.id,item.id,item.price)
+        env.DB.prepare("INSERT INTO purchases (id,user_id,item_id,price,currency) SELECT ?,?,?,?,? WHERE changes()=1").bind(purchaseId,user.id,item.id,price,currencyCode)
       ]);
       if (!results?.[0]?.meta?.changes) {
         const latest = await env.DB.prepare("SELECT stock_limit,stock_sold,is_for_sale,is_offsale FROM items WHERE id=?").bind(item.id).first();
@@ -520,25 +543,28 @@ async function route(request, env) {
         if (Number(latest.is_offsale) === 1) return fail("This item is Off Sale and cannot be purchased.",409);
         if (Number(latest.stock_limit)>0 && Number(latest.stock_sold)>=Number(latest.stock_limit)) return fail("This item is sold out.",409);
         if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
-        return fail("Not enough Sakura currency.",409);
+        return fail("Not enough " + currencyCode + ".",409);
       }
       if (!results?.[1]?.meta?.changes) return fail("Purchase could not be completed. Please retry.",409);
-    } catch { return fail("Purchase could not be completed.",400); }
-    const updated = await env.DB.prepare("SELECT balance FROM users WHERE id=?").bind(user.id).first();
-    return json({ ok:true,balance:updated.balance });
+    } catch (error) {
+      console.error("[Sakura purchase] Purchase failed:",error);
+      return fail("Purchase could not be completed.",400);
+    }
+    const updated = await env.DB.prepare("SELECT balance,tix_balance FROM users WHERE id=?").bind(user.id).first();
+    return json({ok:true,balance:Number(updated?.balance||0),tixBalance:Number(updated?.tix_balance||0),currency:currencyCode});
   }
 
   if (request.method === "GET" && path === "/api/currency/history") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT p.price,p.purchased_at,i.name,i.category FROM purchases p JOIN items i ON i.id=p.item_id WHERE p.user_id=? ORDER BY p.purchased_at DESC LIMIT 50").bind(user.id).all();
+    const rows = await env.DB.prepare("SELECT p.price,p.currency,p.purchased_at,i.name,i.category FROM purchases p JOIN items i ON i.id=p.item_id WHERE p.user_id=? ORDER BY p.purchased_at DESC LIMIT 50").bind(user.id).all();
     return json({ purchases:rows.results || [] });
   }
 
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -550,17 +576,19 @@ async function route(request, env) {
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId)) return fail("Choose a valid inventory item.");
 
     const item = await env.DB.prepare(
-      "SELECT i.id,i.name,i.price FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.item_id=?"
+      "SELECT i.id,i.name,i.price,i.currency FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.item_id=?"
     ).bind(user.id,itemId).first();
     if (!item) return fail("This item is not in your inventory.",404);
 
     const price = Number(item.price);
+    const currencyCode = item.currency === "Tix" ? "Tix" : "P$";
+    const walletColumn = currencyCode === "Tix" ? "tix_balance" : "balance";
     if (!Number.isSafeInteger(price) || price < 0) return fail("This item has an invalid sale price.",409);
 
     try {
       const results = await env.DB.batch([
-        env.DB.prepare("DELETE FROM inventory WHERE id=(SELECT id FROM inventory WHERE user_id=? AND item_id=? ORDER BY purchased_at DESC LIMIT 1) AND EXISTS (SELECT 1 FROM items WHERE id=? AND price=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)").bind(user.id,itemId,itemId,price,user.id,itemId),
-        env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND changes()=1").bind(price,user.id),
+        env.DB.prepare("DELETE FROM inventory WHERE id=(SELECT id FROM inventory WHERE user_id=? AND item_id=? ORDER BY purchased_at DESC LIMIT 1) AND EXISTS (SELECT 1 FROM items WHERE id=? AND price=? AND COALESCE(currency,'P$')=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)").bind(user.id,itemId,itemId,price,currencyCode,user.id,itemId),
+        env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}+? WHERE id=? AND changes()=1`).bind(price,user.id),
         env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=? AND changes()=1 AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)").bind(user.id,itemId,user.id,itemId)
       ]);
 
@@ -575,21 +603,21 @@ async function route(request, env) {
       return fail("The sale could not be completed. Please try again.",500);
     }
 
-    const updated = await env.DB.prepare("SELECT balance FROM users WHERE id=?").bind(user.id).first();
-    return json({ok:true,item:{id:item.id,name:item.name,price},balance:Number(updated?.balance||0)});
+    const updated = await env.DB.prepare("SELECT balance,tix_balance FROM users WHERE id=?").bind(user.id).first();
+    return json({ok:true,item:{id:item.id,name:item.name,price,currency:currencyCode},balance:Number(updated?.balance||0),tixBalance:Number(updated?.tix_balance||0)});
   }
 
   const profileIdInventoryMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})\/inventory$/);
   if (request.method === "GET" && profileIdInventoryMatch) {
     const profile = await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND is_banned=0").bind(Number(profileIdInventoryMatch[1])).first();
     if (!profile) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
     return json({ items:rows.results || [] });
   }
 
   const profileIdMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})$/);
   if (request.method === "GET" && profileIdMatch) {
-    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1) AS total_rap
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1 AND COALESCE(rap_item.currency,'P$')='P$') AS total_rap
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.public_id=? AND u.is_banned=0`).bind(Number(profileIdMatch[1])).first();
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
@@ -601,7 +629,7 @@ async function route(request, env) {
     const username = profileInventoryMatch[1];
     const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(profile.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -620,7 +648,7 @@ async function route(request, env) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
     catch { return fail("Invalid username.",400); }
-    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1) AS total_rap
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1 AND COALESCE(rap_item.currency,'P$')='P$') AS total_rap
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
@@ -860,7 +888,7 @@ async function route(request, env) {
       const q = (url.searchParams.get("q") || "").trim().slice(0,32);
       if (q.length < 1) return json({users:[]});
       const numericId = /^\d+$/.test(q) && Number.isSafeInteger(Number(q)) ? Number(q) : -1;
-      const rows = await env.DB.prepare(`SELECT id,public_id,username,role,balance,created_at,is_banned,is_verified FROM users
+      const rows = await env.DB.prepare(`SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified FROM users
         WHERE instr(lower(username),lower(?))>0 OR id=? OR public_id=? ORDER BY username LIMIT 30`).bind(q,q,numericId).all();
       return json({users:rows.results||[]});
     }
@@ -868,7 +896,7 @@ async function route(request, env) {
     const userMatch = path.match(/^\/api\/owner\/users\/([A-Za-z0-9-]+)$/);
     if (!userMatch) return fail("User not found.",404);
     const targetId = userMatch[1];
-    const target = await env.DB.prepare("SELECT id,public_id,username,role,balance,created_at,is_banned,is_verified FROM users WHERE id=?").bind(targetId).first();
+    const target = await env.DB.prepare("SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified FROM users WHERE id=?").bind(targetId).first();
     if (!target) return fail("User not found.",404);
 
     if (request.method === "GET") {
@@ -886,10 +914,12 @@ async function route(request, env) {
     const details = String(data?.reason||"").trim().slice(0,500);
     if (action === "credit") {
       const amount = Number(data?.amount);
-      if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) return fail("Enter an amount from 1 to 1,000,000 P$.");
-      const result = await env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND balance<=1000000000-?").bind(amount,targetId,amount).run();
-      if (!result?.meta?.changes) return fail("Could not add currency. The balance limit may have been reached.",409);
-      await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"CURRENCY_CREDIT",amount+" P$"+(details?" — "+details:"")).run();
+      const currencyCode = data?.currency === "Tix" ? "Tix" : "P$";
+      const walletColumn = currencyCode === "Tix" ? "tix_balance" : "balance";
+      if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) return fail("Enter an amount from 1 to 1,000,000 " + currencyCode + ".");
+      const result = await env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}+? WHERE id=? AND ${walletColumn}<=1000000000-?`).bind(amount,targetId,amount).run();
+      if (!result?.meta?.changes) return fail("Could not add " + currencyCode + ". The balance limit may have been reached.",409);
+      await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"CURRENCY_CREDIT",amount+" "+currencyCode+(details?" — "+details:"")).run();
     } else if (action === "verify" || action === "unverify") {
       const verified = action === "verify" ? 1 : 0;
       await env.DB.batch([
@@ -920,7 +950,7 @@ async function route(request, env) {
     } else {
       return fail("Unknown user management action.");
     }
-    const updated = await env.DB.prepare("SELECT id,public_id,username,role,balance,created_at,is_banned,is_verified FROM users WHERE id=?").bind(targetId).first();
+    const updated = await env.DB.prepare("SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified FROM users WHERE id=?").bind(targetId).first();
     return json({ok:true,user:updated});
   }
 
@@ -953,7 +983,7 @@ async function route(request, env) {
     const data = await body(request);
     const name = String(data?.name||"").trim();
     const description = String(data?.description||"").trim();
-    if (!/^[a-z0-9а-яёіїєґ _.-]{1,32}$/i.test(name)) return fail("Group name must be 1–32 characters and use letters, numbers, spaces, dots, underscores or hyphens.");
+    if (!/^[a-z0-9а-яёіїєґ _.-]{3,32}$/i.test(name)) return fail("New group names must be 3–32 characters and use letters, numbers, spaces, dots, underscores or hyphens.");
     if (description.length>300) return fail("Group description must be 300 characters or less.");
     const admin = await env.DB.prepare("SELECT id FROM users WHERE username='Admin' COLLATE NOCASE AND is_banned=0").first();
     if (!admin) return fail("The Admin account could not be found. Group creation is temporarily unavailable.",503);
@@ -1039,7 +1069,7 @@ async function route(request, env) {
       const loadItems = async (ownerId,ids) => {
         if (!ids.length) return [];
         const marks=ids.map(()=>"?").join(",");
-        const found=await env.DB.prepare(`SELECT i.id,i.name,i.category,i.image_url,i.price,i.is_limited,i.is_offsale FROM items i WHERE i.id IN (${marks})`).bind(...ids).all();
+        const found=await env.DB.prepare(`SELECT i.id,i.name,i.category,i.image_url,i.price,i.currency,i.is_limited,i.is_offsale FROM items i WHERE i.id IN (${marks})`).bind(...ids).all();
         return found.results||[];
       };
       trades.push({...row,offeredItems:await loadItems(row.sender_id,offeredIds),requestedItems:await loadItems(row.recipient_id,requestedIds)});
@@ -1124,7 +1154,7 @@ async function route(request, env) {
     if (path === "/api/owner/items" && request.method === "GET") {
       try { await announceMissingLimitedItems(env, url.origin); }
       catch (error) { console.error("[Sakura Discord] Missing Limited scan failed:",error); }
-      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i ORDER BY i.created_at DESC,i.name").all();
+      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i ORDER BY i.created_at DESC,i.name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
@@ -1146,10 +1176,10 @@ async function route(request, env) {
       const assetId = Number(data.asset_id || 0);
       const assetTypeId = Number(data.asset_type_id || (assetId ? (defaultAssetTypes[data.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID (for example neck, back, front, shoulder or waist).");
-      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,isLimited?1:0,stockLimit,0,data.is_for_sale===false?0:1,data.is_offsale===true?1:0).run();
+      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),data.currency||"P$",String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,isLimited?1:0,stockLimit,0,data.is_for_sale===false?0:1,data.is_offsale===true?1:0).run();
       if (isLimited && data.is_for_sale !== false) {
         try {
-          await announceLimitedItem({id:itemId,name:data.name,category:data.category,price:Number(data.price),image_url:String(data.image_url||"").trim(),stock_limit:stockLimit},env,url.origin);
+          await announceLimitedItem({id:itemId,name:data.name,category:data.category,price:Number(data.price),currency:data.currency||"P$",image_url:String(data.image_url||"").trim(),stock_limit:stockLimit},env,url.origin);
         } catch (error) { console.error("[Sakura Discord] New Limited announcement failed:",error); }
       }
       return json({ok:true,id:itemId},201);
@@ -1163,7 +1193,7 @@ async function route(request, env) {
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item catalog visibility must be true or false.");
        if (data.is_offsale !== undefined && typeof data.is_offsale !== "boolean") return fail("Off Sale status must be true or false.");
       if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
-      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0),is_offsale:data.is_offsale===undefined?Number(current.is_offsale||0)===1:data.is_offsale,is_limited:data.is_limited===undefined?Number(current.is_limited)===1:data.is_limited,stock_limit:data.stock_limit===undefined?Number(current.stock_limit||0):Number(data.stock_limit)};
+      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,currency:data.currency??current.currency??"P$",image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0),is_offsale:data.is_offsale===undefined?Number(current.is_offsale||0)===1:data.is_offsale,is_limited:data.is_limited===undefined?Number(current.is_limited)===1:data.is_limited,stock_limit:data.stock_limit===undefined?Number(current.stock_limit||0):Number(data.stock_limit)};
       if (!Number.isSafeInteger(merged.stock_limit) || merged.stock_limit < 0 || merged.stock_limit > 1000000) return fail("Stock must be a whole number from 0 to 1,000,000.");
       if (merged.is_limited && merged.stock_limit < 1) return fail("A Limited item must have a stock quantity of at least 1.");
       if (merged.stock_limit > 0 && merged.stock_limit < Number(current.stock_sold||0)) return fail("Stock cannot be lower than the number already sold.");
@@ -1173,13 +1203,14 @@ async function route(request, env) {
       const assetId = Number(merged.asset_id || 0);
       const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
-      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=?,is_offsale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,merged.is_offsale?1:0,match[1]).run();
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,currency=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=?,is_offsale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),merged.currency,String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,merged.is_offsale?1:0,match[1]).run();
       if (Number(merged.price) > Number(current.price || 0) && Number(merged.is_for_sale) === 1) {
         try {
           await announcePriceIncrease({
             id:match[1],
             name:merged.name,
-            image_url:String(merged.image_url||"").trim()
+            image_url:String(merged.image_url||"").trim(),
+            currency:merged.currency
           },Number(current.price || 0),Number(merged.price),env,url.origin);
         } catch (error) {
           console.error("[Sakura Discord] Price increase announcement failed:",error);
@@ -1233,13 +1264,13 @@ export default {
     }
     const itemShareMatch = url.pathname.match(new RegExp("^/item/([A-Za-z0-9_-]{1,80})/?$"));
     if (request.method === "GET" && itemShareMatch && env.DB) {
-      const sharedItem = await env.DB.prepare("SELECT id,name,description,category,price,image_url FROM items WHERE id=? AND is_for_sale=1").bind(itemShareMatch[1]).first();
+      const sharedItem = await env.DB.prepare("SELECT id,name,description,category,price,currency,image_url FROM items WHERE id=? AND is_for_sale=1").bind(itemShareMatch[1]).first();
       if (sharedItem) {
         const pageResponse = await env.ASSETS.fetch(new Request(new URL("/",url), { method:"GET", headers:request.headers }));
         if (pageResponse.ok && (pageResponse.headers.get("content-type")||"").includes("text/html")) {
           const escapeHtml = value => String(value??"").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
           const title = String(sharedItem.name||"Sakura item").slice(0,100);
-          const description = (sharedItem.category+" · "+Number(sharedItem.price||0).toLocaleString("en-US")+" P$"+(String(sharedItem.description||"").trim()?" · "+String(sharedItem.description).trim():"")).slice(0,300);
+          const description = (sharedItem.category+" · "+Number(sharedItem.price||0).toLocaleString("en-US")+" "+(sharedItem.currency||"P$")+(String(sharedItem.description||"").trim()?" · "+String(sharedItem.description).trim():"")).slice(0,300);
           const image = /^https:\/\//i.test(String(sharedItem.image_url||"")) ? String(sharedItem.image_url) : "https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/pekora-logo.png";
           const canonical = new URL("/item/"+encodeURIComponent(sharedItem.id),url.origin).href;
           const metadata = '<meta name="description" content="'+escapeHtml(description)+'">' +
