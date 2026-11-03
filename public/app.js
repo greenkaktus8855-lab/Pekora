@@ -149,7 +149,6 @@ function itemPreview(x,extraClass=""){
  }
  return x?.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name||"Item")+'" loading="lazy">':'◇';
 }
-const LIMITED_OVERLAY_CLASS="icon-labels Limited";
 function itemStockState(x){
  const total=Math.max(0,Number(x?.stock_limit||0)),sold=Math.max(0,Number(x?.stock_sold||0));
  return {limited:Number(x?.is_limited)===1,total,sold,finite:total>0,remaining:Math.max(0,total-sold),soldOut:total>0&&sold>=total};
