@@ -66,3 +66,170 @@ body{padding-top:0}
 @media(max-width:1324px){.op-sidebar{display:none}.op-sidebar.visible{display:block}.op-sidebar.visible:not(.mobile-open){display:none}.op-sidebar.mobile-open{display:block}.op-site-layout{max-width:1154px}.op-main-content{max-width:970px}}
 @media(max-width:991px){.navbar-wrapper-main{height:88px;margin-bottom:18px}.op-navbar-inner{flex-wrap:wrap;gap:4px;padding:5px 8px}.op-logo{flex-basis:80px;width:80px}.op-logo img{max-width:80px;max-height:34px}.op-navigation{gap:0}.op-navigation a{padding:4px 6px;font-size:14px}.op-search{width:42%;margin-left:6px}.op-account{margin-left:auto}.op-currency{font-size:12px}.op-site-layout{display:block;padding:0 10px 20px}.op-main-content{width:100%;max-width:970px}.op-dashboard{padding-top:8px}.op-headshot{width:90px;height:90px;flex-basis:90px;margin-left:10px;margin-right:14px}.op-home-header{min-height:100px}.op-home-header h1{font-size:28px}}
 @media(max-width:560px){.navbar-wrapper-main{height:116px}.op-navbar-inner{min-height:108px}.op-logo{height:30px}.op-navigation{order:3;width:100%;justify-content:space-around}.op-search{order:4;width:100%;margin:0 0 4px}.op-account{margin-left:auto}.op-site-layout{padding-left:8px;padding-right:8px}.op-footer .footer-links{justify-content:center;gap:14px}.op-footer .footer-links a{font-size:13px}.op-footer .footer-inner p{width:95%}.op-headshot{width:72px;height:72px;flex-basis:72px}.op-home-header h1{font-size:24px}}
+
+
+/* Sakura dark theme: black surfaces with the existing violet brand accents */
+:root{
+  --text-color-primary:#f1eef7;
+  --text-color-secondary:#aaa5b5;
+  --text-color-tertiary:#9993a5;
+  --text-color-quinary:#c9c3d2;
+  --white-color:#15151c;
+  --background-color:#09090d;
+  --background-color-legacy:#15151c;
+  --op-text:#f1eef7;
+  --op-muted:#9993a5;
+  --op-white:#15151c;
+  --op-bg:#09090d;
+}
+html,body{
+  min-height:100%;
+  background:#08080c!important;
+  color:#f1eef7!important;
+}
+body,.op-site-layout,.site-layout,.op-main-content,.main-content{color:#f1eef7}
+.op-site-layout,.site-layout,.op-main-content,.main-content{background:transparent!important}
+
+/* Main panels and page surfaces */
+.section-box,.section-content,.info-panel,.form,.empty,.people-results,
+.catalog-layout,.catalog-container,.catalog-results,.op-section-content,
+.item-detail-card,.avatar-preview-panel,.avatar-wardrobe,.owner-section,
+.info-page,.owner-user-card,.game-card,.trade-card,.group-card,
+.op-footer,.site-footer,.sidebar-card,.op-sidebar .sidebar-card,
+.op-profile-avatar,.op-headshot,.home-avatar,.op-section-content{
+  background:#15151c!important;
+  color:#f1eef7!important;
+  border-color:#30303b;
+  box-shadow:0 1px 5px rgba(0,0,0,.35);
+}
+.sidebar-card,.op-sidebar .sidebar-card{
+  background:#111116!important;
+  color:#f1eef7!important;
+  border-right:1px solid #292933;
+}
+.sidebar.mobile-open,.op-sidebar.mobile-open{background:#111116!important}
+.section-box.muted-box,.section-content-off,.op-empty{
+  background:#202027!important;
+  color:#aaa5b5!important;
+}
+.item-image,.item-detail-image,.avatar-wardrobe-image,.avatar-original-thumbnail,
+.owner-item-thumb,.owner-game-thumb,.game-thumbnail,.game-thumbnail-empty,
+.people-avatar,.friend-placeholder,.people-avatar,.op-home-friend img{
+  background:#202027!important;
+  border-color:#34343f!important;
+  color:#aaa5b5!important;
+}
+.avatar-wardrobe-empty,.avatar-category{
+  background:#25212d!important;
+  border-color:#494052!important;
+  color:#e9e1f5!important;
+}
+.catalog-sidebar,.catalog-navigation,.catalog-results{background:transparent!important}
+.catalog-categories a:hover{background:#211a2b!important;color:#d9b8ff!important}
+.catalog-categories a.active{background:#292033!important;color:#f1eef7!important}
+.catalog-browse-title,.catalog-results-header,.catalog-sidebar,
+.catalog-navigation .divider-right{border-color:#353540!important}
+.catalog-sidebar h2,.catalog-browse-title h2,.catalog-results-header h2{color:#f1eef7!important}
+
+/* Header remains violet; search field is dark */
+.op-navbar,.topbar{background:#6b2eb5!important}
+.op-search,.global-search{
+  background:#1b1b23!important;
+  border:1px solid #3a3945!important;
+}
+.op-search input,.global-search input{
+  background:#1b1b23!important;
+  color:#f1eef7!important;
+}
+.op-search button,.global-search button{background:#1b1b23!important}
+.op-search input::placeholder,.global-search input::placeholder{color:#9993a5!important}
+.search-glass{border-color:#d8c9e8}
+.search-glass:after{background:#d8c9e8}
+
+/* Inputs and editable controls */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+textarea,select,.search-input,.form input,.form textarea,.form select,
+.catalog-input,.catalog-select,.owner-item-form input,.owner-item-form select,
+.owner-item-form textarea,.owner-item-fields input,.owner-item-fields select,
+.owner-item-fields textarea,.group-create-form input,.group-create-form textarea,
+.trade-target-form input,.inputTextStyle{
+  background:#202027!important;
+  color:#f1eef7!important;
+  border-color:#41414d!important;
+}
+input::placeholder,textarea::placeholder{color:#9993a5!important}
+input:focus,textarea:focus,select:focus{
+  border-color:#a64dff!important;
+  outline-color:#a64dff;
+}
+.owner-item-form,.owner-user-actions .owner-item-form,.owner-verify-form{
+  background:#1c1c24!important;
+  border-color:#383842!important;
+}
+.owner-toggle,.owner-inline-check{
+  background:#202027!important;
+  border-color:#41414d!important;
+  color:#e9e5ef!important;
+}
+.owner-item-row,.people-user,.people-user-info,.currency-history-row{
+  border-color:#34343f!important;
+}
+.owner-user-result{
+  background:#1b1b23!important;
+  border-color:#3a3945!important;
+  color:#f1eef7!important;
+}
+.owner-user-result:hover,.owner-user-card{background:#1b1b23!important}
+
+/* Trading, inventory, groups and status panels */
+.trade-pick-list{background:#15151c!important;border-color:#383842!important}
+.trade-select-item,.trade-item-chip{
+  background:#24232d!important;
+  color:#f1eef7!important;
+}
+.trade-status{background:#302d39!important;color:#e2dbea!important}
+.trade-status-accepted{background:#163326!important;color:#a9e8c3!important}
+.trade-status-declined,.trade-status-cancelled{background:#30272a!important;color:#d6bfc3!important}
+.game-thumbnail{background:#202027!important}
+.game-locked-button{background:#302d38!important;color:#b9b2c4!important}
+.inventory-sell-panel{background:#21192c!important;border-color:#533776!important}
+.inventory-sell-card.is-selected{background:#241a32!important}
+.notice,.offsale-notice{background:#251a33!important;color:#eadcff!important}
+.trade-invalid-note,.account-warning-panel{
+  background:#2b2116!important;
+  border-color:#76552a!important;
+  color:#f0d6aa!important;
+}
+.trade-limited-tag{background:#30203f!important;color:#d9b8ff!important}
+.group-card{border-color:#383842!important}
+.group-card-mark{background:#30203f!important;color:#d9b8ff!important}
+.group-create-form label{color:#f1eef7!important}
+
+/* Readable foreground colors where the legacy stylesheet hard-coded black */
+.side-username,.side-nav a,.page-title,.home-header h1,
+.section-heading h2,.section-heading h3,.profile-header h1,.profile-header p,
+.op-profile-info h1,.op-profile-info p,.op-profile-id strong,
+.op-profile-stats b,.catalog-title,.catalog-browse-title h2,
+.catalog-results-header h2,.catalog-sort-label,.tabs a,
+.owner-inline-check,.item-detail-info h1,.item-detail-info p,
+.info-page p,.people-user-info strong,.owner-user-card h3,
+.owner-user-card h4,.owner-user-card li,.footer-links a:hover{
+  color:#f1eef7!important;
+}
+.page-subtitle,.muted,.side-role,.profile-stats,.op-profile-meta,
+.op-profile-id,.people-user-info span,.footer-inner p,
+.op-footer .footer-inner p,.item-stock-text,.item-detail-stock,
+.inventory-sell-intro{
+  color:#aaa5b5!important;
+}
+.tabs a.active,.tabs a:hover,.op-sidebar .side-nav a:hover,
+.op-sidebar .side-nav a.active,.side-nav a.active,
+.section-heading a,.op-section-heading a,.profile-share-link,
+.item-back-link,.catalog-categories a,.op-home-friend{
+  color:#c18aff!important;
+}
+.op-footer,.site-footer{background:#111116!important}
+.footer-links a{color:#aaa5b5!important}
+.avatar-initials{background:#30203f!important;color:#eadcff!important}
+.side-avatar{background:#30203f!important}
+.toast{color:#fff!important}
