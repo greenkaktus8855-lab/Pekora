@@ -564,7 +564,7 @@ async function tradesPage(){
  const view=beginView();
  renderSidebar("trades");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to trade items.</div>';return}
- app.innerHTML='<div class="trades-page"><h1 class="page-title">Trades</h1><section class="owner-section"><h2>Create a trade</h2><p class="muted">Choose items from your inventory and items from another player. Items are reserved while the offer is pending. Trades exchange items only and do not use real money.</p>'+
+ app.innerHTML='<div class="trades-page"><h1 class="page-title">Trades</h1><section class="owner-section"><h2>Create a trade</h2><p class="muted">Choose items from your inventory and optionally items from another player. Leave their side empty to send a gift. Players can receive duplicates. Items are reserved while the offer is pending. Trades exchange items only and do not use real money.</p>'+
  '<form id="tradeTargetForm" class="trade-target-form"><label>Player username<input name="username" minlength="1" maxlength="20" required placeholder="Username"></label><button class="button" type="submit">Load inventories</button></form><div id="tradeBuilder" class="trade-builder"></div><div id="tradeMessage" class="muted"></div></section>'+
  '<section class="owner-section"><h2>Your trade offers</h2><div id="tradeList" class="trade-list">Loading trades...</div></section></div>';
  async function loadTrades(){
@@ -625,7 +625,7 @@ async function groupsPage(){
  const view=beginView();
  renderSidebar("groups");
  app.innerHTML='<div class="groups-page"><h1 class="page-title">Groups</h1>'+
-  (me?'<section class="owner-section"><h2>Create a group</h2><p class="muted">Creating a group costs <strong>100 P$</strong>. The fee is transferred to the Sakura Admin account.</p><form id="groupCreateForm" class="group-create-form"><label>Group name<input name="name" minlength="3" maxlength="32" required placeholder="Your group name"></label><label>Description<textarea name="description" maxlength="300" rows="2" placeholder="What is this group about?"></textarea></label><button class="primary" type="submit">Create group · 100 P$</button><span id="groupCreateMessage" class="muted"></span></form></section>':'<section class="owner-section"><p>Please <a href="#login" data-page="login">log in</a> to create or join groups.</p></section>')+
+  (me?'<section class="owner-section"><h2>Create a group</h2><p class="muted">Creating a group costs <strong>100 P$</strong>. The fee is transferred to the Sakura Admin account.</p><form id="groupCreateForm" class="group-create-form"><label>Group name<input name="name" minlength="1" maxlength="32" required placeholder="Your group name"></label><label>Description<textarea name="description" maxlength="300" rows="2" placeholder="What is this group about?"></textarea></label><button class="primary" type="submit">Create group · 100 P$</button><span id="groupCreateMessage" class="muted"></span></form></section>':'<section class="owner-section"><p>Please <a href="#login" data-page="login">log in</a> to create or join groups.</p></section>')+
   '<section class="owner-section"><h2>All Groups</h2><div id="groupsList" class="groups-list">Loading groups...</div></section></div>';
  const host=document.getElementById("groupsList");
  async function loadGroups(){
