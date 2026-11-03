@@ -59,13 +59,19 @@ const checks = [
   ["trade acceptance rechecks Limited or Off Sale status", worker.includes("Only Limited or Off Sale items can be traded") && worker.includes("(i.is_limited=1 OR i.is_offsale=1)")],
   ["trade picker only displays Limited or Off Sale items", app.includes("items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1)") && app.includes("ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target)")],
   ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
-  ["Sakura asset cache versions are refreshed", index.includes("app.js?v=20261103-openpekora-membership-form-4") && index.includes("openpekora-components.css?v=20261103-openpekora-membership-form-4")],
+  ["Sakura asset cache versions are refreshed", index.includes("app.js?v=20261103-openpekora-rcc-render-5") && index.includes("openpekora-components.css?v=20261103-openpekora-rcc-render-5")],
   ["Sakura theme primary accents are violet", globals.includes("rgb(166, 77, 255)") && globals.includes("rgba(106,27,177,1)") && !globals.includes("rgb(0, 162, 255)") && !globals.includes("rgba(8,79,192,1)")],
   ["promo codes can grant currency and multiple catalog items", worker.includes("CREATE TABLE IF NOT EXISTS promo_code_items") && worker.includes("reward_currency") && app.includes("ownerPromoItems")],
   ["promo codes enforce use limits and expiry", worker.includes("max_uses IS NULL") && worker.includes("expires_at") && app.includes('name="max_uses"') && app.includes('type="datetime-local"')],
   ["promo codes can only be claimed once per user", worker.includes("PRIMARY KEY(code,user_id)") && worker.includes("ON CONFLICT(code,user_id) DO NOTHING")],
   ["promo code page and sidebar link exist", app.includes("async function promocodesPage()") && app.includes("side-promo-button")],
-  ["Premium and OBC require accounts older than three days", worker.includes("Date.now() - createdAtMs <= 3 * 24 * 60 * 60 * 1000") && worker.includes("datetime(u.created_at)<datetime('now','-3 days')") && app.includes("canUseAdvancedMemberships") && app.includes("OBC and Premium unlock")]
+  ["Premium and OBC require accounts older than three days", worker.includes("Date.now() - createdAtMs <= 3 * 24 * 60 * 60 * 1000") && worker.includes("datetime(u.created_at)<datetime('now','-3 days')") && app.includes("canUseAdvancedMemberships") && app.includes("OBC and Premium unlock")],
+  ["real OpenPekora RCC avatar renderer endpoint is connected", worker.includes("/player/thumbnail") && worker.includes("AVATAR_RENDERER_URL") && worker.includes("x-avatar-renderer")],
+  ["RCC character appearance endpoint returns equipped assets", worker.includes('path === "/v1.1/avatar-fetch"') && worker.includes("assetAndAssetTypeIds") && worker.includes("equipped_items")],
+  ["RCC body colors and asset delivery endpoints exist", worker.includes('"/asset/bodycolors.ashx"') && worker.includes("assetdelivery.roblox.com/v1/asset/")],
+  ["RCC support routes are handled by the Worker before static assets", wrangler.includes('"/v1.1/*"') && wrangler.includes('"/Asset/*"') && worker.includes('url.pathname === "/v1.1/avatar-fetch"')],
+  ["avatar page and profiles display actual RCC thumbnail images", app.includes('id="avatarRenderPreview"') && app.includes("op-profile-render-image") && app.includes("/api/avatar/thumbnail/")],
+  ["renderer responses are validated as PNG before caching", worker.includes("imageBytes[0]!==137") && worker.includes("avatar_render_cache") && worker.includes("thumbnail_data BLOB")]
 
 ];
 
