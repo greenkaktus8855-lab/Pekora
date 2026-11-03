@@ -16,7 +16,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     exit
 }
 
-$repoRoot = $PSScriptRoot
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $rccSetup = Join-Path $repoRoot "scripts\start-rcc-2020.ps1"
 $rendererSetup = Join-Path $repoRoot "scripts\start-renderer-secure.ps1"
 if (-not (Test-Path -LiteralPath $rccSetup) -or -not (Test-Path -LiteralPath $rendererSetup)) {
