@@ -1204,7 +1204,7 @@ async function route(request, env) {
       const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
       await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,currency=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=?,is_offsale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),merged.currency,String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,merged.is_offsale?1:0,match[1]).run();
-      if (Number(merged.price) > Number(current.price || 0) && Number(merged.is_for_sale) === 1) {
+      if (String(merged.currency||"P$")===String(current.currency||"P$") && Number(merged.price) > Number(current.price || 0) && Number(merged.is_for_sale) === 1) {
         try {
           await announcePriceIncrease({
             id:match[1],
