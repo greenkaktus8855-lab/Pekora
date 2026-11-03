@@ -1,3 +1,23 @@
 /* OpenPekora navigation sprite positions from frontend/styles/roblox/icons.css */
 .icon-default-navigation,.icon-nav-menu,.icon-nav-robux,.icon-nav-tix,.icon-nav-settings,.icon-nav-search,.icon-nav-home,.icon-nav-profile,.icon-nav-message,.icon-nav-friends,.icon-nav-charactercustomizer,.icon-nav-inventory,.icon-nav-trade,.icon-nav-group,.icon-nav-forum,.icon-nav-blog{background-image:url('/navigation_02012016.svg');background-repeat:no-repeat;width:28px;height:28px;display:inline-block;vertical-align:middle}
 .icon-nav-menu{background-position:0 0}.icon-nav-robux{background-position:0 -28px}.icon-nav-tix{background-position:0 -56px}.icon-nav-settings{background-position:0 -84px}.icon-nav-search{background-position:0 -112px}.icon-nav-home{background-position:0 -140px}.icon-nav-profile{background-position:0 -168px}.icon-nav-message{background-position:0 -196px}.icon-nav-friends{background-position:0 -224px}.icon-nav-charactercustomizer{background-position:0 -252px}.icon-nav-inventory{background-position:0 -280px}.icon-nav-trade{background-position:0 -308px}.icon-nav-group{background-position:0 -336px}.icon-nav-forum{background-position:0 -364px}.icon-nav-blog{background-position:0 -392px}
+
+
+/* Original OpenPekora currency symbols from frontend/public/img/branded.svg */
+.icon-robux-16x16,
+.icon-robux-gray-16x16,
+.icon-tix-16x16,
+.icon-tix-gray-16x16{
+  background-image:url('/branded.svg');
+  background-repeat:no-repeat;
+  background-size:200% auto;
+  width:16px;
+  height:16px;
+  display:inline-block;
+  vertical-align:middle;
+}
+.icon-robux-16x16{background-position:0 -64px}
+.icon-tix-16x16{background-position:0 -80px}
+.icon-robux-gray-16x16{background-position:0 -112px}
+.icon-tix-gray-16x16{background-position:0 -80px;filter:grayscale(1);opacity:.65}
+.currency-icon-original{flex:0 0 16px;margin:0}
