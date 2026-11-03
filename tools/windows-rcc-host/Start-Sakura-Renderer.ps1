@@ -229,7 +229,7 @@ if (-not $ready) {
 try {
     $publicCheck = Invoke-WebRequest -Uri "https://renderer.mopcblox.online/" -UseBasicParsing -TimeoutSec 12
     if ([int]$publicCheck.StatusCode -lt 200 -or [int]$publicCheck.StatusCode -ge 400) { throw "The public renderer route returned HTTP $($publicCheck.StatusCode)." }
-    Show-Notice "Sakura Renderer is running and the public route is responding." "Sakura Renderer"
+    Write-Host "Sakura Renderer is running and the public route is responding."
 } catch {
     Show-Notice ("The local Renderer is running, but renderer.mopcblox.online is not responding yet." + [Environment]::NewLine + [Environment]::NewLine + "The Cloudflare Tunnel may still be starting or may point to the wrong local port." + [Environment]::NewLine + [Environment]::NewLine + "Details: " + $_.Exception.Message + [Environment]::NewLine + [Environment]::NewLine + "Renderer logs: " + $logDir) "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Warning)
 }
