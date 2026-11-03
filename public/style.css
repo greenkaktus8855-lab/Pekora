@@ -453,23 +453,6 @@ button,input,textarea,select{font:inherit}
 }
 .avatar-original-thumbnail img{display:block;width:100%;height:100%;object-fit:contain}
 
-/* Original Pekora profile icon used as a neutral fallback until avatar thumbnails are connected. */
-.avatar-placeholder{
- display:flex;align-items:center;justify-content:center;
- background:#e3e3e3;color:#757575;border-radius:50%;overflow:hidden;
-}
-.avatar-placeholder .icon-nav-profile{
- display:block;flex:0 0 28px;width:28px;height:28px;
-}
-.side-avatar .avatar-placeholder{width:100%;height:100%;border-radius:50%}
-.people-avatar .avatar-placeholder{width:100%;height:100%;border-radius:50%}
-.op-home-avatar>.avatar-placeholder{width:112px;height:112px;border-radius:50%}
-.op-home-avatar>.avatar-real{width:112px;height:112px;border-radius:50%;object-fit:cover}
-.op-home-friend>.avatar-placeholder{width:54px;height:54px;border-radius:50%}
-.op-profile-avatar>.avatar-placeholder{width:100%;height:100%;border-radius:0}
-.avatar-original-thumbnail>.avatar-placeholder{width:100%;height:100%;border-radius:0}
-
-
 /* Currency and Games sections */
 .op-currency{color:#fff;font-size:16px;font-weight:600;white-space:nowrap;text-decoration:none}
 .op-currency:hover{color:#fff;text-decoration:underline}
@@ -500,23 +483,6 @@ model-viewer.pekora-model{display:block;width:100%;height:100%;min-height:150px;
 .owner-item-subfields input[name="model_url"]{grid-column:1/-1}
 @media(max-width:767px){.item-detail-image model-viewer.pekora-model{min-height:220px}.item-detail-image .pekora-model-missing{min-height:220px}}
 
-
-/* Browser-based 3D avatar viewer */
-pekora-avatar-viewer{display:block;width:100%;min-height:300px;border:1px solid #c7d5df;border-radius:3px;touch-action:pan-y;cursor:grab;}
-pekora-avatar-viewer:active{cursor:grabbing}
-.op-profile-avatar-3d{width:300px;max-width:100%;height:300px;flex:0 0 300px;background:#f8f2ff;border:1px solid #c7d5df;overflow:hidden}
-.op-profile-avatar-3d pekora-avatar-viewer{height:300px;min-height:300px;border:0;border-radius:0}
-.op-profile-id{display:inline-flex;align-items:center;gap:8px;margin:0 0 8px;padding:4px 8px;background:#e8eef3;border:1px solid #cbd5dd;border-radius:2px;color:#5a5a5a;font-size:11px;font-weight:700;letter-spacing:.04em}
-.op-profile-id strong{color:#191919;font-size:12px;letter-spacing:0;font-weight:600;overflow-wrap:anywhere}
-@media(max-width:767px){.op-profile-avatar-3d{width:100%;height:300px;flex-basis:100%}}
-
-.openpekora-avatar-renderer{display:block;width:100%;height:100%;min-height:280px;position:relative;background:#f1f1f1;overflow:hidden}
-.openpekora-avatar-canvas{width:100%;height:100%;min-height:280px}
-.openpekora-avatar-canvas canvas{display:block;width:100%;height:100%}
-.openpekora-avatar-message{display:flex;align-items:center;justify-content:center;min-height:280px;padding:20px;text-align:center;color:#666;font-size:13px;background:#f1f1f1}
-.op-profile-avatar .openpekora-avatar-renderer{width:300px;height:300px;min-height:300px}
-.avatar-preview-placeholder:has(openpekora-avatar-renderer){width:100%;height:390px;min-height:390px;overflow:hidden}
-.avatar-preview-placeholder .openpekora-avatar-renderer{height:100%;min-height:390px}
 
 .owner-user-results{display:grid;gap:6px;margin:12px 0}
 .owner-user-result{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;padding:10px 12px;background:#fff;border:1px solid #c7c7c7;border-radius:3px;text-align:left;cursor:pointer;color:#191919}
@@ -676,3 +642,31 @@ pekora-avatar-viewer:active{cursor:grabbing}
 .owner-inline-check input{width:auto;min-width:auto;margin:0;accent-color:#7b2cbf}
 .owner-item-subfields{grid-template-columns:110px 100px minmax(0,1fr) minmax(0,1fr) 110px 120px 105px}
 @media(max-width:767px){.owner-item-subfields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Plain non-rendered account avatars */
+.avatar-initials{display:flex;align-items:center;justify-content:center;width:100%;height:100%;min-width:0;overflow:hidden;background:#eee5f8;color:#6b2eb5;font-size:18px;font-weight:800;letter-spacing:.02em;border-radius:0}
+.side-avatar{border-radius:4px!important;background:#eee5f8!important}
+.op-home-avatar>.avatar-initials{width:112px;height:112px;font-size:34px}
+.op-home-friend>.avatar-initials{width:54px;height:54px;font-size:18px}
+.people-avatar>.avatar-initials{width:100%;height:100%;font-size:16px}
+.op-profile-avatar>.avatar-initials{width:100%;height:100%;font-size:44px}
+.avatar-wardrobe-no-image{padding:8px;text-align:center;color:#777;font-size:12px}
+.avatar-wardrobe-item button{width:100%;margin-top:7px}
+.avatar-wardrobe-image img{object-fit:contain}
+.avatar-wardrobe .muted{font-size:12px}
+.groups-page{width:100%;max-width:970px;margin:8px auto}
+.group-create-form{display:grid;gap:10px;max-width:620px}
+.group-create-form label{display:grid;gap:5px;font-weight:600}
+.group-create-form input,.group-create-form textarea{width:100%;padding:9px;border:1px solid #bbb;background:#fff;color:#191919}
+.group-create-form textarea{resize:vertical}
+.group-create-form button{justify-self:start}
+.groups-list{display:grid;gap:10px}
+.group-card{display:flex;align-items:center;gap:14px;padding:12px;border:1px solid #ddd;background:#fff}
+.group-card-mark{display:flex;align-items:center;justify-content:center;flex:0 0 54px;width:54px;height:54px;background:#f2e8fc;color:#6b2eb5;font-size:24px;font-weight:800}
+.group-card-info{flex:1;min-width:0}
+.group-card-info h3{margin:0 0 3px;font-size:18px}
+.group-card-info p{margin:0 0 5px;overflow-wrap:anywhere}
+.group-card-info .muted{font-size:12px}
+.group-card>button{flex:0 0 auto}
+@media(max-width:560px){.group-card{align-items:flex-start;flex-wrap:wrap}.group-card-info{flex-basis:calc(100% - 70px)}.group-card>button{margin-left:68px}}
