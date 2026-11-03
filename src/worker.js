@@ -461,6 +461,7 @@ async function route(request, env) {
         "SELECT id,username,password_hash,password_salt,role,balance,tix_balance,created_at,is_banned FROM users LIMIT 0",
         "SELECT token_hash,user_id,expires_at FROM sessions LIMIT 0",
         "SELECT user_id,description,avatar_json FROM profiles LIMIT 0",
+        "SELECT user_id,body_colors,rig_type,scales_json FROM avatar_settings LIMIT 0",
         "SELECT id,name,description,category,price,currency,image_url,model_url,is_limited,is_for_sale,is_offsale,created_at FROM items LIMIT 0",
         "SELECT id,user_id,item_id,purchased_at FROM inventory LIMIT 0",
         "SELECT id,user_id,item_id,price,currency,purchased_at FROM purchases LIMIT 0",
@@ -624,7 +625,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
     return json({ items:rows.results || [] });
   }
 
