@@ -15,7 +15,8 @@ function currencyIconMarkup(currencyCode){
 }
 function currencyMarkup(amount,currencyCode="P$",extraClass=""){
  const code=currencyCode==="Tix"?"Tix":"P$";
- return '<span class="currency-inline '+esc(extraClass)+'">'+currencyIconMarkup(code)+'<b>'+Number(amount||0).toLocaleString()+'</b><span>'+code+'</span></span>';
+ const value=Number(amount||0).toLocaleString();
+ return '<span class="currency-inline '+esc(extraClass)+'" aria-label="'+esc(code)+' '+value+'">'+currencyIconMarkup(code)+'<b>'+value+'</b></span>';
 }
 async function api(path,options={}){
  const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});
