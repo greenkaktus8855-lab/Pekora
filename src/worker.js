@@ -670,7 +670,6 @@ async function route(request, env) {
       const results = await env.DB.batch([
         env.DB.prepare("DELETE FROM inventory WHERE id=(SELECT id FROM inventory WHERE user_id=? AND item_id=? ORDER BY purchased_at DESC LIMIT 1) AND EXISTS (SELECT 1 FROM items WHERE id=? AND price=? AND COALESCE(currency,'P$')=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)").bind(user.id,itemId,itemId,price,currencyCode,user.id,itemId),
         env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}+? WHERE id=? AND changes()=1`).bind(price,user.id),
-        env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=? AND changes()=1 AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)").bind(user.id,itemId,user.id,itemId)
       ]);
 
       if (!results?.[0]?.meta?.changes) {
