@@ -60,7 +60,8 @@ try {
 
     Write-Host "Starting secured OpenPekora HTTP renderer..."
     & $rendererSetup
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "OpenPekora renderer exited with code $LASTEXITCODE." }
+    $rendererExitCode = $LASTEXITCODE
+    throw "OpenPekora renderer stopped unexpectedly. Exit code: $rendererExitCode."
 } catch {
     $message = $_ | Out-String
     Add-Content -LiteralPath $transcriptPath -Value ([Environment]::NewLine + "AUTOSTART ERROR:" + [Environment]::NewLine + $message)
