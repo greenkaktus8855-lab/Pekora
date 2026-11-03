@@ -82,6 +82,11 @@ async function body(request) {
 }
 const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:Number(u.balance||0), tixBalance:Number(u.tix_balance||0), createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified) });
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
+const DEFAULT_AVATAR_BODY_COLORS = Object.freeze({headColorId:125,torsoColorId:125,leftArmColorId:125,rightArmColorId:125,leftLegColorId:125,rightLegColorId:125});
+const AVATAR_COLOR_IDS = new Set([364,217,359,18,125,1030,361,192]);
+const DEFAULT_AVATAR_SCALES = Object.freeze({height:1,width:1,head:1,depth:1,proportion:0,bodyType:0});
+const AVATAR_COLOR_KEYS = Object.keys(DEFAULT_AVATAR_BODY_COLORS);
+
 const MEMBERSHIP_REWARDS = Object.freeze({
   None:0,
   BuildersClub:15,
