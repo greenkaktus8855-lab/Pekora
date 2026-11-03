@@ -25,6 +25,9 @@ This repository currently deploys a lightweight Cloudflare Worker website with a
 - 16 KB API JSON request-body limit
 - HTTPS-only preview image URLs for new catalog entries
 - API health endpoint that checks the database schema
+- Avatar editor with saved R6/R15 rig, body colors, skin tones, body scales and equipped inventory items
+- OpenPekora RCC thumbnail integration with server-side PNG validation and render caching
+- One-click Windows launcher for the local RCCService 2020 and secured HTTP renderer
 
 New accounts start with 100 P$. The initial OWNER account starts with 1,000 P$.
 
@@ -37,11 +40,11 @@ Failed sign-in, registration and OWNER setup/recovery attempts are rate-limited 
 ## Not connected in this deployment
 
 - The original OpenPekora Avatar API and wearable Roblox assets
-- Real R6/R15 avatar rendering and the local RCC renderer (removed from this deployment)
+- A permanently hosted cloud renderer; the OpenPekora RCC renderer runs on the configured Windows host
 - The original Roblox asset catalog
 - Game launcher, game client, game servers or game downloads
 
-Catalog entries created in this build are Pekora inventory items with image or optional GLB previews. They are not Roblox assets. Trades exchange existing inventory items only; they do not transfer Pekora currency or real money. The Avatar page keeps basic equipped-item records but does not generate a 3D avatar. The former RCC renderer scripts, local setup instructions and browser avatar-rendering component have been removed. Game cards are informational and remain locked; no game launcher is connected.
+Catalog entries created in this build are Pekora inventory items with image or optional GLB previews. They are not Roblox assets. Trades exchange existing inventory items only; they do not transfer Pekora currency or real money. The Avatar page stores rig type, skin tone/body colors, body scales and equipped items. Thumbnail generation is handled by the OpenPekora RCC renderer through the secured Renderer service on the Windows host. The host computer and its Cloudflare Tunnel must remain online for new renders. The former RCC renderer scripts, local setup instructions and browser avatar-rendering component have been removed. Game cards are informational and remain locked; no game launcher is connected.
 
 Pekora currency is an in-site balance only. It has no real-world monetary value.
 
@@ -80,6 +83,12 @@ The repository's `wrangler.toml` is configured for the D1 database named `pekora
    ```
 
    A healthy response includes `"ok":true`, `"database":true` and `"schema":true`. If the schema check fails, apply the D1 migrations and inspect the Worker logs.
+
+## Starting the avatar renderer without terminal commands
+
+The avatar renderer uses the existing OpenPekora checkout and RCCService 2020 on the Windows host. Download the repository ZIP, extract it, and double-click `tools/windows-rcc-host/Start-Sakura-Renderer.vbs`. Approve the Windows permission prompt, select the OpenPekora folder if asked, and enter the same private key already configured as the Worker secret `AVATAR_RENDERER_SECRET`. The launcher starts the local RCC workers and secured HTTP renderer, then checks the public renderer route. Logs are saved under `%LOCALAPPDATA%\SakuraRenderer\logs`.
+
+RCCService ports remain local-only. Do not expose the RCCService ports directly to the internet. The Cloudflare Tunnel should point only to the HTTP Renderer port configured in `game-renderer/config.json`.
 
 ## Creating the first OWNER account
 
