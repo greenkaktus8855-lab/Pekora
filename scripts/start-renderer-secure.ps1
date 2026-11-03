@@ -50,6 +50,7 @@ if ($listener) {
 }
 
 $source = [System.IO.File]::ReadAllText($mainPath)
+$sourceChanged = $false
 if (-not $source.Contains("x-pekora-renderer-secret")) {
     $expressImport = 'import express from "ultimate-express";'
     if (-not $source.Contains($expressImport)) { throw "Main.ts does not match the expected OpenPekora source. No patch was applied." }
@@ -74,12 +75,25 @@ App.use((req: any, res: any, next: any) => {
 });
 '@
     $source = $source.Replace($jsonParser, $auth.TrimEnd())
+    $sourceChanged = $true
+}
+
+# Bind the public renderer HTTP service to loopback only. Cloudflare Tunnel can
+# still reach 127.0.0.1, but other devices cannot connect directly over LAN.
+if (-not $source.Contains('App.listen(ProcessPort, "127.0.0.1"')) {
+    $listenPattern = 'App\.listen\(ProcessPort,\s*\(\)\s*=>'
+    if (-not [regex]::IsMatch($source, $listenPattern)) { throw "Main.ts listen statement did not match the expected source. No bind change was applied." }
+    $source = [regex]::Replace($source, $listenPattern, 'App.listen(ProcessPort, "127.0.0.1", () =>', 1)
+    $sourceChanged = $true
+}
+
+if ($sourceChanged) {
     $backup = "$mainPath.sakura-backup"
     if (-not (Test-Path -LiteralPath $backup)) { Copy-Item -LiteralPath $mainPath -Destination $backup }
     [System.IO.File]::WriteAllText($mainPath, $source, [System.Text.UTF8Encoding]::new($false))
-    Write-Host "Added shared-secret authentication to the Renderer."
+    Write-Host "Applied shared-secret authentication and loopback-only binding to the Renderer."
 } else {
-    Write-Host "Renderer shared-secret authentication is already present."
+    Write-Host "Renderer authentication and loopback-only binding are already present."
 }
 
 $env:PEKORA_RENDERER_SECRET = $secret
