@@ -45,7 +45,7 @@ const checks = [
   ["owner game creation API", worker.includes('path === "/api/owner/games" && request.method === "POST"')],
   ["locked game cards", app.includes("game-locked-button") && app.includes("game-lock-icon")],
   ["trade UI", app.includes("tradeTargetForm") && app.includes("tradeList")],
-  ["old RCC renderer removed", !worker.includes("AVATAR_RENDERER_URL") && !app.includes("openpekora-avatar-renderer")],
+  ["legacy hard-coded renderer endpoint removed", !worker.includes("http://176.100.36.98:7832/") && worker.includes("AVATAR_RENDERER_URL") && !app.includes("openpekora-avatar-renderer")],
   ["no old procedural avatar renderer", !app.includes("render3DAvatar") && !app.includes("avatar3d.js")],
   ["no fake wearable CSS", !/avatar-artwork|avatar-worn-chip|avatar-wearing-label/.test(css)],
   ["no missing legacy loading GIF", !/\/img\/loading(?:_old)?\.gif/.test(fs.readFileSync(path.join(root,"public/openpekora-globals.css"),"utf8"))],
