@@ -666,3 +666,59 @@ input:focus,textarea:focus,select:focus{
 .account-area #logoutBtn:hover{
   color:#191919!important;
 }
+
+
+/* Sakura violet button recolor only — keep original sizing, spacing and behavior.
+   Navigation tabs/links are intentionally excluded. */
+#app button,
+#app .button,
+#app .primary,
+.op-account button,
+.account-area button,
+.op-search button,
+.global-search button,
+.op-mobile-menu,
+.mobile-menu{
+  background-color:#7b35c9!important;
+  background-image:none!important;
+  border-color:#7b35c9!important;
+  color:#fff!important;
+}
+#app button:hover:not(:disabled),
+#app .button:hover:not(:disabled),
+#app .primary:hover:not(:disabled),
+.op-account button:hover,
+.account-area button:hover,
+.op-search button:hover,
+.global-search button:hover,
+.op-mobile-menu:hover,
+.mobile-menu:hover{
+  background-color:#914de0!important;
+  border-color:#914de0!important;
+  color:#fff!important;
+}
+#app button:active:not(:disabled),
+#app .button:active:not(:disabled),
+#app .primary:active:not(:disabled),
+.op-account button:active,
+.account-area button:active,
+.op-search button:active,
+.global-search button:active,
+.op-mobile-menu:active,
+.mobile-menu:active{
+  background-color:#6425ad!important;
+  border-color:#6425ad!important;
+  color:#fff!important;
+}
+#app button:disabled,
+#app .button:disabled,
+#app .primary:disabled,
+#app button.disabled,
+#app .button.disabled,
+#app .primary.disabled{
+  background-color:#4e3766!important;
+  background-image:none!important;
+  border-color:#655078!important;
+  color:#c9b9d9!important;
+}
+#app .owner-user-result span{color:#e8dcf5!important}
