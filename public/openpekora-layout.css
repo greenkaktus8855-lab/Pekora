@@ -493,92 +493,6 @@ input:focus,textarea:focus,select:focus{
 .inventory-item-price .currency-inline,.inventory-sell-summary .currency-inline{color:#e9ddff!important}
 .group-create-form .currency-inline{color:#f5f3fa!important}
 
-/* Restore the original Sakura purple buttons everywhere */
-#app .button,
-#app .primary,
-#app button.button,
-#app button.primary,
-#app .catalog-search-button,
-#app input[type="submit"],
-.op-account button,
-.op-account #registerBtn,
-.op-account #logoutBtn,
-.account-area button,
-.account-area #registerBtn,
-.account-area #logoutBtn{
-  background:linear-gradient(0deg,#57218a 0%,#8e44d6 100%)!important;
-  background-image:linear-gradient(0deg,#57218a 0%,#8e44d6 100%)!important;
-  border:1px solid #7b35b8!important;
-  color:#fff!important;
-  font-weight:700!important;
-  text-decoration:none!important;
-}
-#app .button :where(*),
-#app .primary :where(*),
-.op-account button :where(*),
-.account-area button :where(*){
-  color:inherit!important;
-}
-#app .button:hover,
-#app .primary:hover,
-#app button.button:hover,
-#app button.primary:hover,
-#app .catalog-search-button:hover,
-.op-account button:hover,
-.account-area button:hover{
-  background:linear-gradient(0deg,#6a2ba5 0%,#a967ed 100%)!important;
-  background-image:linear-gradient(0deg,#6a2ba5 0%,#a967ed 100%)!important;
-  border-color:#bd8be8!important;
-  color:#fff!important;
-}
-#app .button.secondary,
-#app button.button.secondary{
-  background:linear-gradient(0deg,#32194b 0%,#593078 100%)!important;
-  background-image:linear-gradient(0deg,#32194b 0%,#593078 100%)!important;
-  border-color:#755094!important;
-  color:#fff!important;
-}
-#app .button.secondary:hover,
-#app button.button.secondary:hover{
-  background:linear-gradient(0deg,#49236d 0%,#704095 100%)!important;
-  background-image:linear-gradient(0deg,#49236d 0%,#704095 100%)!important;
-  border-color:#a77bc8!important;
-  color:#fff!important;
-}
-#app .button:disabled,
-#app .primary:disabled,
-#app button.button:disabled,
-#app button.primary:disabled,
-.op-account button:disabled,
-.account-area button:disabled{
-  background:linear-gradient(0deg,#302638 0%,#59456b 100%)!important;
-  background-image:linear-gradient(0deg,#302638 0%,#59456b 100%)!important;
-  border-color:#59456b!important;
-  color:#d8cde3!important;
-  opacity:.82;
-  cursor:not-allowed!important;
-}
-#app .game-locked-button,
-#app button.game-locked-button:disabled{
-  background:#302638!important;
-  background-image:none!important;
-  border:1px solid #59456b!important;
-  color:#d8cde3!important;
-  opacity:.82;
-}
-.op-account #logoutBtn,.account-area #logoutBtn{
-  background:linear-gradient(0deg,#57218a 0%,#8e44d6 100%)!important;
-  border-color:#7b35b8!important;
-  color:#fff!important;
-}
-@media(max-width:560px){
-  .header-wallets{gap:4px}
-  .currency-inline.wallet-chip{font-size:11px;padding:3px 5px}
-  .currency-inline.wallet-chip .currency-icon{width:13px;height:13px;flex-basis:13px}
-  .op-navbar-inner{gap:7px}
-}
-
-
 /* The item editor grows to fit the added currency selector */
 .owner-item-subfields{
   grid-template-columns:repeat(auto-fit,minmax(135px,1fr))!important;
@@ -798,4 +712,13 @@ input:focus,textarea:focus,select:focus{
   border:1px solid #b8b8b8!important;
   color:#b8b8b8!important;
   cursor:default!important;
+}
+
+
+/* Keep wallet spacing compact on small screens */
+@media(max-width:560px){
+  .header-wallets{gap:4px}
+  .currency-inline.wallet-chip{font-size:11px;padding:3px 5px}
+  .currency-inline.wallet-chip .currency-icon{width:13px;height:13px;flex-basis:13px}
+  .op-navbar-inner{gap:7px}
 }
