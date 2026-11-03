@@ -45,7 +45,7 @@ const checks = [
   ["owner game creation API", worker.includes('path === "/api/owner/games" && request.method === "POST"')],
   ["locked game cards", app.includes("game-locked-button") && app.includes("game-lock-icon")],
   ["trade UI", app.includes("tradeTargetForm") && app.includes("tradeList")],
-  ["avatar renderer configuration removed", !worker.includes("http://176.100.36.98:7832/") && !worker.includes("AVATAR_RENDERER_URL") && !app.includes("openpekora-avatar-renderer")],
+  ["avatar renderer uses HTTPS and a shared secret", worker.includes("AVATAR_RENDERER_URL") && worker.includes("AVATAR_RENDERER_SECRET") && worker.includes("X-Pekora-Renderer-Secret")],
   ["no old procedural avatar renderer", !app.includes("render3DAvatar") && !app.includes("avatar3d.js")],
   ["no fake wearable CSS", !/avatar-artwork|avatar-worn-chip|avatar-wearing-label/.test(css)],
   ["no missing legacy loading GIF", !/\/img\/loading(?:_old)?\.gif/.test(fs.readFileSync(path.join(root,"public/openpekora-globals.css"),"utf8"))],
@@ -59,14 +59,16 @@ const checks = [
   ["trade acceptance rechecks Limited or Off Sale status", worker.includes("Only Limited or Off Sale items can be traded") && worker.includes("(i.is_limited=1 OR i.is_offsale=1)")],
   ["trade picker only displays Limited or Off Sale items", app.includes("items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1)") && app.includes("ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target)")],
   ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
-  ["Sakura app cache version is refreshed", index.includes("app.js?v=20261103-avatar-removed-1") && index.includes("openpekora-components.css?v=20261103-openpekora-rcc-render-5")],
+  ["Sakura app cache version is refreshed", index.includes("app.js?v=20261103-avatar-editor-1") && index.includes("openpekora-components.css?v=20261103-avatar-editor-1")],
   ["Sakura theme primary accents are violet", globals.includes("rgb(166, 77, 255)") && globals.includes("rgba(106,27,177,1)") && !globals.includes("rgb(0, 162, 255)") && !globals.includes("rgba(8,79,192,1)")],
   ["promo codes can grant currency and multiple catalog items", worker.includes("CREATE TABLE IF NOT EXISTS promo_code_items") && worker.includes("reward_currency") && app.includes("ownerPromoItems")],
   ["promo codes enforce use limits and expiry", worker.includes("max_uses IS NULL") && worker.includes("expires_at") && app.includes('name="max_uses"') && app.includes('type="datetime-local"')],
   ["promo codes can only be claimed once per user", worker.includes("PRIMARY KEY(code,user_id)") && worker.includes("ON CONFLICT(code,user_id) DO NOTHING")],
   ["promo code page and sidebar link exist", app.includes("async function promocodesPage()") && app.includes("side-promo-button")],
   ["Premium and OBC require accounts older than three days", worker.includes("Date.now() - createdAtMs <= 3 * 24 * 60 * 60 * 1000") && worker.includes("datetime(u.created_at)<datetime('now','-3 days')") && app.includes("canUseAdvancedMemberships") && app.includes("OBC and Premium unlock")],
-  ["avatar page, preview, wardrobe and RCC endpoints are removed", !app.includes("avatarPage") && !app.includes("/api/avatar") && !app.includes("op-profile-render-image") && !worker.includes("AVATAR_RENDERER_URL") && !worker.includes("/player/thumbnail") && !worker.includes("/v1.1/avatar-fetch") && !worker.includes("equipped_items") && !wrangler.includes("/v1.1/*") && !wrangler.includes("/Asset/*")],
+  ["avatar editor, wardrobe and profile thumbnails are restored", app.includes("async function avatarPage()") && app.includes("avatarSkinTones") && app.includes("op-profile-render-image") && app.includes("else if(name===\"avatar\")await avatarPage()") && worker.includes("/api/avatar/thumbnail/") && worker.includes("/v1.1/avatar-fetch") && worker.includes("equipped_items") && wrangler.includes("/v1.1/*")],
+  ["skin tone and advanced body colors persist in D1", worker.includes("CREATE TABLE IF NOT EXISTS avatar_settings") && worker.includes("body_colors") && worker.includes("AVATAR_COLOR_IDS")],
+  ["avatar render cache invalidates when appearance changes", worker.includes("bodyColors:settings.bodyColors") && worker.includes("rigType:settings.rigType") && worker.includes("scales:settings.scales")],
 
 ];
 
