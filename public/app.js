@@ -49,6 +49,7 @@ function renderSidebar(active="home"){
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-trade","Trades"],
   ["inventory","icon-nav-inventory","Inventory"],
+  ["avatar","icon-nav-profile","Avatar"],
   ["groups","icon-nav-group","Groups"],
   ["currency","icon-nav-robux","Currency"],
   ["membership","icon-nav-robux","Membership"],
@@ -1135,6 +1136,54 @@ function infoPage(type){
  const pageData=pages[type]||pages.about;
  app.innerHTML='<article class="info-page"><h1 class="page-title">'+pageData.title+'</h1>'+pageData.body+'<a class="button" href="#home" data-page="home">Back to Home</a></article>';
 }
+async function avatarPage(){
+ const view=beginView();
+ renderSidebar("avatar");
+ if(!me){
+  app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your avatar.</div>';
+  return;
+ }
+ const publicId=Number(me.publicId||0);
+ if(!publicId){
+  app.innerHTML='<div class="empty">Your account does not have a public avatar ID yet.</div>';
+  return;
+ }
+ app.innerHTML='<div class="avatar-page" style="max-width:900px;margin:0 auto;padding:12px 0">'+
+  '<h1 class="page-title">Avatar</h1>'+
+  '<p class="muted">Your character rendered by OpenPekora RCC.</p>'+
+  '<section style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:18px;margin:14px 0;display:flex;flex-direction:column;align-items:center;gap:12px">'+
+   '<div style="width:min(100%,520px);min-height:360px;background:#f4f1f8;border-radius:8px;display:grid;place-items:center;overflow:hidden">'+
+    '<img id="sakuraAvatarImage" alt="3D avatar render" style="display:block;width:100%;height:420px;object-fit:contain" src="/api/avatar/thumbnail/'+publicId+'?refresh='+Date.now()+'">'+
+   '</div>'+
+   '<div id="sakuraAvatarStatus" class="muted" role="status">Loading OpenPekora render...</div>'+
+   '<button class="button primary" id="refreshSakuraAvatar" type="button">Refresh Avatar</button>'+
+  '</section>'+
+  '<section style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:18px;margin:14px 0">'+
+   '<h2 style="margin:0 0 10px">Equipped items</h2><div id="sakuraEquippedItems" class="muted">Loading...</div>'+
+  '</section></div>';
+ const image=document.getElementById("sakuraAvatarImage");
+ const status=document.getElementById("sakuraAvatarStatus");
+ const refresh=()=>{
+  if(!image?.isConnected)return;
+  status.textContent="Rendering with OpenPekora RCC...";
+  image.src="/api/avatar/thumbnail/"+publicId+"?refresh="+Date.now();
+ };
+ image.addEventListener("load",()=>{if(isActiveView(view))status.textContent="OpenPekora avatar render loaded.";});
+ image.addEventListener("error",()=>{if(isActiveView(view))status.textContent="Render failed. Check that the Sakura Renderer and RCCService are running.";});
+ document.getElementById("refreshSakuraAvatar")?.addEventListener("click",refresh);
+ try{
+  const data=await api("/api/avatar");
+  if(!isActiveView(view))return;
+  const host=document.getElementById("sakuraEquippedItems");
+  if(host){
+   const equipped=Array.isArray(data.equipped)?data.equipped:[];
+   host.innerHTML=equipped.length?equipped.map(item=>'<div style="padding:7px 0;border-bottom:1px solid #eee">'+esc(item.name)+' <span class="muted">('+esc(item.category)+')</span></div>').join(""):'No items equipped yet.';
+  }
+ }catch(error){
+  if(isActiveView(view)&&document.getElementById("sakuraEquippedItems"))document.getElementById("sakuraEquippedItems").textContent=error.message;
+ }
+}
+
 async function render(name){
  name=name||"home";
  const parts=String(name).split("?",2);
@@ -1145,6 +1194,7 @@ async function render(name){
  else if(name==="login"||name==="register")auth(name);
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
+ else if(name==="avatar")await avatarPage();
  else if(name==="groups")await groupsPage();
  else if(name==="profile")await (query.get("id")?profile(query.get("id"),true):profile(query.get("username")||me?.username));
  else if(name==="item")await showItem(query.get("id"),false);
