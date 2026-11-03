@@ -475,28 +475,51 @@ async function avatarPage(){
  const grid=document.getElementById("avatarWardrobeGrid");
  const preview=document.getElementById("avatarRenderPreview");
  const status=document.getElementById("avatarRenderStatus");
- let avatarItems=[],equippedIds=new Set();
+ let avatarItems=[],equippedIds=new Set(),previewObjectUrl=null,previewRequestId=0;
  const allowed=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
- function refreshAvatarPreview(){
+ async function refreshAvatarPreview(){
+  const requestId=++previewRequestId;
   if(!preview||!status||!Number.isSafeInteger(publicId)||publicId<1){
    if(status)status.textContent="A valid public user ID is required to render this avatar.";
    return;
   }
   preview.hidden=true;
+  status.hidden=false;
   status.textContent="Rendering your avatar with OpenPekora RCC...";
-  preview.onload=()=>{
-   if(!isActiveView(view))return;
-   preview.hidden=false;
-   status.textContent="";
-   status.hidden=true;
-  };
-  preview.onerror=()=>{
-   if(!isActiveView(view))return;
+  try{
+   const response=await fetch("/api/avatar/thumbnail/"+encodeURIComponent(String(publicId))+"?v="+Date.now(),{cache:"no-store",credentials:"same-origin"});
+   if(!response.ok){
+    const detail=(await response.text()).trim();
+    throw new Error((detail||"Renderer request failed")+(detail?"":" (HTTP "+response.status+")"));
+   }
+   const contentType=response.headers.get("content-type")||"";
+   if(!contentType.toLowerCase().includes("image/png")){
+    const detail=(await response.text()).trim();
+    throw new Error(detail||"Renderer did not return a PNG image.");
+   }
+   const blob=await response.blob();
+   if(!isActiveView(view)||requestId!==previewRequestId)return;
+   if(previewObjectUrl)URL.revokeObjectURL(previewObjectUrl);
+   previewObjectUrl=URL.createObjectURL(blob);
+   preview.onload=()=>{
+    if(!isActiveView(view)||requestId!==previewRequestId)return;
+    preview.hidden=false;
+    status.textContent="";
+    status.hidden=true;
+   };
+   preview.onerror=()=>{
+    if(!isActiveView(view)||requestId!==previewRequestId)return;
+    preview.hidden=true;
+    status.hidden=false;
+    status.textContent="The returned image could not be displayed.";
+   };
+   preview.src=previewObjectUrl;
+  }catch(error){
+   if(!isActiveView(view)||requestId!==previewRequestId)return;
    preview.hidden=true;
    status.hidden=false;
-   status.textContent="The OpenPekora renderer did not return an image. Check that the renderer and RCCService are running.";
-  };
-  preview.src="/api/avatar/thumbnail/"+encodeURIComponent(String(publicId))+"?v="+Date.now();
+   status.textContent=String(error?.message||"Avatar rendering failed").slice(0,500);
+  }
  }
  function drawWardrobe(){
   const available=avatarItems.filter(item=>allowed.includes(item.category));
