@@ -185,6 +185,9 @@ async function ensureSiteSettings(env) {
       if (!(itemColumns.results || []).some(column => column.name === "stock_sold")) {
         await env.DB.prepare("ALTER TABLE items ADD COLUMN stock_sold INTEGER NOT NULL DEFAULT 0").run();
       }
+      if (!(itemColumns.results || []).some(column => column.name === "is_offsale")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN is_offsale INTEGER NOT NULL DEFAULT 0").run();
+      }
       // Backfill historical purchases once so they count toward finite stock.
       const stockBackfill = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='stock_sold_backfill_2026_11'").first();
       if (!stockBackfill) {
@@ -367,7 +370,7 @@ async function route(request, env) {
         "SELECT id,username,password_hash,password_salt,role,balance,created_at,is_banned FROM users LIMIT 0",
         "SELECT token_hash,user_id,expires_at FROM sessions LIMIT 0",
         "SELECT user_id,description,avatar_json FROM profiles LIMIT 0",
-        "SELECT id,name,description,category,price,image_url,model_url,is_limited,is_for_sale,created_at FROM items LIMIT 0",
+        "SELECT id,name,description,category,price,image_url,model_url,is_limited,is_for_sale,is_offsale,created_at FROM items LIMIT 0",
         "SELECT id,user_id,item_id,purchased_at FROM inventory LIMIT 0",
         "SELECT id,user_id,item_id,price,purchased_at FROM purchases LIMIT 0",
         "SELECT user_id,friend_id,status,created_at FROM friends LIMIT 0"
@@ -487,7 +490,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.stock_limit,i.stock_sold,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
     return json({ items:rows.results || [] });
   }
 
@@ -497,20 +500,22 @@ async function route(request, env) {
     const data = await body(request);
     if (typeof data?.itemId !== "string") return fail("Invalid item.");
     const item = await env.DB.prepare("SELECT * FROM items WHERE id=? AND is_for_sale=1").bind(data.itemId).first();
-    if (!item) return fail("Item not found or sold out.",404);
+    if (!item) return fail("Item not found or unavailable.",404);
+    if (Number(item.is_offsale) === 1) return fail("This item is Off Sale and cannot be purchased.",409);
     if (item.price > user.balance) return fail("Not enough Sakura currency.",400);
     if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
     const purchaseId=id(), inventoryId=id();
     try {
       const results = await env.DB.batch([
-        env.DB.prepare("UPDATE items SET stock_sold=stock_sold+1 WHERE id=? AND is_for_sale=1 AND (stock_limit=0 OR stock_sold<stock_limit) AND EXISTS (SELECT 1 FROM users WHERE id=? AND balance>=?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)").bind(item.id,user.id,item.price,user.id,item.id),
+        env.DB.prepare("UPDATE items SET stock_sold=stock_sold+1 WHERE id=? AND is_for_sale=1 AND is_offsale=0 AND (stock_limit=0 OR stock_sold<stock_limit) AND EXISTS (SELECT 1 FROM users WHERE id=? AND balance>=?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)").bind(item.id,user.id,item.price,user.id,item.id),
         env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND changes()=1").bind(item.price,user.id,item.price),
         env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE changes()=1").bind(inventoryId,user.id,item.id),
         env.DB.prepare("INSERT INTO purchases (id,user_id,item_id,price) SELECT ?,?,?,? WHERE changes()=1").bind(purchaseId,user.id,item.id,item.price)
       ]);
       if (!results?.[0]?.meta?.changes) {
-        const latest = await env.DB.prepare("SELECT stock_limit,stock_sold,is_for_sale FROM items WHERE id=?").bind(item.id).first();
-        if (!latest || !latest.is_for_sale) return fail("This item is no longer for sale.",409);
+        const latest = await env.DB.prepare("SELECT stock_limit,stock_sold,is_for_sale,is_offsale FROM items WHERE id=?").bind(item.id).first();
+        if (!latest || !latest.is_for_sale) return fail("This item is no longer in the catalog.",409);
+        if (Number(latest.is_offsale) === 1) return fail("This item is Off Sale and cannot be purchased.",409);
         if (Number(latest.stock_limit)>0 && Number(latest.stock_sold)>=Number(latest.stock_limit)) return fail("This item is sold out.",409);
         if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
         return fail("Not enough Sakura currency.",409);
@@ -1065,7 +1070,7 @@ async function route(request, env) {
     if (path === "/api/owner/items" && request.method === "GET") {
       try { await announceMissingLimitedItems(env, url.origin); }
       catch (error) { console.error("[Sakura Discord] Missing Limited scan failed:",error); }
-      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i ORDER BY i.created_at DESC,i.name").all();
+      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i ORDER BY i.created_at DESC,i.name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
@@ -1075,7 +1080,8 @@ async function route(request, env) {
     if (path === "/api/owner/items" && request.method === "POST") {
       const data = await body(request), error = validItem(data);
       if (error) return fail(error);
-      if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
+      if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item catalog visibility must be true or false.");
+      if (data.is_offsale !== undefined && typeof data.is_offsale !== "boolean") return fail("Off Sale status must be true or false.");
       if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
       const isLimited = data.is_limited === true;
       const stockLimit = data.stock_limit === undefined || data.stock_limit === null || data.stock_limit === "" ? 0 : Number(data.stock_limit);
@@ -1086,7 +1092,7 @@ async function route(request, env) {
       const assetId = Number(data.asset_id || 0);
       const assetTypeId = Number(data.asset_type_id || (assetId ? (defaultAssetTypes[data.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID (for example neck, back, front, shoulder or waist).");
-      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,isLimited?1:0,stockLimit,0,data.is_for_sale===false?0:1).run();
+      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,isLimited?1:0,stockLimit,0,data.is_for_sale===false?0:1,data.is_offsale===true?1:0).run();
       if (isLimited && data.is_for_sale !== false) {
         try {
           await announceLimitedItem({id:itemId,name:data.name,category:data.category,price:Number(data.price),image_url:String(data.image_url||"").trim(),stock_limit:stockLimit},env,url.origin);
@@ -1100,9 +1106,10 @@ async function route(request, env) {
       if (!current) return fail("Item not found.",404);
       const data=await body(request);
       if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid item update.");
-      if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item sale status must be true or false.");
+      if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item catalog visibility must be true or false.");
+       if (data.is_offsale !== undefined && typeof data.is_offsale !== "boolean") return fail("Off Sale status must be true or false.");
       if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
-      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0),is_limited:data.is_limited===undefined?Number(current.is_limited)===1:data.is_limited,stock_limit:data.stock_limit===undefined?Number(current.stock_limit||0):Number(data.stock_limit)};
+      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0),is_offsale:data.is_offsale===undefined?Number(current.is_offsale||0)===1:data.is_offsale,is_limited:data.is_limited===undefined?Number(current.is_limited)===1:data.is_limited,stock_limit:data.stock_limit===undefined?Number(current.stock_limit||0):Number(data.stock_limit)};
       if (!Number.isSafeInteger(merged.stock_limit) || merged.stock_limit < 0 || merged.stock_limit > 1000000) return fail("Stock must be a whole number from 0 to 1,000,000.");
       if (merged.is_limited && merged.stock_limit < 1) return fail("A Limited item must have a stock quantity of at least 1.");
       if (merged.stock_limit > 0 && merged.stock_limit < Number(current.stock_sold||0)) return fail("Stock cannot be lower than the number already sold.");
@@ -1112,7 +1119,7 @@ async function route(request, env) {
       const assetId = Number(merged.asset_id || 0);
       const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
-      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,match[1]).run();
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=?,is_offsale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,merged.is_offsale?1:0,match[1]).run();
       if (Number(merged.price) > Number(current.price || 0) && Number(merged.is_for_sale) === 1) {
         try {
           await announcePriceIncrease({
