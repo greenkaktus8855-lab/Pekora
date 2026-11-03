@@ -414,20 +414,6 @@ async function route(request, env) {
       return json({ error:"Catalog database setup failed. Check Worker logs." },503);
     }
   }
-  if (request.method === "GET" && /^\/asset\/?$/i.test(path)) {
-    const assetId = Number(url.searchParams.get("id") || 0);
-    if (!Number.isSafeInteger(assetId) || assetId < 1 || assetId > 9007199254740991) return fail("A valid asset id is required.",400);
-    const upstreamUrl = new URL("https://assetdelivery.roblox.com/v1/asset/");
-    upstreamUrl.searchParams.set("id",String(assetId));
-    const upstream = await fetch(upstreamUrl.toString(),{redirect:"follow",headers:{"user-agent":"Sakura-OpenPekora-Renderer/1.0"}});
-    if (!upstream.ok) return new Response("Asset could not be loaded.",{status:upstream.status,headers:{"cache-control":"no-store","content-type":"text/plain; charset=utf-8"}});
-    const headers = new Headers();
-    headers.set("content-type",upstream.headers.get("content-type")||"application/octet-stream");
-    headers.set("cache-control","public, max-age=3600, s-maxage=86400");
-    headers.set("x-content-type-options","nosniff");
-    return new Response(upstream.body,{status:200,headers});
-  }
-
   if (request.method === "GET" && path === "/api/health") {
     if (!env.DB) return json({ ok:false, site:"Sakura", database:false, schema:false, error:"D1 binding DB is missing." },503);
     try {
@@ -1431,7 +1417,7 @@ export default {
   },
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/") || /^\/asset\/?$/i.test(url.pathname)) {
+    if (url.pathname.startsWith("/api/")) {
       try { return await route(request,env); }
       catch (error) {
         if (error instanceof RequestBodyTooLarge) return fail("Request body must be 16 KB or smaller.",413);
