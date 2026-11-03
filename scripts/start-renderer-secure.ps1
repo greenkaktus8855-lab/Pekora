@@ -2,10 +2,11 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $candidateRoots = @(
+    $env:SAKURA_OPENPEKORA_ROOT,
     $repoRoot,
     (Join-Path $repoRoot "OpenPekora"),
     "C:\Pekora-RCC-Host\OpenPekora"
-) | Select-Object -Unique
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 $openPekoraRoot = $null
 foreach ($candidate in $candidateRoots) {
     $candidateRenderer = Join-Path $candidate "game-renderer"
@@ -27,12 +28,15 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     throw "game-renderer\config.json was not found: $configPath"
 }
 
-$secureSecret = Read-Host "Enter the SAME value as Cloudflare Worker secret AVATAR_RENDERER_SECRET" -AsSecureString
-$pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSecret)
-try {
-    $secret = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
-} finally {
-    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+$secret = [string]$env:PEKORA_RENDERER_SECRET
+if ([string]::IsNullOrWhiteSpace($secret)) {
+    $secureSecret = Read-Host "Enter the SAME value as Cloudflare Worker secret AVATAR_RENDERER_SECRET" -AsSecureString
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSecret)
+    try {
+        $secret = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+    }
 }
 if ([string]::IsNullOrWhiteSpace($secret) -or $secret.Length -lt 24) {
     throw "The renderer secret must contain at least 24 characters. Nothing was started."
