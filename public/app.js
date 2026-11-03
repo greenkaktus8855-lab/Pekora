@@ -470,10 +470,10 @@ async function avatarPage(){
  renderSidebar("avatar");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your avatar.</div>';return}
  const publicId=Number(me.publicId||0);
- app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar Editor</h1><p class="muted">Customize your Sakura character and preview it with OpenPekora RCC.</p></div>'+
+ app.innerHTML='<div class="avatar-editor"><div class="avatar-editor-heading"><h1 class="page-title">Avatar Editor</h1><p class="muted">Customize your Sakura character and preview it instantly in your browser.</p></div>'+
   '<div class="avatar-editor-layout">'+
    '<div class="avatar-editor-left">'+
-    '<section class="avatar-preview-panel"><h2>Avatar Preview</h2><div class="avatar-render-frame"><img id="avatarRenderPreview" alt="Your rendered avatar" hidden><div id="avatarRenderStatus" class="avatar-render-status">Connecting to the OpenPekora renderer...</div></div><button class="button secondary avatar-render-refresh" id="refreshAvatarRender" type="button">Refresh Preview</button><p class="muted avatar-render-caption">Rendered by OpenPekora RCCService</p></section>'+
+    '<section class="avatar-preview-panel"><h2>Avatar Preview</h2><div class="avatar-render-frame"><img id="avatarRenderPreview" alt="Your rendered avatar" hidden><div id="avatarRenderStatus" class="avatar-render-status">Preparing your avatar preview...</div></div><button class="button secondary avatar-render-refresh" id="refreshAvatarRender" type="button">Refresh Preview</button><p class="muted avatar-render-caption">Live preview · runs inside Sakura</p></section>'+
     '<section class="avatar-preview-panel avatar-appearance-panel"><h2>Appearance</h2>'+
      '<label class="avatar-setting-label" for="avatarRigType">Avatar type</label><select id="avatarRigType"><option value="R6">R6</option><option value="R15">R15</option></select>'+
      '<h3>Skin Tone</h3><p class="muted">Choose one tone for the whole body.</p><div id="avatarSkinTones" class="avatar-skin-tones">Loading palette...</div>'+
@@ -498,25 +498,37 @@ async function avatarPage(){
  let avatarItems=[],equippedIds=new Set(),previewObjectUrl=null,previewRequestId=0;
  let settings={bodyColors:{headColorId:125,torsoColorId:125,leftArmColorId:125,rightArmColorId:125,leftLegColorId:125,rightLegColorId:125},rigType:"R6",scales:{height:1,width:1,head:1,depth:1,proportion:0,bodyType:0}};
  async function refreshAvatarPreview(){
-  const requestId=++previewRequestId;
-  if(!preview||!status||!Number.isSafeInteger(publicId)||publicId<1){if(status)status.textContent="A valid public user ID is required to render this avatar.";return}
-  preview.hidden=true;status.hidden=false;status.textContent="Rendering your avatar with OpenPekora RCC...";
-  try{
-   const response=await fetch("/api/avatar/thumbnail/"+encodeURIComponent(String(publicId))+"?v="+Date.now(),{cache:"no-store",credentials:"same-origin"});
-   if(!response.ok){const detail=(await response.text()).trim();throw new Error(detail||"Renderer request failed (HTTP "+response.status+")")}
-   const contentType=response.headers.get("content-type")||"";
-   if(!contentType.toLowerCase().includes("image/png"))throw new Error((await response.text()).trim()||"Renderer did not return a PNG image.");
-   const blob=await response.blob();
-   if(!isActiveView(view)||requestId!==previewRequestId)return;
-   if(previewObjectUrl)URL.revokeObjectURL(previewObjectUrl);
-   previewObjectUrl=URL.createObjectURL(blob);
-   preview.onload=()=>{if(!isActiveView(view)||requestId!==previewRequestId)return;preview.hidden=false;status.hidden=true};
-   preview.onerror=()=>{if(!isActiveView(view)||requestId!==previewRequestId)return;preview.hidden=true;status.hidden=false;status.textContent="The returned image could not be displayed."};
-   preview.src=previewObjectUrl;
-  }catch(error){
-   if(!isActiveView(view)||requestId!==previewRequestId)return;
-   preview.hidden=true;status.hidden=false;status.textContent=String(error?.message||"Avatar rendering failed").slice(0,500);
-  }
+  if(!preview||!status)return;
+  const colorById={364:"#5A4C42",217:"#7C5C46",359:"#AF9483",18:"#CC8E69",125:"#EAB892",361:"#564236",192:"#694028",351:"#BC9B5D",352:"#C7AC78",5:"#D7C59A",153:"#957977",1007:"#A34B4B",101:"#DA867A",1025:"#FFC9C9",330:"#FF98DC",135:"#74869D",305:"#527CAE",11:"#80BBDC",1026:"#B1A7FF",321:"#A75E9B",107:"#008F9C",310:"#5B9A4C",317:"#7C9C6B",29:"#A1C48C",105:"#E29B40",24:"#F5CD30",334:"#F8D96D",199:"#635F62",1002:"#CDCDCD",1001:"#F8F8F8"};
+  const colors=settings.bodyColors||{};
+  const head=colorById[colors.headColorId]||"#EAB892";
+  const torso=colorById[colors.torsoColorId]||head;
+  const leftArm=colorById[colors.leftArmColorId]||head;
+  const rightArm=colorById[colors.rightArmColorId]||head;
+  const leftLeg=colorById[colors.leftLegColorId]||head;
+  const rightLeg=colorById[colors.rightLegColorId]||head;
+  const scale=settings.scales||{};
+  const width=Math.max(.7,Math.min(1,Number(scale.width)||1));
+  const height=Math.max(.9,Math.min(1.05,Number(scale.height)||1));
+  const headScale=Math.max(.95,Math.min(1,Number(scale.head)||1));
+  const headW=36*headScale, headX=100-headW/2, bodyW=48*width, bodyX=100-bodyW/2;
+  const isR15=settings.rigType==="R15";
+  const gap=isR15?5:0;
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 260" role="img" aria-label="Sakura avatar preview">'+
+   '<defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#2a183d"/><stop offset="1" stop-color="#120d1c"/></linearGradient><linearGradient id="shine" x2="1" y2="1"><stop stop-color="#ffffff" stop-opacity=".22"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs>'+
+   '<rect width="200" height="260" rx="16" fill="url(#bg)"/><ellipse cx="100" cy="239" rx="53" ry="9" fill="#000" opacity=".3"/>'+
+   '<g stroke="#17121d" stroke-width="2" stroke-linejoin="round">'+
+   '<rect x="'+(61-bodyW*.18)+'" y="124" width="'+(bodyW*.38)+'" height="'+(48*height)+'" rx="'+(isR15?8:2)+'" fill="'+leftLeg+'"/>'+
+   '<rect x="'+(100+bodyW*.0)+'" y="124" width="'+(bodyW*.38)+'" height="'+(48*height)+'" rx="'+(isR15?8:2)+'" fill="'+rightLeg+'"/>'+
+   '<rect x="'+(bodyX-13)+'" y="66" width="20" height="'+(58*height)+'" rx="'+(isR15?10:2)+'" fill="'+leftArm+'"/>'+
+   '<rect x="'+(bodyX+bodyW-7)+'" y="66" width="20" height="'+(58*height)+'" rx="'+(isR15?10:2)+'" fill="'+rightArm+'"/>'+
+   '<rect x="'+bodyX+'" y="66" width="'+bodyW+'" height="62" rx="'+(isR15?10:3)+'" fill="'+torso+'"/>'+
+   '<rect x="'+headX+'" y="24" width="'+headW+'" height="38" rx="'+(isR15?headW*.42:3)+'" fill="'+head+'"/>'+
+   '</g><g fill="#29202a"><circle cx="91" cy="42" r="2.4"/><circle cx="109" cy="42" r="2.4"/><path d="M94 52 Q100 56 106 52" fill="none" stroke="#29202a" stroke-width="1.8" stroke-linecap="round"/></g>'+
+   '<path d="M'+bodyX+' 68 h'+bodyW+' v16 h-'+bodyW+'z" fill="url(#shine)" opacity=".55"/>'+
+   '<text x="100" y="252" text-anchor="middle" fill="#d8c5ed" font-family="Arial,sans-serif" font-size="8" letter-spacing="2">SAKURA</text></svg>';
+  preview.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
+  preview.hidden=false;status.hidden=true;
  }
  function drawSkinTones(){
   const allSame=bodyKeys.every(key=>settings.bodyColors[key]===settings.bodyColors.headColorId);
@@ -538,7 +550,7 @@ async function avatarPage(){
    const wearing=equippedIds.has(item.id);
    const previewMarkup=item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'" loading="lazy">':'<span class="avatar-wardrobe-no-image">'+esc(item.category)+'</span>';
    return '<article class="avatar-wardrobe-item"><div class="avatar-wardrobe-image">'+previewMarkup+'</div><div class="avatar-wardrobe-name">'+esc(item.name)+'</div><div class="muted">'+esc(item.category)+'</div><button class="button '+(wearing?'secondary':'')+'" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+(wearing?'remove':'wear')+'">'+(wearing?'Remove':'Wear')+'</button></article>';
-  }).join(""):'<div class="avatar-wardrobe-empty">No renderable catalog assets in your inventory yet. Assets need a Roblox Asset ID.</div>';
+  }).join(""):'<div class="avatar-wardrobe-empty">No renderable catalog assets in your inventory yet. Your appearance changes update the preview instantly. Catalog clothing and accessories are not shown in this basic preview yet.</div>';
  }
  async function saveColors(next){
   try{
