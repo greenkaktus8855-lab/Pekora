@@ -35,6 +35,72 @@ async function api(path,options={}){
  return data;
 }
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),2600)}
+async function copyToClipboard(value,successMessage="Copied"){
+ const textValue=String(value??"");
+ try{
+  if(navigator.clipboard&&window.isSecureContext){
+   await navigator.clipboard.writeText(textValue);
+  }else{
+   const field=document.createElement("textarea");
+   field.value=textValue;
+   field.setAttribute("readonly","");
+   field.style.position="fixed";
+   field.style.left="-9999px";
+   document.body.appendChild(field);
+   field.select();
+   const copied=document.execCommand("copy");
+   field.remove();
+   if(!copied)throw new Error("Clipboard unavailable");
+  }
+  toast(successMessage);
+  return true;
+ }catch{
+  toast("Could not copy. Check browser clipboard permissions.");
+  return false;
+ }
+}
+function removeAvatarWhiteBackground(image){
+ if(!image||image.dataset.avatarBgProcessed==="1"||!image.naturalWidth||!image.naturalHeight)return;
+ image.dataset.avatarBgProcessed="1";
+ try{
+  const width=image.naturalWidth,height=image.naturalHeight,total=width*height;
+  if(total>3000000)return;
+  const canvas=document.createElement("canvas");
+  canvas.width=width;canvas.height=height;
+  const context=canvas.getContext("2d",{willReadFrequently:true});
+  if(!context)return;
+  context.drawImage(image,0,0,width,height);
+  const frame=context.getImageData(0,0,width,height);
+  const pixels=frame.data;
+  const visited=new Uint8Array(total);
+  const queue=new Int32Array(total);
+  const isBackground=index=>{
+   const offset=index*4,r=pixels[offset],g=pixels[offset+1],b=pixels[offset+2];
+   return pixels[offset+3]>0&&r>=238&&g>=238&&b>=238&&Math.max(r,g,b)-Math.min(r,g,b)<=20;
+  };
+  let head=0,tail=0;
+  const add=index=>{
+   if(index>=0&&index<total&&!visited[index]&&isBackground(index)){
+    visited[index]=1;queue[tail++]=index;
+   }
+  };
+  for(let x=0;x<width;x++){add(x);add((height-1)*width+x);}
+  for(let y=0;y<height;y++){add(y*width);add(y*width+width-1);}
+  while(head<tail){
+   const index=queue[head++],x=index%width,y=(index/width)|0;
+   if(x>0)add(index-1);
+   if(x+1<width)add(index+1);
+   if(y>0)add(index-width);
+   if(y+1<height)add(index+width);
+  }
+  if(!tail)return;
+  for(let i=0;i<tail;i++)pixels[queue[i]*4+3]=0;
+  context.putImageData(frame,0,0);
+  image.src=canvas.toDataURL("image/png");
+ }catch(error){
+  console.warn("[Sakura avatar] Could not make the render background transparent:",error);
+ }
+}
 function avatar(username=me?.username){
  const label=String(username||"?").trim()||"?";
  const initials=label.split(/[ _-]+/).filter(Boolean).slice(0,2).map(part=>part[0]).join("").toUpperCase()||"?";
@@ -1151,24 +1217,30 @@ async function avatarPage(){
  app.innerHTML='<div class="avatar-page" style="max-width:900px;margin:0 auto;padding:12px 0">'+
   '<h1 class="page-title">Avatar</h1>'+
   '<p class="muted">Your character rendered by OpenPekora RCC.</p>'+
-  '<section style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:18px;margin:14px 0;display:flex;flex-direction:column;align-items:center;gap:12px">'+
-   '<div style="width:min(100%,520px);min-height:360px;background:#f4f1f8;border-radius:8px;display:grid;place-items:center;overflow:hidden">'+
-    '<img id="sakuraAvatarImage" alt="3D avatar render" style="display:block;width:100%;height:420px;object-fit:contain" src="/api/avatar/thumbnail/'+publicId+'?refresh='+Date.now()+'">'+
+  '<section style="background:transparent;border:0;border-radius:10px;padding:8px 0;margin:14px 0;display:flex;flex-direction:column;align-items:center;gap:12px">'+
+   '<div style="width:min(100%,520px);min-height:360px;background-color:#20182b;background-image:linear-gradient(45deg,#30263d 25%,transparent 25%),linear-gradient(-45deg,#30263d 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#30263d 75%),linear-gradient(-45deg,transparent 75%,#30263d 75%);background-size:28px 28px;background-position:0 0,0 14px,14px -14px,-14px 0;border:1px solid #514260;border-radius:8px;display:grid;place-items:center;overflow:hidden">'+
+    '<img id="sakuraAvatarImage" alt="3D avatar render" style="display:block;width:100%;height:420px;object-fit:contain;background:transparent" src="/api/avatar/thumbnail/'+publicId+'?refresh='+Date.now()+'">'+
    '</div>'+
    '<div id="sakuraAvatarStatus" class="muted" role="status">Loading OpenPekora render...</div>'+
    '<button class="button primary" id="refreshSakuraAvatar" type="button">Refresh Avatar</button>'+
   '</section>'+
-  '<section style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:18px;margin:14px 0">'+
-   '<h2 style="margin:0 0 10px">Equipped items</h2><div id="sakuraEquippedItems" class="muted">Loading...</div>'+
+  '<section style="background:transparent;border:1px solid #d9cce7;border-radius:10px;padding:16px;margin:14px 0">'+
+   '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px"><h2 style="margin:0">Equipped items</h2><button class="button secondary" id="copyAvatarItemIds" type="button">Copy all item IDs</button></div>'+
+   '<div id="sakuraEquippedItems" class="muted">Loading...</div>'+
   '</section></div>';
  const image=document.getElementById("sakuraAvatarImage");
  const status=document.getElementById("sakuraAvatarStatus");
  const refresh=()=>{
   if(!image?.isConnected)return;
+  delete image.dataset.avatarBgProcessed;
   status.textContent="Rendering with OpenPekora RCC...";
   image.src="/api/avatar/thumbnail/"+publicId+"?refresh="+Date.now();
  };
- image.addEventListener("load",()=>{if(isActiveView(view))status.textContent="OpenPekora avatar render loaded.";});
+ image.addEventListener("load",()=>{
+  if(!isActiveView(view))return;
+  removeAvatarWhiteBackground(image);
+  status.textContent="OpenPekora avatar render loaded.";
+ });
  image.addEventListener("error",()=>{if(isActiveView(view))status.textContent="Render failed. Check that the Sakura Renderer and RCCService are running.";});
  document.getElementById("refreshSakuraAvatar")?.addEventListener("click",refresh);
  try{
@@ -1177,7 +1249,30 @@ async function avatarPage(){
   const host=document.getElementById("sakuraEquippedItems");
   if(host){
    const equipped=Array.isArray(data.equipped)?data.equipped:[];
-   host.innerHTML=equipped.length?equipped.map(item=>'<div style="padding:7px 0;border-bottom:1px solid #eee">'+esc(item.name)+' <span class="muted">('+esc(item.category)+')</span></div>').join(""):'No items equipped yet.';
+   host.innerHTML=equipped.length?equipped.map(item=>{
+    const itemId=String(item.id||"");
+    const assetId=Number(item.asset_id||0);
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #e6ddec">'+
+     '<div style="min-width:140px"><strong>'+esc(item.name)+'</strong><div class="muted">'+esc(item.category)+(assetId?' · Asset ID: '+assetId:'')+'</div></div>'+
+     '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+      '<button class="button secondary" type="button" data-copy-avatar-link="'+esc(itemId)+'">Copy item link</button>'+
+      '<button class="button secondary" type="button" data-copy-avatar-id="'+esc(assetId||itemId)+'">'+(assetId?'Copy asset ID':'Copy item ID')+'</button>'+
+     '</div></div>';
+   }).join(""):'No items equipped yet.';
+   host.querySelectorAll("[data-copy-avatar-link]").forEach(button=>{
+    button.addEventListener("click",()=>{
+     const id=button.dataset.copyAvatarLink;
+     copyToClipboard(new URL("/item/"+encodeURIComponent(id),location.origin).href,"Item link copied");
+    });
+   });
+   host.querySelectorAll("[data-copy-avatar-id]").forEach(button=>{
+    button.addEventListener("click",()=>copyToClipboard(button.dataset.copyAvatarId,"Item ID copied"));
+   });
+   document.getElementById("copyAvatarItemIds")?.addEventListener("click",()=>{
+    const ids=equipped.map(item=>Number(item.asset_id||0)).filter(id=>Number.isSafeInteger(id)&&id>0);
+    if(!ids.length){toast("No Roblox asset IDs on equipped items.");return;}
+    copyToClipboard(ids.join(", "),"All avatar asset IDs copied");
+   });
   }
  }catch(error){
   if(isActiveView(view)&&document.getElementById("sakuraEquippedItems"))document.getElementById("sakuraEquippedItems").textContent=error.message;
