@@ -1355,3 +1355,78 @@
  .membership-plans{grid-template-columns:1fr}
  .membership-plan-description{min-height:0}
 }
+
+
+/* Sakura promo codes and membership eligibility */
+#sidebar .side-promo-button{
+ display:block!important;margin:11px 0 12px!important;padding:9px 8px!important;
+ border:1px solid #9a5be2!important;border-radius:5px!important;
+ background:#7134b1!important;color:#fff!important;text-align:center!important;
+ font-size:15px!important;font-weight:700!important;text-decoration:none!important;
+}
+#sidebar .side-promo-button:hover,
+#sidebar .side-promo-button.active{
+ background:#8a45cf!important;border-color:#b77df0!important;color:#fff!important;
+}
+#app .membership-plan.is-locked{opacity:.72;border-color:#51475f}
+#app .membership-locked-note{
+ margin:8px 0 0;padding:8px 10px;border-left:3px solid #9b66d3;
+ background:#211a2b;color:#d4c3e9!important;font-size:12px;line-height:1.45
+}
+#app .promocodes-page{width:100%;max-width:970px;margin:8px auto}
+#app .promocodes-page>.muted{margin:-3px 0 18px}
+#app .promocode-redeem-panel,
+#app .promocode-history-section{
+ margin:0 0 18px;padding:18px;background:#15151c;border:1px solid #393343;border-radius:6px
+}
+#app .promocode-redeem-form>label{display:block;margin-bottom:8px;font-weight:700}
+#app .promocode-redeem-row{display:flex;gap:10px;align-items:stretch}
+#app .promocode-redeem-row input{flex:1;min-width:0;min-height:42px;padding:9px 12px}
+#app .promocode-redeem-row button{min-width:120px}
+#app .promocode-redeem-form>p{min-height:18px;margin:10px 0 0}
+#app .promocode-history-section h2{margin:0 0 12px;font-size:20px}
+#app .promocode-history{display:grid;gap:8px}
+#app .promocode-claim{
+ display:flex;align-items:center;justify-content:space-between;gap:16px;
+ padding:12px;background:#1c1a23;border:1px solid #393343;border-radius:5px
+}
+#app .promocode-claim>div{display:grid;gap:4px;min-width:0}
+#app .promocode-claim>p{display:flex;align-items:center;gap:10px;margin:0;text-align:right}
+#app .promocode-items-reward{color:#d8c3f0!important;font-size:13px}
+#app .owner-promocode-section{margin-top:18px}
+#app .owner-promo-form{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end
+}
+#app .owner-promo-form label{display:flex;flex-direction:column;gap:5px;min-width:0}
+#app .owner-promo-form select[multiple]{
+ min-height:178px;padding:6px;background:#17151d;color:#f5f3fa;border:1px solid #51485e;border-radius:4px
+}
+#app .owner-promo-form select[multiple] option{padding:5px}
+#app .owner-promo-form>p,
+#app .owner-promo-form>button,
+#app .owner-promo-form>#ownerPromoMessage{grid-column:1/-1}
+#app .owner-promocode-list{display:grid;gap:8px;margin-top:15px}
+#app .owner-promocode-row{
+ display:flex;align-items:center;gap:12px;padding:12px;
+ background:#17151d;border:1px solid #393343;border-radius:5px
+}
+#app .owner-promocode-details{display:grid;gap:4px;flex:1;min-width:0}
+#app .owner-promocode-details>strong{font-size:16px;overflow-wrap:anywhere}
+#app .owner-promocode-details .muted{font-size:12px;overflow-wrap:anywhere}
+#app .owner-promocode-status{
+ padding:4px 7px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase;white-space:nowrap
+}
+#app .owner-promocode-status.is-active{background:#173d2b;color:#83e5ad!important}
+#app .owner-promocode-status.is-disabled{background:#3b3030;color:#e7a7a7!important}
+@media(max-width:620px){
+ #app .promocode-redeem-row{flex-direction:column}
+ #app .promocode-redeem-row button{width:100%}
+ #app .promocode-claim{align-items:flex-start;flex-direction:column}
+ #app .promocode-claim>p{text-align:left;flex-wrap:wrap}
+ #app .owner-promo-form{grid-template-columns:1fr}
+ #app .owner-promo-form>p,
+ #app .owner-promo-form>button,
+ #app .owner-promo-form>#ownerPromoMessage{grid-column:1}
+ #app .owner-promocode-row{align-items:flex-start;flex-wrap:wrap}
+ #app .owner-promocode-row button{width:100%}
+}
