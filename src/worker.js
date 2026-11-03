@@ -82,6 +82,13 @@ async function body(request) {
 }
 const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:Number(u.balance||0), tixBalance:Number(u.tix_balance||0), createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified) });
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
+const MEMBERSHIP_REWARDS = Object.freeze({
+  None:0,
+  BuildersClub:15,
+  TurboBuildersClub:35,
+  OutrageousBuildersClub:85,
+  Premium:85
+});
 function validItem(data, allowLegacyHttp = false) {
   if (!data || typeof data !== "object" || Array.isArray(data)) return "Invalid item details.";
   if (typeof data.name !== "string" || !data.name.trim() || data.name.trim().length > 80) return "Item name must be 1–80 characters.";
@@ -134,6 +141,9 @@ async function ensureSiteSettings(env) {
     siteSettingsPromise = (async () => {
       await env.DB.batch([
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS user_memberships (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, membership_type TEXT NOT NULL DEFAULT 'None' CHECK(membership_type IN ('None','BuildersClub','TurboBuildersClub','OutrageousBuildersClub','Premium')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS membership_daily_rewards (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, reward_date TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0), created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,reward_date))"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_membership_rewards_date ON membership_daily_rewards(reward_date)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS discord_limited_announcements (item_id TEXT PRIMARY KEY, announced_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_files (id TEXT PRIMARY KEY, model_data BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
@@ -363,6 +373,31 @@ async function announceMissingLimitedItems(env, siteOrigin) {
   return {sent,remaining:(rows.results || []).length-sent};
 }
 
+async function runDailyMembershipPayout(controller,env) {
+  if (!env.DB) return;
+  const scheduledAt = new Date(Number(controller.scheduledTime));
+  const localParts = new Intl.DateTimeFormat("en-GB",{
+    timeZone:"Europe/Kyiv",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"
+  }).formatToParts(scheduledAt);
+  const part = type => localParts.find(entry => entry.type === type)?.value || "";
+  // Both UTC cron times are configured so this runs at Kyiv midnight in summer and winter.
+  if (part("hour") !== "00" || part("minute") !== "00") return;
+  const rewardDate = part("year")+"-"+part("month")+"-"+part("day");
+  await ensureSiteSettings(env);
+  const members = await env.DB.prepare("SELECT m.user_id,m.membership_type FROM user_memberships m JOIN users u ON u.id=m.user_id WHERE m.membership_type<>'None' AND u.is_banned=0 ORDER BY m.user_id").all();
+  let awarded = 0;
+  for (const member of members.results || []) {
+    const amount = Number(MEMBERSHIP_REWARDS[member.membership_type] || 0);
+    if (amount <= 0) continue;
+    const result = await env.DB.batch([
+      env.DB.prepare("INSERT INTO membership_daily_rewards (user_id,reward_date,amount) VALUES (?,?,?) ON CONFLICT(user_id,reward_date) DO NOTHING").bind(member.user_id,rewardDate,amount),
+      env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND changes()=1").bind(amount,member.user_id)
+    ]);
+    if (Number(result?.[0]?.meta?.changes || 0) === 1) awarded++;
+  }
+  console.log("[Sakura membership] Daily payout completed",JSON.stringify({rewardDate,awarded,members:(members.results || []).length}));
+}
+
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -472,6 +507,37 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/me") {
     const user = await currentUser(request,env);
     return json({ user:user ? publicUser(user) : null });
+  }
+
+  if (request.method === "GET" && path === "/api/membership") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const [membership,lastReward,wallet] = await Promise.all([
+      env.DB.prepare("SELECT membership_type,updated_at FROM user_memberships WHERE user_id=?").bind(user.id).first(),
+      env.DB.prepare("SELECT reward_date,amount,created_at FROM membership_daily_rewards WHERE user_id=? ORDER BY reward_date DESC LIMIT 1").bind(user.id).first(),
+      env.DB.prepare("SELECT balance,tix_balance FROM users WHERE id=?").bind(user.id).first()
+    ]);
+    const membershipType = membership?.membership_type || "None";
+    return json({
+      membershipType,
+      dailyRobux:Number(MEMBERSHIP_REWARDS[membershipType] || 0),
+      updatedAt:membership?.updated_at || null,
+      lastRewardDate:lastReward?.reward_date || null,
+      lastRewardAmount:Number(lastReward?.amount || 0),
+      balance:Number(wallet?.balance || 0),
+      tixBalance:Number(wallet?.tix_balance || 0),
+      payoutTimezone:"Europe/Kyiv"
+    });
+  }
+
+  if (request.method === "POST" && path === "/api/membership") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const data = await body(request);
+    const membershipType = String(data?.membershipType || "");
+    if (!Object.prototype.hasOwnProperty.call(MEMBERSHIP_REWARDS,membershipType)) return fail("Choose a valid membership.");
+    await env.DB.prepare("INSERT INTO user_memberships (user_id,membership_type,updated_at) VALUES (?,?,datetime('now')) ON CONFLICT(user_id) DO UPDATE SET membership_type=excluded.membership_type,updated_at=excluded.updated_at").bind(user.id,membershipType).run();
+    return json({ok:true,membershipType,dailyRobux:Number(MEMBERSHIP_REWARDS[membershipType] || 0)});
   }
 
   if (request.method === "POST" && path === "/api/bootstrap-owner") {
@@ -1249,6 +1315,13 @@ async function route(request, env) {
 }
 
 export default {
+  async scheduled(controller,env,ctx) {
+    const task = runDailyMembershipPayout(controller,env).catch(error => {
+      console.error("[Sakura membership] Daily payout failed:",error);
+      throw error;
+    });
+    ctx.waitUntil(task);
+  },
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) {
