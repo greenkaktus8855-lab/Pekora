@@ -482,10 +482,7 @@ async function profile(identifier=me?.username,byId=false){
   const publicId=p.publicId??p.id,profileUrl="/#profile?id="+encodeURIComponent(publicId);
   if(!byId&&publicId){history.replaceState({page:"profile",publicId},"",profileUrl)}
   const profileAvatar=avatar(p.username);
-  const renderablePublicId=Number(publicId);
-  const profileRenderImage=Number.isSafeInteger(renderablePublicId)&&renderablePublicId>0
-   ? '<img class="op-profile-render-image" src="/api/avatar/thumbnail/'+encodeURIComponent(String(renderablePublicId))+'" alt="'+esc(p.username)+' avatar" loading="lazy">'
-   : "";
+  const profileRenderImage="";
   app.innerHTML='<div class="op-profile">'+
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+profileRenderImage+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
@@ -496,7 +493,6 @@ async function profile(identifier=me?.username,byId=false){
    '<section class="op-profile-section"><h2>Inventory</h2>'+
     (owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+
    '</section></div>';
-  document.querySelector(".op-profile-render-image")?.addEventListener("error",event=>event.currentTarget.remove());
   if(!isSelf&&me)loadProfileFriendAction(p.username);
  }catch(e){if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
