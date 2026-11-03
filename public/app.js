@@ -603,7 +603,8 @@ async function tradesPage(){
    if(!isActiveView(view))return;
    const own=ownData.items||[],target=targetData.items||[];
    if(!target.length)message.textContent="That player has no items available to trade.";
-   const ownEligible=own.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1),targetEligible=target.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1);
+   const uniqueEligible=items=>[...new Map(items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1).map(item=>[item.id,item])).values()];
+   const ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target);
     const checks=(list,prefix)=>list.map(item=>'<label class="trade-select-item"><input type="checkbox" value="'+esc(item.id)+'" data-trade-side="'+prefix+'"><span>'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="">':'')+'<span>'+esc(item.name)+' <small class="trade-limited-tag">'+(Number(item.is_limited)===1?'LIMITED':'OFF SALE')+'</small></span></span></label>').join("");
     if(!ownEligible.length&&!targetEligible.length)message.textContent="Trading is available for Limited and Off Sale items. Neither player has an eligible item.";
     else if(!ownEligible.length)message.textContent="You do not have any Limited or Off Sale items to offer.";
