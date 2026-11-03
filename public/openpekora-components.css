@@ -1316,3 +1316,42 @@
   #app .owner-user-result{align-items:flex-start;flex-direction:column}
   #app .catalog-body{grid-template-columns:105px minmax(0,1fr)}
 }
+
+ 
+/* Sakura Builders Club membership */
+.membership-page{width:100%;max-width:970px;margin:8px auto}
+.membership-intro{margin:-3px 0 18px;font-size:15px}
+.membership-current-panel{
+ display:flex;align-items:center;justify-content:space-between;gap:24px;
+ margin:0 0 18px;padding:18px 20px;background:#15151c;border:1px solid #393343;border-radius:6px;
+}
+.membership-current-label,.membership-current-reward>span{
+ display:block;color:#aaa5b5;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase
+}
+.membership-current-panel h2{margin:5px 0;font-size:23px}
+.membership-current-panel p{margin:4px 0 0}
+.membership-current-reward{text-align:right;white-space:nowrap}
+.membership-current-reward strong{display:block;margin-top:6px;font-size:22px}
+.membership-plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.membership-plan{
+ display:flex;flex-direction:column;align-items:flex-start;min-width:0;padding:17px;
+ background:#15151c;border:1px solid #393343;border-radius:6px;
+}
+.membership-plan.is-current{border-color:#a64dff;box-shadow:0 0 0 1px rgba(166,77,255,.2)}
+.membership-plan-mark{
+ display:flex;align-items:center;justify-content:center;min-width:48px;min-height:34px;
+ padding:4px 9px;background:#30203f;border:1px solid #65418a;border-radius:4px;
+ color:#eadcff;font-size:13px;font-weight:900
+}
+.membership-plan h2{margin:12px 0 4px;font-size:20px}
+.membership-plan-description{min-height:38px;margin:0;color:#aaa5b5;font-size:13px}
+.membership-plan-reward{display:flex;align-items:center;gap:7px;margin:13px 0 15px;font-size:21px;font-weight:800}
+.membership-plan-reward>span{color:#aaa5b5;font-size:13px;font-weight:600}
+.membership-plan button{margin-top:auto;min-width:130px}
+.membership-footnote{margin:17px 0 0;color:#aaa5b5;font-size:13px;line-height:1.5}
+@media(max-width:620px){
+ .membership-current-panel{align-items:flex-start;flex-direction:column;gap:12px}
+ .membership-current-reward{text-align:left}
+ .membership-plans{grid-template-columns:1fr}
+ .membership-plan-description{min-height:0}
+}
