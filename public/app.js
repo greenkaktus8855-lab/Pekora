@@ -26,6 +26,12 @@ function currencyMarkup(amount,currencyCode="P$",extraClass=""){
  const value=Number(amount||0).toLocaleString();
  return '<span class="currency-inline '+esc(extraClass)+'" aria-label="'+esc(code)+' '+value+'">'+currencyIconMarkup(code)+'<b>'+value+'</b></span>';
 }
+function administratorBadgeMarkup(username){
+ const normalized=String(username||"").trim().toLowerCase();
+ return normalized==="admin"||normalized==="sakura"
+  ? ' <span class="administrator-profile-badge" title="Administrator" aria-label="Administrator"><span class="icon-administrator-small" aria-hidden="true"></span><span>Administrator</span></span>'
+  : "";
+}
 async function api(path,options={}){
  const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});
  let data={};try{data=await res.json()}catch{}
@@ -653,7 +659,7 @@ async function profile(identifier=me?.username,byId=false){
   const profileRenderImage="";
   app.innerHTML='<div class="op-profile">'+
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+profileRenderImage+'</div><div class="op-profile-info">'+
-    '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
+    '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+administratorBadgeMarkup(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
