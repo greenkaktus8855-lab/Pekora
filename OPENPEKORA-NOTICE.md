@@ -7,6 +7,8 @@ The navigation sprite at `public/navigation_02012016.svg` is copied from the ups
 frontend's public image assets. Its navigation sprite styling is adapted from the
 upstream `frontend/styles/roblox/icons.css`.
 
+The original Administrator badge sprite at `public/roblox_badges.svg` is copied from the upstream frontend's public image assets. Its display position is adapted from the `.icon-administrator` rule in `frontend/styles/roblox/icons.css`.
+
 The upstream frontend includes an MIT license in `frontend/LICENSE`, Copyright 2021.
 Its MIT permission notice and disclaimer are reproduced below.
 
