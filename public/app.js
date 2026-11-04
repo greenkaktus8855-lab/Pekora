@@ -136,7 +136,7 @@ function renderSidebar(active="home"){
   ["resale","icon-nav-trade","Resale Market"],
   ["groups","icon-nav-group","Groups"],
   ["currency","icon-nav-sakura-currency","Currency"],
-  ["membership","icon-nav-sakura-currency","Membership"],
+  ["membership","icon-nav-membership","Membership"],
   ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
  ];
@@ -1092,6 +1092,23 @@ function users(){
  }
 }
 
+
+function parseRobloxClothingReference(value){
+ const raw=String(value||"").trim();
+ if(/^\\d{1,10}$/.test(raw)){
+  const assetId=Number(raw);
+  return Number.isSafeInteger(assetId)&&assetId>0&&assetId<=2147483647?{assetId,url:"https://www.roblox.com/catalog/"+assetId}:null;
+ }
+ try{
+  const source=new URL(raw);
+  if(source.protocol!=="https:"||!["roblox.com","www.roblox.com","m.roblox.com"].includes(source.hostname.toLowerCase()))return null;
+  const match=source.pathname.match(/^\\/(?:catalog|library)\\/(\\d+)(?:\\/|$)|^\\/marketplace\\/asset\\/(\\d+)(?:\\/|$)/i);
+  const assetId=Number(match?.[1]||match?.[2]||0);
+  if(!Number.isSafeInteger(assetId)||assetId<1||assetId>2147483647)return null;
+  return {assetId,url:"https://www.roblox.com/catalog/"+assetId};
+ }catch{return null}
+}
+
 async function createPage(){
  const view=beginView();
  renderSidebar("create");
@@ -1106,8 +1123,8 @@ async function createPage(){
    '<label>Item name<input name="name" maxlength="80" required placeholder="Name your clothing"></label>'+
    '<label>Type<select name="category">'+CREATABLE_CATEGORIES.map(category=>'<option value="'+category+'">'+(category==="Shirts"?"Shirt":"Pants")+'</option>').join("")+'</select></label>'+
    '<label>Description <span class="muted">(optional)</span><textarea name="description" maxlength="500" rows="3" placeholder="Tell players a little about this item"></textarea></label>'+
-   '<label>Original Roblox item link<input name="roblox_url" type="url" maxlength="500" required placeholder="https://www.roblox.com/catalog/123456789/Item"></label>'+
-   '<p class="creator-create-note">Use the original Roblox catalog page for the Shirt or Pants. The Owner will add the Sakura catalog image before publishing.</p>'+
+   '<label>Roblox item link or ID<input name="roblox_url" type="text" inputmode="url" autocomplete="off" maxlength="500" required placeholder="roblox.com/catalog/123456789 or 123456789"></label>'+
+   '<p class="creator-create-note">Paste the Roblox catalog link or its item ID. A Sakura page link or image URL is not an original Roblox clothing item. The Owner will add the catalog image before publishing.</p>'+
    '<div class="creator-create-actions"><button class="primary" type="submit">Submit for review</button><span id="creatorSubmissionMessage" class="muted" role="status"></span></div>'+
   '</form></section>'+
   '<section class="creator-submissions-section"><div class="creator-submissions-heading"><h2>My submissions</h2><span class="muted">Review status</span></div><div id="myCreatorSubmissions" class="creator-submissions-list">Loading submissions...</div></section>'+
@@ -1138,7 +1155,9 @@ async function createPage(){
   const submit=form.querySelector('button[type="submit"]');
   const message=document.getElementById("creatorSubmissionMessage");
   const data=new FormData(form);
-  const payload={name:String(data.get("name")||"").trim(),category:String(data.get("category")||""),description:String(data.get("description")||"").trim(),roblox_url:String(data.get("roblox_url")||"").trim()};
+  const robloxReference=parseRobloxClothingReference(data.get("roblox_url"));
+  if(!robloxReference){message.textContent="Enter a Roblox catalog link or numeric item ID. A Sakura homepage link is not a Roblox clothing item.";return;}
+  const payload={name:String(data.get("name")||"").trim(),category:String(data.get("category")||""),description:String(data.get("description")||"").trim(),roblox_url:robloxReference.url};
   submit.disabled=true;message.textContent="Sending request...";
   try{
    await api("/api/creator/submissions",{method:"POST",body:JSON.stringify(payload)});
