@@ -1412,7 +1412,7 @@ async function owner(){
    }
    ownerVerificationHost.innerHTML=applications.map(application=>{
     const username=application.current_username||application.username_snapshot;
-    const links=String(application.links||"").split(/[\\s,]+/).filter(Boolean).map(raw=>{
+    const links=String(application.links||"").split(/[\s,]+/).filter(Boolean).map(raw=>{
      try{
       const url=new URL(raw);
       if(!["https:","http:"].includes(url.protocol))return "";
