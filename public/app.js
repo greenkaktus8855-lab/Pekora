@@ -1153,13 +1153,12 @@ async function createPage(){
  await loadMySubmissions();
  const form=document.getElementById("creatorSubmissionForm");
  const message=document.getElementById("creatorSubmissionMessage");
- const robloxInput=form?.querySelector('input[name="roblox_url"]');
- robloxInput?.addEventListener("input",()=>{
+ form?.querySelectorAll('input[name="roblox_url"],input[name="price"]').forEach(input=>input.addEventListener("input",()=>{
   if(message?.dataset.validationError==="true"){
    message.textContent="";
    delete message.dataset.validationError;
   }
- });
+ }));
  form?.addEventListener("submit",async event=>{
   event.preventDefault();
   const submit=form.querySelector('button[type="submit"]');
