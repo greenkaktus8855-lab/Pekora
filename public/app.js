@@ -1095,15 +1095,17 @@ function users(){
 
 function parseRobloxClothingReference(value){
  const raw=String(value||"").trim();
- if(/^\\d{1,10}$/.test(raw)){
+ if(/^[0-9]{1,10}$/.test(raw)){
   const assetId=Number(raw);
   return Number.isSafeInteger(assetId)&&assetId>0&&assetId<=2147483647?{assetId,url:"https://www.roblox.com/catalog/"+assetId}:null;
  }
  try{
   const source=new URL(raw);
   if(source.protocol!=="https:"||!["roblox.com","www.roblox.com","m.roblox.com"].includes(source.hostname.toLowerCase()))return null;
-  const match=source.pathname.match(/^\\/(?:catalog|library)\\/(\\d+)(?:\\/|$)|^\\/marketplace\\/asset\\/(\\d+)(?:\\/|$)/i);
-  const assetId=Number(match?.[1]||match?.[2]||0);
+  const pathParts=source.pathname.split("/").filter(Boolean);
+  let assetId=0;
+  if(["catalog","library"].includes(pathParts[0])&&/^[0-9]+$/.test(pathParts[1]||""))assetId=Number(pathParts[1]);
+  else if(pathParts[0]==="marketplace"&&pathParts[1]==="asset"&&/^[0-9]+$/.test(pathParts[2]||""))assetId=Number(pathParts[2]);
   if(!Number.isSafeInteger(assetId)||assetId<1||assetId>2147483647)return null;
   return {assetId,url:"https://www.roblox.com/catalog/"+assetId};
  }catch{return null}
