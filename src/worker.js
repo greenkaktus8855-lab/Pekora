@@ -219,6 +219,10 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')"),
         env.DB.prepare("DELETE FROM banned_session_notices WHERE expires_at <= datetime('now')")
       ]);
+      const creatorSubmissionColumns = await env.DB.prepare("PRAGMA table_info(creator_submissions)").all();
+      if (!(creatorSubmissionColumns.results || []).some(column => column.name === "price")) {
+        await env.DB.prepare("ALTER TABLE creator_submissions ADD COLUMN price INTEGER NOT NULL DEFAULT 50 CHECK(price>=0 AND price<=1000000)").run();
+      }
       const userColumns = await env.DB.prepare("PRAGMA table_info(users)").all();
       if (!(userColumns.results || []).some(column => column.name === "public_id")) {
         await env.DB.prepare("ALTER TABLE users ADD COLUMN public_id INTEGER").run();
@@ -744,7 +748,7 @@ async function route(request, env) {
   if (path === "/api/creator/submissions" && request.method === "GET") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare(`SELECT id,name,description,category,roblox_url,status,created_item_id,created_at,reviewed_at
+    const rows = await env.DB.prepare(`SELECT id,name,description,category,roblox_url,price,status,created_item_id,created_at,reviewed_at
       FROM creator_submissions WHERE user_id=? ORDER BY created_at DESC LIMIT 40`).bind(user.id).all();
     return json({submissions:rows.results||[]});
   }
@@ -756,10 +760,15 @@ async function route(request, env) {
     const name = String(data?.name||"").trim();
     const description = String(data?.description||"").trim();
     const category = String(data?.category||"");
+    const rawPrice = data?.price === undefined ? 50 : data.price;
+    const price = Number(rawPrice);
     const suppliedUrl = String(data?.roblox_url||"").trim();
     if (!name || name.length>80) return fail("Item name must be 1–80 characters.");
     if (!["Shirts","Pants"].includes(category)) return fail("Only Shirts and Pants can be submitted.");
     if (description.length>500) return fail("Description must be 500 characters or less.");
+    if ((typeof rawPrice !== "number" && typeof rawPrice !== "string") ||
+        (typeof rawPrice === "string" && !/^\\d+$/.test(rawPrice.trim())) ||
+        !Number.isSafeInteger(price) || price<0 || price>1000000) return fail("Price must be a whole number from 0 to 1,000,000 P$.");
     if (suppliedUrl.length>500) return fail("Roblox catalog link or item ID is too long.");
     let assetId = 0;
     try {
@@ -782,8 +791,8 @@ async function route(request, env) {
     const submissionId = id();
     const canonicalUrl = "https://www.roblox.com/catalog/"+assetId;
     try {
-      await env.DB.prepare("INSERT INTO creator_submissions (id,user_id,username,name,description,category,roblox_url,asset_id) VALUES (?,?,?,?,?,?,?,?)")
-        .bind(submissionId,user.id,user.username,name,description,category,canonicalUrl,assetId).run();
+      await env.DB.prepare("INSERT INTO creator_submissions (id,user_id,username,name,description,category,roblox_url,asset_id,price) VALUES (?,?,?,?,?,?,?,?,?)")
+        .bind(submissionId,user.id,user.username,name,description,category,canonicalUrl,assetId,price).run();
     } catch (error) {
       const message = String(error?.message||"").toLowerCase();
       if (message.includes("unique") || message.includes("constraint")) return fail("This Roblox item already has a pending or approved submission.",409);
@@ -1778,7 +1787,7 @@ async function route(request, env) {
     if (!actor) return fail("Please sign in.",401);
     if (actor.role !== "OWNER") return fail("Owner access required.",403);
     if (path === "/api/owner/creator-submissions" && request.method === "GET") {
-      const rows = await env.DB.prepare(`SELECT s.id,s.user_id,s.username,s.name,s.description,s.category,s.roblox_url,s.created_at,u.public_id AS creator_public_id
+      const rows = await env.DB.prepare(`SELECT s.id,s.user_id,s.username,s.name,s.description,s.category,s.roblox_url,s.price,s.created_at,u.public_id AS creator_public_id
         FROM creator_submissions s LEFT JOIN users u ON u.id=s.user_id
         WHERE s.status='PENDING' ORDER BY s.created_at ASC LIMIT 100`).all();
       return json({submissions:rows.results||[]});
@@ -1907,8 +1916,28 @@ async function route(request, env) {
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
-      await env.DB.prepare("UPDATE items SET is_for_sale=0 WHERE id=?").bind(match[1]).run();
-      return json({ok:true});
+      if (url.searchParams.get("permanent") === "1") {
+        const itemId = match[1];
+        const current = await env.DB.prepare("SELECT id FROM items WHERE id=?").bind(itemId).first();
+        if (!current) return fail("Item not found.",404);
+        await env.DB.batch([
+          env.DB.prepare("UPDATE trades SET status='CANCELLED',responded_at=datetime('now') WHERE status='PENDING' AND (EXISTS (SELECT 1 FROM json_each(trades.offered_items) WHERE value=?) OR EXISTS (SELECT 1 FROM json_each(trades.requested_items) WHERE value=?))").bind(itemId,itemId),
+          env.DB.prepare("DELETE FROM trade_locks WHERE item_id=?").bind(itemId),
+          env.DB.prepare("DELETE FROM resale_listings WHERE item_id=?").bind(itemId),
+          env.DB.prepare("DELETE FROM equipped_items WHERE item_id=?").bind(itemId),
+          env.DB.prepare("DELETE FROM inventory WHERE item_id=?").bind(itemId),
+          env.DB.prepare("DELETE FROM purchases WHERE item_id=?").bind(itemId),
+          env.DB.prepare("DELETE FROM promo_code_items WHERE item_id=?").bind(itemId),
+          env.DB.prepare("DELETE FROM discord_limited_announcements WHERE item_id=?").bind(itemId),
+          env.DB.prepare("DELETE FROM item_creators WHERE item_id=?").bind(itemId),
+          env.DB.prepare("UPDATE creator_submissions SET created_item_id=NULL WHERE created_item_id=?").bind(itemId),
+          env.DB.prepare("DELETE FROM items WHERE id=?").bind(itemId)
+        ]);
+        return json({ok:true,deleted:true});
+      }
+      const result = await env.DB.prepare("UPDATE items SET is_for_sale=0 WHERE id=?").bind(match[1]).run();
+      if (!result?.meta?.changes) return fail("Item not found.",404);
+      return json({ok:true,deleted:false});
     }
     return fail("Unsupported catalog management action.",405);
   }
