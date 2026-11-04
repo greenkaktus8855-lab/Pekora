@@ -860,7 +860,7 @@ async function route(request, env) {
     const price = Number(item.price || 0);
     if (available < price) return fail("Not enough " + currencyCode + ".",400);
     if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
-    const adminAccount = await env.DB.prepare("SELECT id FROM users WHERE role='OWNER' AND is_banned=0 ORDER BY CASE WHEN username='Admin' COLLATE NOCASE THEN 0 ELSE 1 END,created_at LIMIT 1").first();
+    const adminAccount = await env.DB.prepare("SELECT id FROM users WHERE username='Admin' COLLATE NOCASE AND role='OWNER' AND is_banned=0 LIMIT 1").first();
     if (!adminAccount) return fail("The site payment account is unavailable.",503);
     const purchaseId=id(), inventoryId=id();
     try {
