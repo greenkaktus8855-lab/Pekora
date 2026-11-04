@@ -141,6 +141,7 @@ const checks = [
   ["Legacy RCC launcher delegates to the corrected setup", legacyRccLauncher.includes("scripts\\start-rcc-2020.ps1") && !legacyRccLauncher.includes("$port = 64989")],
   ["avatar render cache invalidates when appearance changes", worker.includes("bodyColors:settings.bodyColors") && worker.includes("rigType:settings.rigType") && worker.includes("scales:settings.scales")],
   ["Administrator badge is restricted to Admin and Sakura profiles", app.includes('normalized==="admin"||normalized==="sakura"') && app.includes("administratorBadgeMarkup(p.username)")],
+  ["Profile Badges section lists Administrator and Verified badges", app.includes("function profileBadgesMarkup(profileData)") && app.includes('op-profile-badges-section"><h2>Badges</h2>') && app.includes("profileBadgesMarkup(p)") && css.includes(".profile-badges-grid")],
   ["Original OpenPekora Administrator sprite is connected to the profile badge", icons.includes("icon-administrator-small") && icons.includes("/roblox_badges.svg") && css.includes("administrator-profile-badge") && fs.existsSync(path.join(root,"public/roblox_badges.svg"))],
 
 ];
