@@ -1094,9 +1094,9 @@ function users(){
 
 function parseRobloxClothingReference(value){
  const raw=String(value||"").trim();
- if(/^[0-9]{1,10}$/.test(raw)){
+ if(/^[0-9]+$/.test(raw)){
   const assetId=Number(raw);
-  return Number.isSafeInteger(assetId)&&assetId>0&&assetId<=2147483647?{assetId,url:"https://www.roblox.com/catalog/"+assetId}:null;
+  return Number.isSafeInteger(assetId)&&assetId>0?{assetId,url:"https://www.roblox.com/catalog/"+assetId}:null;
  }
  try{
   const source=new URL(raw);
@@ -1105,7 +1105,7 @@ function parseRobloxClothingReference(value){
   let assetId=0;
   if(["catalog","library"].includes(pathParts[0])&&/^[0-9]+$/.test(pathParts[1]||""))assetId=Number(pathParts[1]);
   else if(pathParts[0]==="marketplace"&&pathParts[1]==="asset"&&/^[0-9]+$/.test(pathParts[2]||""))assetId=Number(pathParts[2]);
-  if(!Number.isSafeInteger(assetId)||assetId<1||assetId>2147483647)return null;
+  if(!Number.isSafeInteger(assetId)||assetId<1)return null;
   return {assetId,url:"https://www.roblox.com/catalog/"+assetId};
  }catch{return null}
 }
@@ -1151,13 +1151,25 @@ async function createPage(){
  }
  await loadMySubmissions();
  const form=document.getElementById("creatorSubmissionForm");
+ const message=document.getElementById("creatorSubmissionMessage");
+ const robloxInput=form?.querySelector('input[name="roblox_url"]');
+ robloxInput?.addEventListener("input",()=>{
+  if(message?.dataset.validationError==="true"){
+   message.textContent="";
+   delete message.dataset.validationError;
+  }
+ });
  form?.addEventListener("submit",async event=>{
   event.preventDefault();
   const submit=form.querySelector('button[type="submit"]');
-  const message=document.getElementById("creatorSubmissionMessage");
   const data=new FormData(form);
   const robloxReference=parseRobloxClothingReference(data.get("roblox_url"));
-  if(!robloxReference){message.textContent="Enter a Roblox catalog link or numeric item ID. A Sakura homepage link is not a Roblox clothing item.";return;}
+  if(!robloxReference){
+   message.dataset.validationError="true";
+   message.textContent="Enter a valid Roblox catalog link or numeric item ID.";
+   return;
+  }
+  delete message.dataset.validationError;
   const payload={name:String(data.get("name")||"").trim(),category:String(data.get("category")||""),description:String(data.get("description")||"").trim(),roblox_url:robloxReference.url};
   submit.disabled=true;message.textContent="Sending request...";
   try{
