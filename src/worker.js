@@ -1658,7 +1658,7 @@ async function route(request, env) {
         env.DB.prepare("INSERT INTO group_members (group_id,user_id,role) SELECT ?,?,'OWNER' WHERE changes()=1").bind(groupId,user.id)
       ]);
       if (!results?.[0]?.meta?.changes) return fail("Group name is already taken or the group could not be created.",409);
-      if (!results?.[1]?.meta?.changes || !results?.[2]?.meta?.changes || !results?.[3]?.meta?.changes) {
+      if (!results?.[1]?.meta?.changes || !results?.[2]?.meta?.changes || !results?.[3]?.meta?.changes || !results?.[4]?.meta?.changes) {
         console.error("[Sakura groups] Group payment transaction did not complete.");
         return fail("Group creation could not be completed. Please try again.",500);
       }
@@ -1851,6 +1851,7 @@ async function route(request, env) {
     const price = Number(rawPrice);
     if (!Number.isSafeInteger(price) || price<0 || price>1000000) return fail("Price must be a whole number from 0 to 1,000,000 P$.");
     const itemId = id();
+    const creatorInventoryId = id();
     const results = await env.DB.batch([
       env.DB.prepare("UPDATE creator_submissions SET status='APPROVED',reviewed_by=?,reviewed_at=datetime('now'),image_url=? WHERE id=? AND status='PENDING' AND created_item_id IS NULL")
         .bind(actor.id,imageUrl,match[1]),
@@ -1869,6 +1870,12 @@ async function route(request, env) {
         WHERE id=? AND status='APPROVED' AND reviewed_by=?
           AND EXISTS (SELECT 1 FROM item_creators WHERE item_id=?)`)
         .bind(itemId,match[1],actor.id,itemId)
+      env.DB.prepare(`INSERT OR IGNORE INTO inventory (id,user_id,item_id)
+        SELECT ?,ic.creator_id,ic.item_id
+        FROM item_creators ic
+        JOIN users creator ON creator.id=ic.creator_id
+        WHERE ic.item_id=?`)
+        .bind(creatorInventoryId,itemId)
     ]);
     if (!results?.[0]?.meta?.changes) return fail("This request has already been reviewed.",409);
     if (!results?.[1]?.meta?.changes || !results?.[2]?.meta?.changes || !results?.[3]?.meta?.changes) {
