@@ -211,6 +211,7 @@ db.execute("""INSERT INTO resale_listings (id,item_id,seller_id,price,currency)
  AND EXISTS (SELECT 1 FROM items WHERE id='off-sale-hat' AND (is_limited=1 OR is_offsale=1))""")
 assert db.execute("SELECT changes()").fetchone()[0] == 1
 print("PASS Off Sale items can be listed by players")
+db.commit()
 
 # Regular Catalog purchases credit the exact Admin account.
 db.commit()
