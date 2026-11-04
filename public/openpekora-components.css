@@ -1672,15 +1672,42 @@
 }
 
 
-/* OpenPekora-style clothing creation and owner review */
+/* OpenPekora sidebar icons and neutral Create navigation */
 .op-navigation a[href="#create"]{
- display:inline-flex!important;align-items:center;justify-content:center;
- margin-left:2px;padding:5px 12px!important;border:1px solid rgba(255,255,255,.28)!important;
- border-radius:3px!important;background:#8d42d0!important;color:#fff!important;font-weight:700!important;
+ background:transparent!important;border:0!important;border-radius:0!important;
+ padding:0!important;margin:0!important;color:inherit!important;font-weight:inherit!important;
+ box-shadow:none!important;user-select:none;-webkit-user-select:none;
 }
-.op-navigation a[href="#create"]:hover{background:#a64dff!important;color:#fff!important}
-#sidebar .side-icon.icon-nav-create:before{content:"+";display:inline-block;font:700 19px/18px Arial,sans-serif}
-#sidebar .side-nav a.active .side-icon.icon-nav-create{color:#a64dff}
+.op-navigation a[href="#create"]:hover{background:rgba(255,255,255,.14)!important;color:#fff!important}
+#sidebar .side-nav a{display:flex;align-items:center;gap:9px;min-height:32px}
+#sidebar .side-icon{
+ display:inline-flex;align-items:center;justify-content:center;
+ flex:0 0 28px;width:28px;height:28px;box-sizing:border-box;
+ vertical-align:middle;position:relative;
+}
+#sidebar .side-icon.icon-nav-create{
+ background-image:none!important;border:1px solid #66507f;border-radius:4px;
+ background:#211b2d;color:#d8baff;
+}
+#sidebar .side-icon.icon-nav-create:before{
+ content:"+";display:block;font:700 21px/1 Arial,sans-serif;color:currentColor;
+}
+#sidebar .side-nav a.active .side-icon.icon-nav-create{
+ border-color:#a64dff;background:#30203f;color:#e2caff;
+}
+#sidebar .side-icon.icon-nav-sakura-currency{
+ background-image:none!important;display:inline-flex;align-items:center;justify-content:center;
+ width:21px;height:21px;flex-basis:21px;border:1px solid rgba(255,255,255,.18);
+ border-radius:50%;background:#168e56;color:#fff;font:900 8px/1 Arial,sans-serif;letter-spacing:-.3px;
+}
+#sidebar .side-icon.icon-nav-sakura-currency:before{content:"P$"}
+#sidebar .side-icon.icon-nav-membership{
+ background-image:none!important;display:inline-flex;align-items:center;justify-content:center;
+ width:21px;height:21px;flex-basis:21px;border:1px solid #72518e;
+ border-radius:50%;background:#30203f;color:#e3c9ff;font:700 15px/1 Georgia,serif;
+}
+#sidebar .side-icon.icon-nav-membership:before{content:"★"}
+
 #app .creator-create-page{max-width:900px;margin:0 auto}
 #app .creator-create-heading{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
 #app .creator-create-card,
