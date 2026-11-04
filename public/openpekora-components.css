@@ -1670,3 +1670,97 @@
  background:#3a2029!important;
  color:#ffc4ce!important;
 }
+
+
+/* OpenPekora-style clothing creation and owner review */
+.op-navigation a[href="#create"]{
+ display:inline-flex!important;align-items:center;justify-content:center;
+ margin-left:2px;padding:5px 12px!important;border:1px solid rgba(255,255,255,.28)!important;
+ border-radius:3px!important;background:#8d42d0!important;color:#fff!important;font-weight:700!important;
+}
+.op-navigation a[href="#create"]:hover{background:#a64dff!important;color:#fff!important}
+#sidebar .side-icon.icon-nav-create:before{content:"+";display:inline-block;font:700 19px/18px Arial,sans-serif}
+#sidebar .side-nav a.active .side-icon.icon-nav-create{color:#a64dff}
+#app .creator-create-page{max-width:900px;margin:0 auto}
+#app .creator-create-heading{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
+#app .creator-create-card,
+#app .creator-submissions-section{
+ margin:0 0 20px;padding:18px;border:1px solid #34303f;border-radius:3px;
+ background:#17151f;color:#eee9f5;box-shadow:0 1px 3px rgba(0,0,0,.18)
+}
+#app .creator-create-card h2,
+#app .creator-submissions-section h2{margin:0 0 6px;color:#f4efff;font-size:21px;font-weight:700}
+#app .creator-create-card>p{margin:0 0 16px;color:#aaa3b7}
+#app .creator-create-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+#app .creator-create-form label,
+#app .creator-review-form label{display:flex;flex-direction:column;gap:6px;color:#e9e1f3;font-size:14px;font-weight:600}
+#app .creator-create-form input,
+#app .creator-create-form select,
+#app .creator-create-form textarea,
+#app .creator-review-form input{
+ width:100%;min-width:0;box-sizing:border-box;padding:9px 10px;border:1px solid #454052;border-radius:3px;
+ background:#211e2a;color:#f4efff;font:400 14px/1.4 "Source Sans Pro",Arial,sans-serif;outline:none
+}
+#app .creator-create-form input:focus,
+#app .creator-create-form select:focus,
+#app .creator-create-form textarea:focus,
+#app .creator-review-form input:focus{border-color:#a64dff;box-shadow:0 0 0 1px rgba(166,77,255,.18)}
+#app .creator-create-form textarea{resize:vertical;min-height:82px}
+#app .creator-create-form label:first-child,
+#app .creator-create-form label:nth-child(3),
+#app .creator-create-form label:nth-child(4),
+#app .creator-create-note,
+#app .creator-create-actions{grid-column:1/-1}
+#app .creator-create-note{margin:-2px 0 0;color:#aaa3b7;font-size:13px}
+#app .creator-create-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#app .creator-create-actions button{min-width:150px}
+#app .creator-submissions-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+#app .creator-submissions-list{display:flex;flex-direction:column;gap:8px}
+#app .creator-submission-status{
+ display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px;
+ border:1px solid #34303f;border-radius:3px;background:#201c29
+}
+#app .creator-submission-status>div{display:flex;align-items:center;gap:8px;min-width:180px;flex:1}
+#app .creator-submission-status strong{color:#f1eaf8}
+#app .creator-submission-type,
+#app .creator-review-type{padding:2px 7px;border:1px solid #594075;border-radius:2px;color:#dfc7ff;font-size:12px}
+#app .creator-submission-state{padding:3px 8px;border:1px solid #594075;border-radius:2px;color:#dfc7ff;font-size:12px}
+#app .creator-submission-state.approved{border-color:#356d53;background:#193326;color:#b8edca}
+#app .creator-submission-state.rejected{border-color:#713843;background:#3a2029;color:#ffc4ce}
+#app .creator-submission-status .muted{margin:0}
+#app .creator-submission-status a,
+#app .creator-review-details a{color:#c49aff;text-decoration:none}
+#app .creator-submission-status a:hover,
+#app .creator-review-details a:hover{text-decoration:underline}
+#app .creator-submissions-empty{padding:18px;border:1px dashed #454052;color:#a9a1b5;text-align:center}
+#app .owner-creator-submissions-list{display:flex;flex-direction:column;gap:12px}
+#app .creator-review-row{
+ display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,320px);gap:18px;
+ padding:14px;border:1px solid #393345;border-radius:3px;background:#201c29
+}
+#app .creator-review-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+#app .creator-review-title h3{margin:0;color:#f4efff;font-size:18px;font-weight:700}
+#app .creator-review-details>p{margin:8px 0;color:#c1b9cd}
+#app .creator-review-details .creator-review-date{font-size:12px;color:#91899d}
+#app .creator-review-description{white-space:pre-wrap;overflow-wrap:anywhere}
+#app .creator-original-link{display:inline-block;margin-top:3px}
+#app .creator-review-form{display:flex;flex-direction:column;gap:10px;min-width:0;padding:12px;border:1px solid #393345;background:#191620}
+#app .creator-review-form input{display:block}
+#app .creator-review-image-preview{
+ display:block;width:100%;max-width:180px;height:150px;object-fit:contain;
+ border:1px solid #393345;background:#15131b
+}
+#app .creator-review-image-preview[hidden]{display:none}
+#app .creator-review-actions{display:flex;gap:7px;flex-wrap:wrap}
+#app .creator-review-actions button{flex:1;min-width:110px}
+#app .item-creator{margin:2px 0 5px;font-size:12px}
+#app .item-creator a{color:#c49aff;text-decoration:none}
+#app .item-creator a:hover{text-decoration:underline}
+@media(max-width:760px){
+ #app .creator-create-form{grid-template-columns:1fr}
+ #app .creator-create-form label,
+ #app .creator-create-note,
+ #app .creator-create-actions{grid-column:1}
+ #app .creator-review-row{grid-template-columns:1fr}
+ #app .creator-review-form{order:-1}
+}
