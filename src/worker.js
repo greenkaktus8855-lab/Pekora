@@ -1940,7 +1940,7 @@ async function route(request, env) {
     if (!match || request.method!=="PATCH") return fail("Unsupported clothing review action.",405);
     const data = await body(request);
     const action = String(data?.action||"");
-    const pending = await env.DB.prepare("SELECT id FROM creator_submissions WHERE id=? AND status='PENDING'").bind(match[1]).first();
+    const pending = await env.DB.prepare("SELECT id,asset_id,price FROM creator_submissions WHERE id=? AND status='PENDING'").bind(match[1]).first();
     if (!pending) return fail("This request has already been reviewed or no longer exists.",409);
     if (action==="reject") {
       const result = await env.DB.prepare("UPDATE creator_submissions SET status='REJECTED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING'")
@@ -1949,7 +1949,10 @@ async function route(request, env) {
       return json({ok:true,status:"REJECTED"});
     }
     if (action!=="approve") return fail("Choose approve or reject.");
-    const imageUrl = String(data?.image_url||"").trim();
+    const isAssetModerator = actor.role !== "OWNER" && actor.is_asset_moderator;
+    const imageUrl = isAssetModerator
+      ? "https://www.roblox.com/asset-thumbnail/image?assetId="+Number(pending.asset_id)+"&width=420&height=420&format=png"
+      : String(data?.image_url||"").trim();
     if (!imageUrl || imageUrl.length>500) return fail("Add a catalog image URL (maximum 500 characters).");
     try {
       const image = new URL(imageUrl);
@@ -1957,7 +1960,7 @@ async function route(request, env) {
     } catch {
       return fail("Catalog image URL must be a valid HTTPS link.");
     }
-    const rawPrice = data?.price===undefined ? 50 : data.price;
+    const rawPrice = isAssetModerator ? pending.price : (data?.price===undefined ? 50 : data.price);
     const price = Number(rawPrice);
     if (!Number.isSafeInteger(price) || price<0 || price>1000000) return fail("Price must be a whole number from 0 to 1,000,000 P$.");
     const itemId = id();
