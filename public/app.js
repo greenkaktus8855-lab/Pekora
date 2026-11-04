@@ -128,15 +128,14 @@ function renderSidebar(active="home"){
  sidebar.classList.add("visible");
  const links=[
   ["home","icon-nav-home","Home"],
-  ["create","icon-nav-create","Create"],
   ["profile","icon-nav-profile","Profile"],
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-trade","Trades"],
   ["inventory","icon-nav-inventory","Inventory"],
   ["resale","icon-nav-trade","Resale Market"],
   ["groups","icon-nav-group","Groups"],
-  ["currency","icon-nav-sakura-currency","Currency"],
-  ["membership","icon-nav-membership","Membership"],
+  ["currency","icon-nav-robux","Currency"],
+  ["membership","icon-bc","Membership"],
   ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
  ];
