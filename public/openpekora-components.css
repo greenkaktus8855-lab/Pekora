@@ -1601,3 +1601,72 @@
  letter-spacing:-.3px;
 }
 #app .side-icon.icon-nav-sakura-currency:before{content:"P$"}
+
+
+/* Final Sakura dark-surface audit: cover legacy status labels and 3D previews */
+:root{color-scheme:dark}
+#app .ban-admin-summary{
+ margin:10px 0;
+ padding:12px;
+ border:1px solid #63313c!important;
+ border-left:3px solid #d66b7c!important;
+ border-radius:0!important;
+ background:#281820!important;
+ color:#f0d6dc!important;
+ box-shadow:none!important;
+}
+#app .ban-admin-summary strong{color:#ffc4ce!important}
+#app .ban-admin-summary p,
+#app .ban-admin-summary .muted{color:#e0bec6!important}
+#app .ban-pill,
+#app .ban-status-label{
+ border:1px solid #713843!important;
+ border-radius:3px!important;
+ background:#3a2029!important;
+ color:#ffb8c2!important;
+}
+#app .group-owner-tag{
+ border:1px solid #594075!important;
+ border-radius:3px!important;
+ background:#30203f!important;
+ color:#e4d0ff!important;
+}
+#app .inventory-listing-status,
+#app .inventory-resale-hint{
+ border:1px solid #594075!important;
+ border-radius:3px!important;
+ background:#21192c!important;
+ color:#dfc7ff!important;
+}
+#app .inventory-listing-status .currency-inline{color:#dfc7ff!important}
+#app .danger-button{
+ border-color:#713843!important;
+ background:#3a2029!important;
+ color:#ffb8c2!important;
+}
+#app .danger-button:hover,
+#app .danger-button:focus{
+ border-color:#9a4a59!important;
+ background:#512632!important;
+ color:#ffe2e6!important;
+}
+#app model-viewer.pekora-model,
+#app .pekora-model{
+ background:#202027!important;
+ --poster-color:#202027;
+}
+#app .pekora-model-missing{
+ border:1px solid #34343f!important;
+ background:#202027!important;
+ color:#aaa5b5!important;
+}
+#app .status-confirm{
+ border-color:#4b3860!important;
+ background:#21192c!important;
+ color:#e5d5f7!important;
+}
+#app .status-error{
+ border-color:#713843!important;
+ background:#3a2029!important;
+ color:#ffc4ce!important;
+}
