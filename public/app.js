@@ -457,7 +457,7 @@ function auth(kind){
    const error=document.getElementById("authError");
    if(isActiveView(view)&&error){
     if(!reg&&String(err.message).startsWith("This account is banned")){
-     error.innerHTML=esc(err.message)+'<p><a href="#banned?username='+encodeURIComponent(String(f.get("username")||""))+'">View ban details</a></p>';
+     error.innerHTML=esc(err.message)+'<p><a href="#banned?username='+encodeURIComponent(String(f.get("username")||""))+'" data-banned-account="'+esc(String(f.get("username")||""))+'">View ban details</a></p>';
     }else error.textContent=err.message;
    }
   }
