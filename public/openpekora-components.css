@@ -1564,3 +1564,40 @@
 #app .op-profile-avatar{position:relative}
 #app .op-profile-avatar .op-profile-render-image{position:absolute;inset:0;z-index:2;width:100%;height:100%;border-radius:50%;object-fit:cover;background:#211b2a}
 @media(max-width:760px){#app .avatar-editor-layout{grid-template-columns:1fr}#app .avatar-editor-left{grid-template-columns:1fr}#app .avatar-preview-panel{max-width:none}}
+
+
+/* Sakura P$ is an internal site currency, not a Roblox currency icon. */
+#app .currency-inline .currency-p-coin{
+ display:inline-flex!important;
+ align-items:center;
+ justify-content:center;
+ flex:0 0 17px;
+ width:17px;
+ height:17px;
+ box-sizing:border-box;
+ border:1px solid rgba(255,255,255,.22);
+ border-radius:50%;
+ background:linear-gradient(145deg,#32c977,#087f45);
+ color:#fff!important;
+ font-family:Arial,sans-serif;
+ font-size:7px!important;
+ font-weight:900!important;
+ line-height:1!important;
+ letter-spacing:-.35px;
+}
+#app .currency-inline.currency-large .currency-p-coin{flex-basis:21px;width:21px;height:21px;font-size:8px!important}
+#app .currency-inline.wallet-chip .currency-p-coin{flex-basis:16px;width:16px;height:16px;font-size:6px!important}
+#app .side-icon.icon-nav-sakura-currency{
+ display:inline-flex;
+ align-items:center;
+ justify-content:center;
+ width:18px;
+ height:18px;
+ border:1px solid rgba(255,255,255,.16);
+ border-radius:50%;
+ background:#168e56;
+ color:#fff;
+ font:900 7px/1 Arial,sans-serif;
+ letter-spacing:-.3px;
+}
+#app .side-icon.icon-nav-sakura-currency:before{content:"P$"}
