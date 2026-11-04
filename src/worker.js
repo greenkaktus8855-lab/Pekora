@@ -781,6 +781,36 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
+  if (path === "/api/creator/model-submissions" && request.method === "GET") {
+    const user=await requireUser(request,env);
+    if(!user)return fail("Please sign in.",401);
+    const rows=await env.DB.prepare("SELECT id,name,description,model_url,image_url,price,status,created_item_id,created_at,reviewed_at FROM model_submissions WHERE user_id=? ORDER BY created_at DESC LIMIT 40").bind(user.id).all();
+    return json({submissions:rows.results||[]});
+  }
+  if (path === "/api/creator/model-submissions" && request.method === "POST") {
+    const user=await requireUser(request,env);
+    if(!user)return fail("Please sign in.",401);
+    const data=await body(request);
+    const name=String(data?.name||"").trim();
+    const description=String(data?.description||"").trim();
+    const modelUrl=String(data?.model_url||"").trim();
+    const imageUrl=String(data?.image_url||"").trim();
+    const price=Number(data?.price??50);
+    if(!name||name.length>80)return fail("Model name must be 1-80 characters.");
+    if(description.length>500)return fail("Description must be 500 characters or less.");
+    if(modelUrl.length>1000)return fail("3D model URL is too long.");
+    try{const parsed=new URL(modelUrl),ext=parsed.pathname.toLowerCase();if(parsed.protocol!=="https:"||!(ext.endsWith(".glb")||ext.endsWith(".gltf")))throw new Error();}
+    catch{return fail("Enter a direct HTTPS .glb or .gltf model URL.");}
+    if(imageUrl){try{if(new URL(imageUrl).protocol!=="https:")throw new Error();}catch{return fail("Preview image must be a valid HTTPS link.");}}
+    if(imageUrl.length>500)return fail("Preview image URL is too long.");
+    if(!Number.isSafeInteger(price)||price<0||price>1000000)return fail("Price must be a whole number from 0 to 1,000,000 P$.");
+    const duplicate=await env.DB.prepare("SELECT id FROM model_submissions WHERE model_url=? AND status IN ('PENDING','APPROVED')").bind(modelUrl).first();
+    if(duplicate)return fail("This model has already been submitted.",409);
+    const submissionId=id();
+    await env.DB.prepare("INSERT INTO model_submissions (id,user_id,username,name,description,model_url,image_url,price) VALUES (?,?,?,?,?,?,?,?)").bind(submissionId,user.id,user.username,name,description,modelUrl,imageUrl,price).run();
+    return json({ok:true,id:submissionId,status:"PENDING"},201);
+  }
+
   if (path === "/api/creator/submissions" && request.method === "GET") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
@@ -1861,10 +1891,44 @@ async function route(request, env) {
     return json({ok:true,status});
   }
 
+  if (path.startsWith("/api/asset-moderation/models")) {
+    const actor=await requireUser(request,env);
+    if(!actor)return fail("Please sign in.",401);
+    if(actor.role!=="OWNER"&&!actor.is_asset_moderator)return fail("Asset Moderator access required.",403);
+    if(path==="/api/asset-moderation/models"&&request.method==="GET"){
+      const rows=await env.DB.prepare("SELECT s.id,s.user_id,s.username,s.name,s.description,s.model_url,s.image_url,s.price,s.created_at,u.public_id AS creator_public_id FROM model_submissions s LEFT JOIN users u ON u.id=s.user_id WHERE s.status='PENDING' ORDER BY s.created_at ASC LIMIT 100").all();
+      return json({submissions:rows.results||[]});
+    }
+    const prefix="/api/asset-moderation/models/";
+    const submissionId=path.startsWith(prefix)?path.slice(prefix.length):"";
+    if(!submissionId||submissionId.length>80||request.method!=="PATCH")return fail("Unsupported model review action.",405);
+    const data=await body(request),action=String(data?.action||"");
+    if(action!=="approve"&&action!=="reject")return fail("Choose approve or reject.");
+    const model=await env.DB.prepare("SELECT id,user_id,name,description,model_url,image_url,price FROM model_submissions WHERE id=? AND status='PENDING'").bind(submissionId).first();
+    if(!model)return fail("This model has already been reviewed or no longer exists.",409);
+    if(action==="reject"){
+      const changed=await env.DB.prepare("UPDATE model_submissions SET status='REJECTED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING'").bind(actor.id,submissionId).run();
+      if(!changed||!changed.meta||!changed.meta.changes)return fail("This model has already been reviewed.",409);
+      await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,model.user_id,"ASSET_REJECT",model.name+" (3D model)").run();
+      return json({ok:true,status:"REJECTED"});
+    }
+    const itemId=id(),inventoryId=id();
+    const results=await env.DB.batch([
+      env.DB.prepare("UPDATE model_submissions SET status='APPROVED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(actor.id,submissionId),
+      env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) SELECT ?,name,description,'Accessories',?,'P$',image_url,model_url,0,0,0,0,0,1,0 FROM model_submissions WHERE id=? AND status='APPROVED' AND reviewed_by=? AND created_item_id IS NULL AND changes()=1").bind(itemId,model.price,submissionId,actor.id),
+      env.DB.prepare("UPDATE model_submissions SET created_item_id=? WHERE id=? AND status='APPROVED' AND reviewed_by=? AND EXISTS (SELECT 1 FROM items WHERE id=?)").bind(itemId,submissionId,actor.id,itemId),
+      env.DB.prepare("INSERT OR IGNORE INTO inventory (id,user_id,item_id) SELECT ?,user_id,? FROM model_submissions WHERE id=? AND status='APPROVED' AND reviewed_by=? AND created_item_id=?").bind(inventoryId,itemId,submissionId,actor.id,itemId)
+    ]);
+    if(!results||!results.length||!results[0]||!results[0].meta||!results[0].meta.changes)return fail("This model has already been reviewed.",409);
+    if(results.slice(1).some(result=>!result||!result.meta||!result.meta.changes))return fail("The model could not be published.",500);
+    await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,model.user_id,"ASSET_APPROVE",model.name+" (3D model)").run();
+    return json({ok:true,status:"APPROVED",itemId:itemId});
+  }
+
   if (path.startsWith("/api/owner/creator-submissions")) {
     const actor = await requireUser(request,env);
     if (!actor) return fail("Please sign in.",401);
-    if (actor.role !== "OWNER") return fail("Owner access required.",403);
+    if (actor.role !== "OWNER" && !actor.is_asset_moderator) return fail("Owner or Asset Moderator access required.",403);
     if (path === "/api/owner/creator-submissions" && request.method === "GET") {
       const rows = await env.DB.prepare(`SELECT s.id,s.user_id,s.username,s.name,s.description,s.category,s.roblox_url,s.price,s.created_at,u.public_id AS creator_public_id
         FROM creator_submissions s LEFT JOIN users u ON u.id=s.user_id
