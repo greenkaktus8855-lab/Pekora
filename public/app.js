@@ -1104,7 +1104,7 @@ async function createPage(){
   '<section class="creator-create-card"><h2>New clothing</h2><p class="muted">Only Shirts and Pants are available. Your item stays private until the Owner reviews and approves it.</p>'+
   '<form id="creatorSubmissionForm" class="creator-create-form">'+
    '<label>Item name<input name="name" maxlength="80" required placeholder="Name your clothing"></label>'+
-   '<label>Type<select name="category"><option value="Shirts">Shirt</option><option value="Pants">Pants</option></select></label>'+
+   '<label>Type<select name="category">'+CREATABLE_CATEGORIES.map(category=>'<option value="'+category+'">'+(category==="Shirts"?"Shirt":"Pants")+'</option>').join("")+'</select></label>'+
    '<label>Description <span class="muted">(optional)</span><textarea name="description" maxlength="500" rows="3" placeholder="Tell players a little about this item"></textarea></label>'+
    '<label>Original Roblox item link<input name="roblox_url" type="url" maxlength="500" required placeholder="https://www.roblox.com/catalog/123456789/Item"></label>'+
    '<p class="creator-create-note">Use the original Roblox catalog page for the Shirt or Pants. The Owner will add the Sakura catalog image before publishing.</p>'+
