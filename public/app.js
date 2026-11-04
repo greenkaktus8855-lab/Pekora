@@ -156,13 +156,12 @@ function renderSidebar(active="home"){
   ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
  ];
- if(me.role==="OWNER"||me.isAssetModerator)links.push(["asset-panel","icon-nav-inventory","Asset Panel"]);
  sidebar.innerHTML='<div class="sidebar-card">'+
   '<a class="side-user" href="/#profile?id='+encodeURIComponent(me.publicId||"")+'" data-page="profile"><span class="side-avatar">'+avatar()+'</span><span><span class="side-username">'+esc(me.username)+(me.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</span><span class="side-role">Account</span></span></a>'+
   '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span></a>').join("")+
   '<div class="side-separator"></div>'+
   '<a href="#promocodes" data-page="promocodes" class="side-promo-button '+(active==="promocodes"?"active":"")+'">Promo Codes</a>'+
-  (me.role==="OWNER"?'<a href="#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':'')+
+  (me.role==="OWNER"?'<a href="#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':(me.isAssetModerator?'<a href="#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Asset Panel</span></a>':''))+
   '</nav></div>';
 }
 
