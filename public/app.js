@@ -26,12 +26,6 @@ function currencyMarkup(amount,currencyCode="P$",extraClass=""){
  const value=Number(amount||0).toLocaleString();
  return '<span class="currency-inline '+esc(extraClass)+'" aria-label="'+esc(code)+' '+value+'">'+currencyIconMarkup(code)+'<b>'+value+'</b></span>';
 }
-function administratorBadgeMarkup(username){
- const normalized=String(username||"").trim().toLowerCase();
- return normalized==="admin"||normalized==="sakura"
-  ? ' <span class="administrator-profile-badge" title="Administrator" aria-label="Administrator"><span class="icon-administrator-small" aria-hidden="true"></span><span>Administrator</span></span>'
-  : "";
-}
 function profileBadgesMarkup(profileData){
  const badges=[];
  const normalized=String(profileData?.username||"").trim().toLowerCase();
@@ -672,7 +666,7 @@ async function profile(identifier=me?.username,byId=false){
   const profileRenderImage="";
   app.innerHTML='<div class="op-profile">'+
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+profileRenderImage+'</div><div class="op-profile-info">'+
-    '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+administratorBadgeMarkup(p.username)+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
+    '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
@@ -1062,17 +1056,45 @@ async function loadFriendsList(view=activeView){
  try{
   const d=await api("/api/friends");
   if(!isActiveView(view)||!host.isConnected)return;
-  const section=(title,list,kind)=>'<section class="friends-section"><h2>'+title+' ('+list.length+')</h2>'+(list.length?list.map(u=>'<article class="people-user"><div class="people-user-info"><strong>'+esc(u.username)+'</strong><span>'+esc(u.role||"USER")+'</span></div><button class="button" type="button" data-friend-action="'+kind+'" data-friend-name="'+esc(u.username)+'">'+(kind==="accept"?"Accept":title==="Sent Requests"?"Cancel":"Remove")+'</button></article>').join(""):'<div class="op-profile-empty">Nothing here yet.</div>')+'</section>';
-  host.innerHTML=section("Friend Requests",d.incoming||[],"accept")+section("Friends",d.friends||[],"remove")+section("Sent Requests",d.outgoing||[],"remove");
-  host.querySelectorAll("[data-friend-action]").forEach(b=>b.addEventListener("click",async()=>{
-   const username=b.dataset.friendName;
+  const section=(title,list,kind)=>{
+   const actionLabel=kind==="accept"?"Accept":title==="Sent Requests"?"Cancel request":"Remove friend";
+   const rows=list.map(u=>'<article class="people-user friend-list-row">'+
+    '<div class="people-avatar">'+avatar(u.username)+'</div>'+
+    '<div class="people-user-info"><strong><a href="#profile?username='+encodeURIComponent(u.username)+'" data-profile="'+esc(u.username)+'">'+esc(u.username)+'</a>'+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</strong>'+
+    '<span>'+esc(u.role||"USER")+'</span></div>'+
+    '<button class="button '+(kind==="accept"?"":"secondary")+'" type="button" data-friend-action="'+kind+'" data-friend-name="'+esc(u.username)+'">'+actionLabel+'</button>'+
+   '</article>').join("");
+   return '<section class="friends-section"><h2>'+title+' ('+list.length+')</h2>'+
+    (rows||'<div class="op-profile-empty">Nothing here yet.</div>')+'</section>';
+  };
+  host.innerHTML=section("Friend Requests",d.incoming||[],"accept")+
+   section("Friends",d.friends||[],"remove")+
+   section("Sent Requests",d.outgoing||[],"remove");
+  host.querySelectorAll("[data-friend-action]").forEach(button=>button.addEventListener("click",async()=>{
+   const username=button.dataset.friendName;
+   button.disabled=true;
    try{
-    if(b.dataset.friendAction==="accept")await api("/api/friends/accept",{method:"POST",body:JSON.stringify({username})});
+    if(button.dataset.friendAction==="accept")await api("/api/friends/accept",{method:"POST",body:JSON.stringify({username})});
     else await api("/api/friends?username="+encodeURIComponent(username),{method:"DELETE"});
     if(isActiveView(view))await loadFriendsList(view);
-   }catch(e){toast(e.message)}
+   }catch(error){
+    toast(error.message);
+    if(button.isConnected)button.disabled=false;
+   }
   }));
- }catch(e){if(isActiveView(view)&&host.isConnected)host.textContent=e.message}
+ }catch(error){
+  if(isActiveView(view)&&host.isConnected)host.innerHTML='<div class="op-profile-empty">Could not load friends: '+esc(error.message)+'</div>';
+ }
+}
+async function friends(){
+ const view=beginView();
+ renderSidebar("friends");
+ if(!me){
+  app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your friends.</div>';
+  return;
+ }
+ app.innerHTML='<div class="friends-page"><h1 class="page-title">Friends</h1><p class="page-subtitle">Manage friend requests and view your Sakura friends.</p><div id="friendsContent"><div class="op-profile-empty">Loading friends...</div></div></div>';
+ await loadFriendsList(view);
 }
 function users(){
  const view=beginView();
