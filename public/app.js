@@ -19,7 +19,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 function currencyIconMarkup(currencyCode){
  return currencyCode==="Tix"
   ? '<span class="icon-tix-16x16 currency-icon-original" aria-hidden="true"></span>'
-  : '<span class="currency-p-coin" aria-hidden="true">P$</span>';
+  : '<span class="icon-robux-16x16 currency-icon-original" aria-hidden="true"></span>';
 }
 function currencyMarkup(amount,currencyCode="P$",extraClass=""){
  const code=currencyCode==="Tix"?"Tix":"P$";
@@ -343,7 +343,12 @@ async function showItem(itemId,updateHistory=true){
   const price=Number(new FormData(form).get("price"));
   button.disabled=true;message.textContent="Creating listing...";
   try{
-   await api("/api/resale/listings",{method:"POST",body:JSON.stringify({itemId:item.id,price})});
+   const result=await api("/api/resale/listings",{method:"POST",body:JSON.stringify({itemId:item.id,price})});
+   const updatedItem={...item,price:Number(result.itemPrice??result.price??price),currency:"P$"};
+   const cachedIndex=items.findIndex(entry=>entry.id===item.id);
+   if(cachedIndex>=0)items[cachedIndex]=updatedItem;
+   else items.push(updatedItem);
+   item=updatedItem;
    toast("Item listed for sale");
    await showItem(item.id,false);
   }catch(error){message.textContent=error.message;button.disabled=false}
@@ -1099,7 +1104,8 @@ function parseRobloxClothingReference(value){
   return Number.isSafeInteger(assetId)&&assetId>0?{assetId,url:"https://www.roblox.com/catalog/"+assetId}:null;
  }
  try{
-  const source=new URL(raw);
+  const normalizedUrl=raw.startsWith("//")?"https:"+raw:/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)?raw:"https://"+raw;
+  const source=new URL(normalizedUrl);
   if(source.protocol!=="https:"||!["roblox.com","www.roblox.com","m.roblox.com"].includes(source.hostname.toLowerCase()))return null;
   const pathParts=source.pathname.split("/").filter(Boolean);
   let assetId=0;
@@ -1155,16 +1161,50 @@ async function createPage(){
  await loadMySubmissions();
  const form=document.getElementById("creatorSubmissionForm");
  const message=document.getElementById("creatorSubmissionMessage");
- form?.querySelectorAll('input[name="roblox_url"],input[name="price"]').forEach(input=>input.addEventListener("input",()=>{
+ const clearCreateValidation=()=>{
   if(message?.dataset.validationError==="true"){
    message.textContent="";
    delete message.dataset.validationError;
   }
- }));
+ };
+ form?.querySelectorAll("input,select,textarea").forEach(field=>{
+  field.addEventListener("input",clearCreateValidation);
+  field.addEventListener("change",clearCreateValidation);
+ });
  form?.addEventListener("submit",async event=>{
   event.preventDefault();
   const submit=form.querySelector('button[type="submit"]');
   const data=new FormData(form);
+  const name=String(data.get("name")||"").trim();
+  const category=String(data.get("category")||"");
+  const description=String(data.get("description")||"").trim();
+  if(!name||name.length>80){
+   message.dataset.validationError="true";
+   message.textContent="Enter an item name between 1 and 80 characters.";
+   return;
+  }
+  if(!CREATABLE_CATEGORIES.includes(category)){
+   message.dataset.validationError="true";
+   message.textContent="Choose Shirts or Pants.";
+   return;
+  }
+  if(description.length>500){
+   message.dataset.validationError="true";
+   message.textContent="Description must be 500 characters or less.";
+   return;
+  }
+  const rawPrice=String(data.get("price")??"").trim();
+  if(!/^\d+$/.test(rawPrice)){
+   message.dataset.validationError="true";
+   message.textContent="Price must be a whole number from 0 to 1,000,000 P$.";
+   return;
+  }
+  const price=Number(rawPrice);
+  if(!Number.isSafeInteger(price)||price<0||price>1000000){
+   message.dataset.validationError="true";
+   message.textContent="Price must be a whole number from 0 to 1,000,000 P$.";
+   return;
+  }
   const robloxReference=parseRobloxClothingReference(data.get("roblox_url"));
   if(!robloxReference){
    message.dataset.validationError="true";
@@ -1172,13 +1212,7 @@ async function createPage(){
    return;
   }
   delete message.dataset.validationError;
-  const price=Number(data.get("price"));
-  if(!Number.isSafeInteger(price)||price<0||price>1000000){
-   message.dataset.validationError="true";
-   message.textContent="Price must be a whole number from 0 to 1,000,000 P$.";
-   return;
-  }
-  const payload={name:String(data.get("name")||"").trim(),category:String(data.get("category")||""),description:String(data.get("description")||"").trim(),price,roblox_url:robloxReference.url};
+  const payload={name,category,description,price,roblox_url:robloxReference.url};
   submit.disabled=true;message.textContent="Sending request...";
   try{
    await api("/api/creator/submissions",{method:"POST",body:JSON.stringify(payload)});
@@ -1187,6 +1221,7 @@ async function createPage(){
    toast("Clothing submitted for review");
    await loadMySubmissions();
   }catch(error){
+   message.dataset.validationError="true";
    message.textContent=error.message;
   }finally{
    submit.disabled=false;
