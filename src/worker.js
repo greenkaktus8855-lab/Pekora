@@ -219,6 +219,33 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')"),
         env.DB.prepare("DELETE FROM banned_session_notices WHERE expires_at <= datetime('now')")
       ]);
+      // Keep the catalog's displayed price in sync with the latest active player listing.
+      // This also backfills listings that existed before global resale pricing was introduced.
+      await env.DB.prepare(`
+        UPDATE items
+        SET price=(
+          SELECT r.price
+          FROM resale_listings r
+          JOIN users seller ON seller.id=r.seller_id
+          WHERE r.item_id=items.id
+            AND r.status='ACTIVE'
+            AND seller.is_banned=0
+            AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
+            AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
+          ORDER BY r.created_at DESC,r.rowid DESC
+          LIMIT 1
+        ),currency='P$'
+        WHERE EXISTS (
+          SELECT 1
+          FROM resale_listings r
+          JOIN users seller ON seller.id=r.seller_id
+          WHERE r.item_id=items.id
+            AND r.status='ACTIVE'
+            AND seller.is_banned=0
+            AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
+            AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
+        )
+      `).run();
       const creatorSubmissionColumns = await env.DB.prepare("PRAGMA table_info(creator_submissions)").all();
       if (!(creatorSubmissionColumns.results || []).some(column => column.name === "price")) {
         await env.DB.prepare("ALTER TABLE creator_submissions ADD COLUMN price INTEGER NOT NULL DEFAULT 50 CHECK(price>=0 AND price<=1000000)").run();
@@ -775,7 +802,9 @@ async function route(request, env) {
       if (/^[0-9]+$/.test(suppliedUrl)) {
         assetId = Number(suppliedUrl);
       } else {
-        const source = new URL(suppliedUrl);
+        const normalizedUrl = suppliedUrl.startsWith("//") ? "https:"+suppliedUrl :
+          /^[a-z][a-z0-9+.-]*:\/\//i.test(suppliedUrl) ? suppliedUrl : "https://"+suppliedUrl;
+        const source = new URL(normalizedUrl);
         if (source.protocol!=="https:" || !["roblox.com","www.roblox.com","m.roblox.com"].includes(source.hostname.toLowerCase())) throw new Error();
         const pathParts = source.pathname.split("/").filter(Boolean);
         if (["catalog","library"].includes(pathParts[0]) && /^[0-9]+$/.test(pathParts[1]||"")) assetId = Number(pathParts[1]);
@@ -845,19 +874,24 @@ async function route(request, env) {
     if (locked) return fail("This item is reserved in a pending trade. Cancel that trade before listing it.",409);
     const listingId=id();
     try {
-      const result = await env.DB.prepare(`INSERT INTO resale_listings (id,item_id,seller_id,price,currency)
-        SELECT ?,?,?,?,'P$'
-        WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)
-          AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)
-          AND NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE')
-          AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1))`)
-        .bind(listingId,itemId,user.id,price,user.id,itemId,user.id,itemId,user.id,itemId,itemId).run();
-      if (!result?.meta?.changes) return fail("This item is already listed, reserved in a trade, or no longer eligible.",409);
+      const results = await env.DB.batch([
+        env.DB.prepare(`INSERT INTO resale_listings (id,item_id,seller_id,price,currency)
+          SELECT ?,?,?,?,'P$'
+          WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)
+            AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)
+            AND NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE')
+            AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1))`)
+          .bind(listingId,itemId,user.id,price,user.id,itemId,user.id,itemId,user.id,itemId,itemId),
+        // The item row is the canonical catalog price, so every API/UI that reads items.price sees this amount.
+        env.DB.prepare("UPDATE items SET price=?,currency='P$' WHERE id=? AND changes()=1").bind(price,itemId)
+      ]);
+      if (!results?.[0]?.meta?.changes) return fail("This item is already listed, reserved in a trade, or no longer eligible.",409);
+      if (!results?.[1]?.meta?.changes) throw new Error("The listing price could not be synchronized with the catalog item.");
     } catch (error) {
       console.error("[Sakura resale] Listing creation failed:",error);
       return fail("Could not create this listing. Refresh your inventory and try again.",409);
     }
-    return json({ok:true,listingId,price});
+    return json({ok:true,listingId,price,itemPrice:price,currency:"P$"});
   }
 
   const resaleListingMatch = path.match(/^\/api\/resale\/listings\/([A-Za-z0-9-]+)$/);
