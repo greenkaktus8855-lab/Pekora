@@ -343,7 +343,12 @@ async function showItem(itemId,updateHistory=true){
   const price=Number(new FormData(form).get("price"));
   button.disabled=true;message.textContent="Creating listing...";
   try{
-   await api("/api/resale/listings",{method:"POST",body:JSON.stringify({itemId:item.id,price})});
+   const result=await api("/api/resale/listings",{method:"POST",body:JSON.stringify({itemId:item.id,price})});
+   const updatedItem={...item,price:Number(result.itemPrice??result.price??price),currency:"P$"};
+   const cachedIndex=items.findIndex(entry=>entry.id===item.id);
+   if(cachedIndex>=0)items[cachedIndex]=updatedItem;
+   else items.push(updatedItem);
+   item=updatedItem;
    toast("Item listed for sale");
    await showItem(item.id,false);
   }catch(error){message.textContent=error.message;button.disabled=false}
