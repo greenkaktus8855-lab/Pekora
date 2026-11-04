@@ -1125,7 +1125,7 @@ async function createPage(){
    '<label>Type<select name="category">'+CREATABLE_CATEGORIES.map(category=>'<option value="'+category+'">'+(category==="Shirts"?"Shirt":"Pants")+'</option>').join("")+'</select></label>'+
    '<label>Description <span class="muted">(optional)</span><textarea name="description" maxlength="500" rows="3" placeholder="Tell players a little about this item"></textarea></label>'+
    '<label>Roblox item link or ID<input name="roblox_url" type="text" inputmode="url" autocomplete="off" maxlength="500" required placeholder="roblox.com/catalog/123456789 or 123456789"></label>'+
-   '<p class="creator-create-note">Paste the Roblox catalog link or its item ID. A Sakura page link or image URL is not an original Roblox clothing item. The Owner will add the catalog image before publishing.</p>'+
+
    '<div class="creator-create-actions"><button class="primary" type="submit">Submit for review</button><span id="creatorSubmissionMessage" class="muted" role="status"></span></div>'+
   '</form></section>'+
   '<section class="creator-submissions-section"><div class="creator-submissions-heading"><h2>My submissions</h2><span class="muted">Review status</span></div><div id="myCreatorSubmissions" class="creator-submissions-list">Loading submissions...</div></section>'+
