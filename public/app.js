@@ -1125,7 +1125,7 @@ async function createPage(){
  }
  app.innerHTML='<div class="creator-create-page">'+
   '<div class="creator-create-heading"><div><h1 class="page-title">Create</h1><p class="page-subtitle">Submit classic clothing to the Sakura catalog</p></div></div>'+
-  '<section class="creator-create-card"><h2>New clothing</h2><p class="muted">Only Shirts and Pants are available. Your item stays private until the Owner reviews and approves it.</p>'+
+  '<section class="creator-create-card"><h2>New clothing</h2><p class="muted">Only Shirts and Pants are available. Your item stays private until the Owner approves it. After approval it appears in the catalog and one free copy is added to your inventory.</p>'+
   '<form id="creatorSubmissionForm" class="creator-create-form">'+
    '<label>Item name<input name="name" maxlength="80" required placeholder="Name your clothing"></label>'+
    '<label>Type<select name="category">'+CREATABLE_CATEGORIES.map(category=>'<option value="'+category+'">'+(category==="Shirts"?"Shirt":"Pants")+'</option>').join("")+'</select></label>'+
