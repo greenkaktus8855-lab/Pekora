@@ -73,7 +73,7 @@ const checks = [
   ["trade picker only displays Limited or Off Sale items", app.includes("items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1)") && app.includes("ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target)")],
   ["Sakura Home panels use dark surfaces", components.includes("#app .sakura-home-card{") && components.includes("background:#15151c!important") && components.includes("background:#202027!important")],
   ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
-  ["Sakura app cache version is refreshed", index.includes("app.js?v=20261103-avatar-clear-copy-1") && index.includes("openpekora-components.css?v=20261103-sakura-home-avatar-2")],
+  ["Sakura app and stylesheet cache versions are refreshed", index.includes("app.js?v=20261104-sakura-groups-ban-1") && index.includes("style.css?v=20261104-sakura-groups-ban-1") && index.includes("openpekora-components.css?v=20261103-sakura-home-avatar-2")],
   ["Sakura theme primary accents are violet", globals.includes("rgb(166, 77, 255)") && globals.includes("rgba(106,27,177,1)") && !globals.includes("rgb(0, 162, 255)") && !globals.includes("rgba(8,79,192,1)")],
   ["promo codes can grant currency and multiple catalog items", worker.includes("CREATE TABLE IF NOT EXISTS promo_code_items") && worker.includes("reward_currency") && app.includes("ownerPromoItems")],
   ["promo codes enforce use limits and expiry", worker.includes("max_uses IS NULL") && worker.includes("expires_at") && app.includes('name="max_uses"') && app.includes('type="datetime-local"')],
