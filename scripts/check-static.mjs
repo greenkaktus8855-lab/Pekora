@@ -140,8 +140,10 @@ const checks = [
   ["Renderer is secret-protected and loopback-only", secureRendererLauncher.includes("timingSafeEqual") && secureRendererLauncher.includes("x-pekora-renderer-secret") && secureRendererLauncher.includes("127.0.0.1")],
   ["Legacy RCC launcher delegates to the corrected setup", legacyRccLauncher.includes("scripts\\start-rcc-2020.ps1") && !legacyRccLauncher.includes("$port = 64989")],
   ["avatar render cache invalidates when appearance changes", worker.includes("bodyColors:settings.bodyColors") && worker.includes("rigType:settings.rigType") && worker.includes("scales:settings.scales")],
-  ["Administrator badge is restricted to Admin and Sakura profiles", app.includes('normalized==="admin"||normalized==="sakura"') && app.includes("administratorBadgeMarkup(p.username)")],
-  ["Profile Badges section lists Administrator and Verified badges", app.includes("function profileBadgesMarkup(profileData)") && app.includes('op-profile-badges-section"><h2>Badges</h2>') && app.includes("profileBadgesMarkup(p)") && css.includes(".profile-badges-grid")],
+  ["Administrator badge appears in the profile Badges section only", app.includes('normalized==="admin"||normalized==="sakura"') && app.includes("profileBadgesMarkup(p)") && !app.includes("administratorBadgeMarkup")],
+  ["Profile Badges section lists Administrator and Verified badges in a larger grid", app.includes("function profileBadgesMarkup(profileData)") && app.includes('op-profile-badges-section"><h2>Badges</h2>') && app.includes("profileBadgesMarkup(p)") && css.includes("minmax(190px,1fr)") && css.includes("min-height:168px")],
+  ["Friends menu route has a page handler and working friends list", app.includes('else if(name==="friends")await friends();') && app.includes("async function friends()") && app.includes("await loadFriendsList(view)") && app.includes("data-friend-action")],
+  ["Friend list supports profile links, accept, cancel and remove actions", app.includes('data-profile="'+esc(u.username)+'"') && app.includes('"/api/friends/accept"') && app.includes('"/api/friends?username="')],
   ["Original OpenPekora Administrator sprite is connected to the profile badge", icons.includes("icon-administrator-small") && icons.includes("/roblox_badges.svg") && css.includes("administrator-profile-badge") && fs.existsSync(path.join(root,"public/roblox_badges.svg"))],
 
 ];
