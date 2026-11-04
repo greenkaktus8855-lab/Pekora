@@ -207,9 +207,6 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS moderation_warnings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, moderator_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), acknowledged INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_moderation_warnings_user ON moderation_warnings(user_id,created_at DESC)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS owner_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL REFERENCES users(id), target_user_id TEXT REFERENCES users(id) ON DELETE SET NULL, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS verification_applications (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, username_snapshot TEXT NOT NULL, reason TEXT NOT NULL, contributions TEXT NOT NULL, recognition TEXT NOT NULL, activity TEXT NOT NULL, links TEXT NOT NULL DEFAULT '', additional_info TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')), review_note TEXT NOT NULL DEFAULT '', reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), reviewed_at TEXT)"),
-        env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_verification_one_pending ON verification_applications(user_id) WHERE status='PENDING'"),
-        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_verification_status_created ON verification_applications(status,created_at DESC)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS banned_session_notices (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at TEXT NOT NULL)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_owner_audit_target ON owner_audit_log(target_user_id,created_at DESC)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_friends_friend_status ON friends(friend_id,status)"),
@@ -773,46 +770,6 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/catalog") {
     const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id WHERE i.is_for_sale=1 ORDER BY i.created_at DESC,i.rowid DESC").all();
     return json({ items:rows.results || [] });
-  }
-
-  if (path === "/api/verification-application" && request.method === "GET") {
-    const user = await requireUser(request,env);
-    if (!user) return fail("Please sign in.",401);
-    const application = await env.DB.prepare(`SELECT id,reason,contributions,recognition,activity,links,additional_info,status,review_note,created_at,reviewed_at
-      FROM verification_applications WHERE user_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1`).bind(user.id).first();
-    return json({isVerified:Boolean(user.is_verified),application:application||null});
-  }
-
-  if (path === "/api/verification-application" && request.method === "POST") {
-    const user = await requireUser(request,env);
-    if (!user) return fail("Please sign in.",401);
-    if (user.is_verified) return fail("Your account is already verified.",409);
-    const data = await body(request);
-    const reason = String(data?.reason||"").trim();
-    const contributions = String(data?.contributions||"").trim();
-    const recognition = String(data?.recognition||"").trim();
-    const activity = String(data?.activity||"");
-    const links = String(data?.links||"").trim();
-    const additionalInfo = String(data?.additional_info||"").trim();
-    if (reason.length<30 || reason.length>800) return fail("Explain why you want the Verified badge in 30–800 characters.");
-    if (contributions.length<30 || contributions.length>800) return fail("Describe your contributions in 30–800 characters.");
-    if (recognition.length<20 || recognition.length>600) return fail("Describe what makes your account recognizable in 20–600 characters.");
-    if (!["Daily","Several times a week","Weekly","Occasionally"].includes(activity)) return fail("Choose how often you use Sakura.");
-    if (links.length>600) return fail("Supporting links must be 600 characters or less.");
-    if (additionalInfo.length>600) return fail("Additional information must be 600 characters or less.");
-    const pending = await env.DB.prepare("SELECT id FROM verification_applications WHERE user_id=? AND status='PENDING' LIMIT 1").bind(user.id).first();
-    if (pending) return fail("You already have a pending verification application.",409);
-    const applicationId=id();
-    try {
-      await env.DB.prepare(`INSERT INTO verification_applications
-        (id,user_id,username_snapshot,reason,contributions,recognition,activity,links,additional_info)
-        VALUES (?,?,?,?,?,?,?,?,?)`)
-        .bind(applicationId,user.id,user.username,reason,contributions,recognition,activity,links,additionalInfo).run();
-    } catch (error) {
-      console.error("[Sakura verification] Application insert failed:",error);
-      return fail("Could not submit your application. Please refresh and try again.",409);
-    }
-    return json({ok:true,applicationId,status:"PENDING"},201);
   }
 
   if (path === "/api/creator/submissions" && request.method === "GET") {
@@ -1456,50 +1413,6 @@ async function route(request, env) {
       env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,group.owner_id,verified?"GROUP_VERIFIED":"GROUP_UNVERIFIED",group.name+" ("+group.id+")")
     ]);
     return json({ok:true,is_verified:verified});
-  }
-
-  if (path === "/api/owner/verification-applications" || path.startsWith("/api/owner/verification-applications/")) {
-    const actor = await requireUser(request,env);
-    if (!actor) return fail("Please sign in.",401);
-    if (actor.role !== "OWNER") return fail("Owner access required.",403);
-
-    if (path === "/api/owner/verification-applications" && request.method === "GET") {
-      const requestedStatus = String(url.searchParams.get("status")||"PENDING").toUpperCase();
-      const status = ["PENDING","APPROVED","REJECTED","ALL"].includes(requestedStatus) ? requestedStatus : "PENDING";
-      const rows = await env.DB.prepare(`SELECT a.id,a.user_id,a.username_snapshot,a.reason,a.contributions,a.recognition,a.activity,a.links,a.additional_info,a.status,a.review_note,a.created_at,a.reviewed_at,u.username AS current_username,u.public_id,u.is_verified,u.is_banned
-        FROM verification_applications a JOIN users u ON u.id=a.user_id
-        WHERE (?='ALL' OR a.status=?)
-        ORDER BY CASE WHEN a.status='PENDING' THEN 0 ELSE 1 END,a.created_at DESC
-        LIMIT 100`).bind(status,status).all();
-      return json({applications:rows.results||[],status});
-    }
-
-    const match = path.match(/^\/api\/owner\/verification-applications\/([A-Za-z0-9-]+)$/);
-    if (!match || request.method !== "POST") return fail("Unsupported verification review action.",405);
-    const application = await env.DB.prepare("SELECT id,user_id,username_snapshot,status FROM verification_applications WHERE id=?").bind(match[1]).first();
-    if (!application) return fail("Verification application not found.",404);
-    if (application.status!=="PENDING") return fail("This application has already been reviewed.",409);
-    const data = await body(request);
-    const action = String(data?.action||"").toUpperCase();
-    if (!["APPROVE","REJECT"].includes(action)) return fail("Choose approve or reject.");
-    const note = String(data?.note||"").trim().slice(0,500);
-    const nextStatus = action==="APPROVE" ? "APPROVED" : "REJECTED";
-    const auditAction = action==="APPROVE" ? "VERIFICATION_APPLICATION_APPROVED" : "VERIFICATION_APPLICATION_REJECTED";
-    const results = await env.DB.batch([
-      env.DB.prepare(`UPDATE verification_applications SET status=?,review_note=?,reviewed_by=?,reviewed_at=datetime('now')
-        WHERE id=? AND status='PENDING'
-          AND EXISTS (SELECT 1 FROM users WHERE id=verification_applications.user_id AND (is_banned=0 OR ?='REJECTED'))`)
-        .bind(nextStatus,note,actor.id,application.id,nextStatus),
-      env.DB.prepare(`UPDATE users SET is_verified=CASE WHEN ?='APPROVED' THEN 1 ELSE is_verified END
-        WHERE id=(SELECT user_id FROM verification_applications WHERE id=? AND status=?) AND changes()=1`)
-        .bind(nextStatus,application.id,nextStatus),
-      env.DB.prepare(`INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details)
-        SELECT ?,?,user_id,?,? FROM verification_applications
-        WHERE id=? AND status=? AND changes()=1`)
-        .bind(id(),actor.id,auditAction,application.username_snapshot+(note?" — "+note:""),application.id,nextStatus)
-    ]);
-    if (!results?.[0]?.meta?.changes) return fail("This application is no longer pending or the account cannot be approved.",409);
-    return json({ok:true,status:nextStatus,isVerified:action==="APPROVE"});
   }
 
   if (path.startsWith("/api/owner/users")) {
