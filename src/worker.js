@@ -1871,7 +1871,7 @@ async function route(request, env) {
       env.DB.prepare(`UPDATE creator_submissions SET created_item_id=?
         WHERE id=? AND status='APPROVED' AND reviewed_by=?
           AND EXISTS (SELECT 1 FROM item_creators WHERE item_id=?)`)
-        .bind(itemId,match[1],actor.id,itemId)
+        .bind(itemId,match[1],actor.id,itemId),
       env.DB.prepare(`INSERT OR IGNORE INTO inventory (id,user_id,item_id)
         SELECT ?,ic.creator_id,ic.item_id
         FROM item_creators ic
