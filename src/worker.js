@@ -763,14 +763,15 @@ async function route(request, env) {
     if (suppliedUrl.length>500) return fail("Roblox catalog link or item ID is too long.");
     let assetId = 0;
     try {
-      if (/^\\d{1,10}$/.test(suppliedUrl)) {
+      if (/^[0-9]{1,10}$/.test(suppliedUrl)) {
         assetId = Number(suppliedUrl);
       } else {
         const source = new URL(suppliedUrl);
         if (source.protocol!=="https:" || !["roblox.com","www.roblox.com","m.roblox.com"].includes(source.hostname.toLowerCase())) throw new Error();
-        const match = source.pathname.match(/^\\/(?:catalog|library)\\/(\\d+)(?:\\/|$)|^\\/marketplace\\/asset\\/(\\d+)(?:\\/|$)/i);
-        if (!match) throw new Error();
-        assetId = Number(match[1]||match[2]||0);
+        const pathParts = source.pathname.split("/").filter(Boolean);
+        if (["catalog","library"].includes(pathParts[0]) && /^[0-9]+$/.test(pathParts[1]||"")) assetId = Number(pathParts[1]);
+        else if (pathParts[0]==="marketplace" && pathParts[1]==="asset" && /^[0-9]+$/.test(pathParts[2]||"")) assetId = Number(pathParts[2]);
+        else throw new Error();
       }
       if (!Number.isSafeInteger(assetId) || assetId<1 || assetId>2147483647) throw new Error();
     } catch {
