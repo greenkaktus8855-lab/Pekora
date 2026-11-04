@@ -763,7 +763,7 @@ async function route(request, env) {
     if (suppliedUrl.length>500) return fail("Roblox catalog link or item ID is too long.");
     let assetId = 0;
     try {
-      if (/^[0-9]{1,10}$/.test(suppliedUrl)) {
+      if (/^[0-9]+$/.test(suppliedUrl)) {
         assetId = Number(suppliedUrl);
       } else {
         const source = new URL(suppliedUrl);
@@ -773,7 +773,7 @@ async function route(request, env) {
         else if (pathParts[0]==="marketplace" && pathParts[1]==="asset" && /^[0-9]+$/.test(pathParts[2]||"")) assetId = Number(pathParts[2]);
         else throw new Error();
       }
-      if (!Number.isSafeInteger(assetId) || assetId<1 || assetId>2147483647) throw new Error();
+      if (!Number.isSafeInteger(assetId) || assetId<1) throw new Error();
     } catch {
       return fail("Enter a Roblox catalog link or numeric item ID, for example https://www.roblox.com/catalog/123456789/Item. A Sakura page or image link is not a Roblox clothing item.");
     }
