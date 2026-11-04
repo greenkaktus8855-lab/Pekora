@@ -7,7 +7,9 @@ const files = [
   "public/style.css",
   "public/openpekora-globals.css",
   "public/openpekora-icons.css",
-  "public/bc.svg"
+  "public/bc.svg",
+  "public/openpekora-icons.css",
+  "public/roblox_badges.svg"
 ];
 const missing = [];
 
@@ -138,6 +140,8 @@ const checks = [
   ["Renderer is secret-protected and loopback-only", secureRendererLauncher.includes("timingSafeEqual") && secureRendererLauncher.includes("x-pekora-renderer-secret") && secureRendererLauncher.includes("127.0.0.1")],
   ["Legacy RCC launcher delegates to the corrected setup", legacyRccLauncher.includes("scripts\\start-rcc-2020.ps1") && !legacyRccLauncher.includes("$port = 64989")],
   ["avatar render cache invalidates when appearance changes", worker.includes("bodyColors:settings.bodyColors") && worker.includes("rigType:settings.rigType") && worker.includes("scales:settings.scales")],
+  ["Administrator badge is restricted to Admin and Sakura profiles", app.includes('normalized==="admin"||normalized==="sakura"') && app.includes("administratorBadgeMarkup(p.username)")],
+  ["Original OpenPekora Administrator sprite is connected to the profile badge", icons.includes("icon-administrator-small") && icons.includes("/roblox_badges.svg") && css.includes("administrator-profile-badge") && fs.existsSync(path.join(root,"public/roblox_badges.svg"))],
 
 ];
 
