@@ -750,3 +750,104 @@ model-viewer.pekora-model{display:block;width:100%;height:100%;min-height:150px;
  .ban-detail-row{grid-template-columns:1fr;gap:4px}
  .group-settings-form button{width:100%}
 }
+
+
+/* Dark Sakura group settings, uploaded images and verification */
+.group-detail-card{
+ background:#17151f!important;
+ color:#f2eff8!important;
+ border:1px solid #393247!important;
+ box-shadow:0 8px 28px rgba(0,0,0,.22)!important;
+ border-radius:10px;
+}
+.group-detail-card h1,.group-detail-card h2,.group-detail-card h3,
+.group-detail-card label,.group-detail-card strong{color:#f5f1fb}
+.group-detail-card .muted{color:#aaa2b8!important}
+.group-detail-card a{color:#c49aff}
+.group-detail-description{color:#e5dfee}
+.group-settings-form{
+ border-top-color:#393247!important;
+ background:#1d1a28!important;
+ border:1px solid #393247;
+ border-radius:9px;
+ padding:16px;
+}
+.group-settings-form input:not([type=file]),
+.group-settings-form textarea{
+ background:#282433!important;
+ border:1px solid #514760!important;
+ color:#f5f1fb!important;
+ border-radius:6px;
+ color-scheme:dark;
+}
+.group-settings-form input::placeholder,
+.group-settings-form textarea::placeholder{color:#9d95aa}
+.group-settings-form input[type=file]{
+ display:block;
+ max-width:100%;
+ color:#e7e0f1;
+ background:#282433;
+ border:1px solid #514760;
+ border-radius:6px;
+ padding:8px;
+}
+.group-avatar-upload{display:grid;gap:9px}
+.group-avatar-upload>label{font-weight:700}
+.group-avatar-upload-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.group-avatar-preview{
+ display:grid;
+ place-items:center;
+ width:104px;
+ height:104px;
+ flex:0 0 104px;
+ overflow:hidden;
+ border:1px solid #514760;
+ border-radius:9px;
+ background:#282433;
+ color:#d4b6ff;
+ font-size:34px;
+ font-weight:800;
+}
+.group-avatar-preview img{display:block;width:100%;height:100%;object-fit:cover}
+.group-avatar-file-controls{display:grid;gap:7px;min-width:0;max-width:100%}
+.group-avatar-file-controls .muted{font-size:12px}
+.group-members-section.owner-section{
+ background:#17151f!important;
+ color:#f2eff8!important;
+ border:1px solid #393247!important;
+ border-radius:10px;
+ padding:16px;
+}
+.group-members-section h2{color:#f5f1fb!important}
+.group-members-list{background:#1d1a28!important;border:1px solid #393247!important;border-radius:8px;overflow:hidden}
+.group-member{background:#1d1a28!important;border-bottom-color:#393247!important;color:#eee8f6}
+.group-member .people-user-info strong{color:#f5f1fb}
+.group-member .people-user-info span{color:#aaa2b8}
+.group-verified-badge{width:18px;height:18px;vertical-align:-2px;margin-left:4px}
+.owner-group-list{display:grid;gap:8px}
+.owner-group-row{
+ display:flex;
+ align-items:center;
+ gap:12px;
+ flex-wrap:wrap;
+ padding:11px 12px;
+ background:#1d1a28;
+ border:1px solid #393247;
+ border-radius:8px;
+}
+.owner-group-row>div{display:grid;gap:3px;flex:1;min-width:160px}
+.owner-group-row>div strong{color:#f5f1fb}
+.owner-group-row .muted{font-size:12px;color:#aaa2b8!important}
+.group-verification-status{
+ color:#aaa2b8;
+ font-size:12px;
+ font-weight:700;
+ white-space:nowrap;
+}
+.group-verification-status.is-verified{color:#66d79a}
+@media(max-width:560px){
+ .group-settings-form{padding:12px}
+ .group-avatar-upload-row{align-items:flex-start}
+ .owner-group-row{align-items:flex-start}
+ .owner-group-row button{width:100%}
+}
