@@ -194,9 +194,9 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_resale_active_created ON resale_listings(status,created_at DESC)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_resale_item_active ON resale_listings(item_id,status)"),
         env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_resale_active_item_seller ON resale_listings(item_id,seller_id) WHERE status='ACTIVE'"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS trade_locks (owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE CASCADE, PRIMARY KEY(owner_id,item_id))"),
         env.DB.prepare("CREATE TRIGGER IF NOT EXISTS trg_resale_no_trade_lock BEFORE INSERT ON resale_listings WHEN EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=NEW.seller_id AND item_id=NEW.item_id) BEGIN SELECT RAISE(ABORT,'Item is reserved in a pending trade.'); END"),
         env.DB.prepare("CREATE TRIGGER IF NOT EXISTS trg_trade_lock_no_resale BEFORE INSERT ON trade_locks WHEN EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=NEW.owner_id AND item_id=NEW.item_id AND status='ACTIVE') BEGIN SELECT RAISE(ABORT,'Item is already listed for sale.'); END"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS trade_locks (owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE CASCADE, PRIMARY KEY(owner_id,item_id))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_trades_sender ON trades(sender_id,status,created_at DESC)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_trades_recipient ON trades(recipient_id,status,created_at DESC)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS moderation_warnings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, moderator_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), acknowledged INTEGER NOT NULL DEFAULT 0)"),
@@ -807,7 +807,7 @@ async function route(request, env) {
   if (resaleBuyMatch && request.method === "POST") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const listing = await env.DB.prepare(\`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,i.name
+    const listing = await env.DB.prepare(\`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,i.name,s.username AS seller_name
       FROM resale_listings r JOIN items i ON i.id=r.item_id
       JOIN users s ON s.id=r.seller_id
       WHERE r.id=? AND r.status='ACTIVE' AND s.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1)\`)
@@ -843,7 +843,7 @@ async function route(request, env) {
       return fail("Purchase could not be completed. No items or balance should have changed.",409);
     }
     const updated = await env.DB.prepare("SELECT balance,tix_balance FROM users WHERE id=?").bind(user.id).first();
-    return json({ok:true,item:{id:listing.item_id,name:listing.name},price:Number(listing.price),currency:"P$",seller:listing.seller_id,balance:Number(updated?.balance||0),tixBalance:Number(updated?.tix_balance||0)});
+    return json({ok:true,item:{id:listing.item_id,name:listing.name},price:Number(listing.price),currency:"P$",seller:listing.seller_id,sellerName:listing.seller_name,balance:Number(updated?.balance||0),tixBalance:Number(updated?.tix_balance||0)});
   }
 
   if (request.method === "POST" && path === "/api/purchase") {
@@ -879,7 +879,7 @@ async function route(request, env) {
         if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
         return fail("Not enough " + currencyCode + ".",409);
       }
-      if (!results?.[1]?.meta?.changes) return fail("Purchase could not be completed. Please retry.",409);
+      if (!results?.[1]?.meta?.changes||!results?.[2]?.meta?.changes||!results?.[3]?.meta?.changes||!results?.[4]?.meta?.changes) return fail("Purchase could not be completed. Please retry.",409);
     } catch (error) {
       console.error("[Sakura purchase] Purchase failed:",error);
       return fail("Purchase could not be completed.",400);
