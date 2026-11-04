@@ -1880,7 +1880,7 @@ async function route(request, env) {
         .bind(creatorInventoryId,itemId)
     ]);
     if (!results?.[0]?.meta?.changes) return fail("This request has already been reviewed.",409);
-    if (!results?.[1]?.meta?.changes || !results?.[2]?.meta?.changes || !results?.[3]?.meta?.changes) {
+    if (!results?.[1]?.meta?.changes || !results?.[2]?.meta?.changes || !results?.[3]?.meta?.changes || !results?.[4]?.meta?.changes) {
       console.error("[Sakura creator] Approval did not create a catalog item:",JSON.stringify(results));
       return fail("The catalog item could not be created. The review transaction was not completed.",500);
     }
