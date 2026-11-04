@@ -1930,7 +1930,7 @@ async function route(request, env) {
     if (!actor) return fail("Please sign in.",401);
     if (actor.role !== "OWNER" && !actor.is_asset_moderator) return fail("Owner or Asset Moderator access required.",403);
     if (path === "/api/owner/creator-submissions" && request.method === "GET") {
-      const rows = await env.DB.prepare(`SELECT s.id,s.user_id,s.username,s.name,s.description,s.category,s.roblox_url,s.price,s.created_at,u.public_id AS creator_public_id
+      const rows = await env.DB.prepare(`SELECT s.id,s.user_id,s.username,s.name,s.description,s.category,s.roblox_url,s.asset_id,s.price,s.created_at,u.public_id AS creator_public_id
         FROM creator_submissions s LEFT JOIN users u ON u.id=s.user_id
         WHERE s.status='PENDING' ORDER BY s.created_at ASC LIMIT 100`).all();
       return json({submissions:rows.results||[]});
