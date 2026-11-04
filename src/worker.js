@@ -767,7 +767,7 @@ async function route(request, env) {
     if (!["Shirts","Pants"].includes(category)) return fail("Only Shirts and Pants can be submitted.");
     if (description.length>500) return fail("Description must be 500 characters or less.");
     if ((typeof rawPrice !== "number" && typeof rawPrice !== "string") ||
-        (typeof rawPrice === "string" && !/^\\d+$/.test(rawPrice.trim())) ||
+        (typeof rawPrice === "string" && !/^\d+$/.test(rawPrice.trim())) ||
         !Number.isSafeInteger(price) || price<0 || price>1000000) return fail("Price must be a whole number from 0 to 1,000,000 P$.");
     if (suppliedUrl.length>500) return fail("Roblox catalog link or item ID is too long.");
     let assetId = 0;
