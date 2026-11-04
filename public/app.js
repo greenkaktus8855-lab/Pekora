@@ -1207,6 +1207,51 @@ async function createPage(){
   }
  }
  await loadMySubmissions();
+ const creatorPageHost=app.querySelector(".creator-create-page");
+ creatorPageHost?.insertAdjacentHTML("beforeend",'<section class="creator-create-card model-creator-card"><h2>New 3D model</h2><p class="muted">Submit a 3D accessory for review. Provide a direct HTTPS link to a .glb or .gltf file. Your model is not published until an Asset Moderator approves it.</p><form id="creatorModelSubmissionForm" class="creator-create-form"><label>Model name<input name="name" maxlength="80" required placeholder="Name your model"></label><label>Description <span class="muted">(optional)</span><textarea name="description" maxlength="500" rows="3" placeholder="Describe the accessory"></textarea></label><label>Price in P$<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label><label>Direct 3D model link (.glb or .gltf)<input name="model_url" type="url" maxlength="1000" required placeholder="https://example.com/model.glb"></label><label>Preview image link <span class="muted">(optional)</span><input name="image_url" type="url" maxlength="500" placeholder="https://example.com/preview.png"></label><div class="creator-create-actions"><button class="primary" type="submit">Submit model for review</button><span id="creatorModelSubmissionMessage" class="muted" role="status"></span></div></form></section><section class="creator-submissions-section"><div class="creator-submissions-heading"><h2>My 3D model submissions</h2><span class="muted">Review status</span></div><div id="myModelSubmissions" class="creator-submissions-list">Loading submissions...</div></section>');
+ const modelHost=document.getElementById("myModelSubmissions");
+ async function loadMyModelSubmissions(){
+  if(!modelHost)return;
+  try{
+   const data=await api("/api/creator/model-submissions");
+   if(!isActiveView(view)||!modelHost.isConnected)return;
+   const submissions=data.submissions||[];
+   modelHost.innerHTML=submissions.length?submissions.map(submission=>{
+    const status=String(submission.status||"PENDING");
+    const label=status==="APPROVED"?"Approved":status==="REJECTED"?"Declined":"Waiting for review";
+    const itemLink=status==="APPROVED"&&submission.created_item_id?'<a href="/item/'+encodeURIComponent(submission.created_item_id)+'" data-item-view="'+esc(submission.created_item_id)+'">View in Catalog</a>':'<span class="muted">'+(status==="REJECTED"?"This request was declined.":"Not visible in Catalog until approval.")+'</span>';
+    return '<article class="creator-submission-status"><div><strong>'+esc(submission.name)+'</strong><span class="creator-submission-type">3D Model</span></div><span class="creator-submission-state '+status.toLowerCase()+'">'+label+'</span><p class="muted">'+Number(submission.price||0).toLocaleString()+' P$ · '+new Date(submission.created_at+"Z").toLocaleString()+'</p>'+itemLink+'</article>';
+   }).join(""):'<div class="creator-submissions-empty">You have not submitted any 3D models yet.</div>';
+  }catch(error){if(isActiveView(view)&&modelHost?.isConnected)modelHost.textContent=error.message}
+ }
+ await loadMyModelSubmissions();
+ const modelForm=document.getElementById("creatorModelSubmissionForm");
+ const modelMessage=document.getElementById("creatorModelSubmissionMessage");
+ modelForm?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const data=new FormData(modelForm);
+  const name=String(data.get("name")||"").trim();
+  const description=String(data.get("description")||"").trim();
+  const modelUrl=String(data.get("model_url")||"").trim();
+  const imageUrl=String(data.get("image_url")||"").trim();
+  const rawPrice=String(data.get("price")||"").trim();
+  let validModelUrl=false,validImageUrl=!imageUrl;
+  try{const parsed=new URL(modelUrl);validModelUrl=parsed.protocol==="https:"&&/\.(glb|gltf)$/i.test(parsed.pathname)}catch{}
+  try{if(imageUrl)validImageUrl=new URL(imageUrl).protocol==="https:"}catch{}
+  const price=Number(rawPrice);
+  if(!name||name.length>80||description.length>500||!validModelUrl||!validImageUrl||!/^\d+$/.test(rawPrice)||!Number.isSafeInteger(price)||price<0||price>1000000){
+   modelMessage.textContent="Check the name, description, price, and HTTPS .glb/.gltf link.";
+   return;
+  }
+  const submit=modelForm.querySelector('button[type="submit"]');
+  submit.disabled=true;modelMessage.textContent="Sending model for review...";
+  try{
+   await api("/api/creator/model-submissions",{method:"POST",body:JSON.stringify({name,description,price,model_url:modelUrl,image_url:imageUrl})});
+   if(!isActiveView(view))return;
+   modelForm.reset();modelMessage.textContent="Your model was sent for review.";toast("Model submitted");await loadMyModelSubmissions();
+  }catch(error){modelMessage.textContent=error.message}
+  finally{submit.disabled=false}
+ });
  const form=document.getElementById("creatorSubmissionForm");
  const message=document.getElementById("creatorSubmissionMessage");
  const clearCreateValidation=()=>{
@@ -1556,22 +1601,40 @@ async function owner(){
     '<div class="owner-user-actions"><form id="ownerCreditForm" class="owner-item-form"><h4>Give Sakura currency</h4><label>Amount<input name="amount" type="number" min="1" max="1000000" required></label><label>Currency<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label><label>Note (optional)<input name="reason" maxlength="500"></label><button class="primary" type="submit">Give currency</button></form>'+
     '<form id="ownerWarnForm" class="owner-item-form"><h4>Issue warning</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button class="primary" type="submit">Send warning</button></form>'+
     (u.is_banned?'<button type="button" class="button" id="ownerUnban">Unban account</button>':'<form id="ownerBanForm" class="owner-item-form"><h4>Ban account</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button type="submit" class="button secondary">Ban account</button></form>')+'</div>')+
-    (u.role==="OWNER"?"":'<form id="ownerVerifyForm" class="owner-item-form owner-verify-form"><h4>Verified badge</h4><p class="muted">'+(u.is_verified?'This user has a verified badge.':'This user is not verified.')+'</p><button class="primary" type="submit">'+(u.is_verified?'Remove verified badge':'Give verified badge')+'</button></form>')+
+
     (u.role==="OWNER"?"":'<form id="ownerPublicIdForm" class="owner-item-form owner-id-form"><h4>Change public User ID</h4><p class="muted">Must be unique. Existing profile links using the old ID will stop working.</p><label>New numeric ID<input name="publicId" type="number" min="1" max="2147483647" step="1" value="'+Number(u.public_id||0)+'" required></label><button class="primary" type="submit">Save User ID</button></form>')+
     '<h4>Warnings</h4>'+(d.warnings.length?'<ul>'+d.warnings.map(x=>'<li>'+esc(x.reason)+' <span class="muted">('+new Date(x.created_at+"Z").toLocaleString()+')</span></li>').join("")+'</ul>':'<p class="muted">No warnings.</p>')+
     '<h4>Moderation history</h4>'+(d.logs.length?'<ul>'+d.logs.map(x=>'<li><strong>'+esc(x.action)+'</strong> '+esc(x.details)+' <span class="muted">('+new Date(x.created_at+"Z").toLocaleString()+')</span></li>').join("")+'</ul>':'<p class="muted">No actions recorded.</p>')+'</div>';
+   const assignedBadges=new Set(u.badges||[]);
+   if(u.is_verified)assignedBadges.add("VERIFIED");
+   const badgeOptions=[
+    ["VERIFIED","Verified"],
+    ["ADMINISTRATOR","Administrator"],
+    ["ASSET_MODERATOR","Asset Moderator"],
+    ["EARLY_SUPPORTER","Early Supporter"],
+    ["CONTRIBUTOR","Contributor"],
+    ["CREATOR","Creator"],
+    ["COMMUNITY_HELPER","Community Helper"]
+   ];
+   userDetails.querySelector(".owner-user-card")?.insertAdjacentHTML("beforeend",'<section class="owner-badge-manager"><h4>Badges and Permissions</h4><p class="muted">Grant or remove profile badges. Asset Moderator gives access only to Asset Panel.</p>'+badgeOptions.map(([key,label])=>{
+    const enabled=assignedBadges.has(key);
+    return '<div class="owner-badge-row"><span><strong>'+label+'</strong><small>'+(enabled?'Granted':'Not granted')+'</small></span><button class="button '+(enabled?'secondary':'')+'" type="button" data-owner-badge-toggle="'+key+'" data-enabled="'+(enabled?'1':'0')+'">'+(enabled?'Remove':'Grant')+'</button></div>';
+   }).join("")+'</section>');
+   userDetails.querySelectorAll("[data-owner-badge-toggle]").forEach(button=>button.addEventListener("click",async()=>{
+    const badgeKey=button.dataset.ownerBadgeToggle;
+    const action=button.dataset.enabled==="1"?"revoke_badge":"grant_badge";
+    button.disabled=true;
+    try{
+     await api("/api/owner/badges/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action,badgeKey})});
+     toast(action==="grant_badge"?"Badge granted":"Badge removed");
+     await loadOwnerUser(userId);
+     await refreshMe();
+    }catch(error){toast(error.message);button.disabled=false}
+   }));
    document.getElementById("ownerCreditForm")?.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(e.currentTarget);
     try{await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:"credit",amount:Number(f.get("amount")),currency:String(f.get("currency")||"P$"),reason:String(f.get("reason")||"")})});toast("Currency granted");await loadOwnerUser(userId);await refreshMe();}
     catch(err){toast(err.message)}
-   });
-   document.getElementById("ownerVerifyForm")?.addEventListener("submit",async e=>{
-    e.preventDefault();
-    try{
-     await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:u.is_verified?"unverify":"verify"})});
-     toast(u.is_verified?"Verified badge removed":"Verified badge granted");
-     await loadOwnerUser(userId);
-    }catch(err){toast(err.message)}
    });
    document.getElementById("ownerPublicIdForm")?.addEventListener("submit",async e=>{
     e.preventDefault();
