@@ -33,3 +33,16 @@
  display:inline-block;
  vertical-align:middle;
 }
+
+
+/* Original OpenPekora Administrator badge sprite position, scaled from 140px to 20px */
+.icon-administrator-small{
+  background-image:url('/roblox_badges.svg');
+  background-repeat:no-repeat;
+  background-size:40px auto;
+  background-position:-20px -120px;
+  width:20px;
+  height:20px;
+  display:inline-block;
+  vertical-align:middle;
+}
