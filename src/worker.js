@@ -186,7 +186,8 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_settings (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, body_colors TEXT NOT NULL DEFAULT '{}', rig_type TEXT NOT NULL DEFAULT 'R6' CHECK(rig_type IN ('R6','R15')), scales_json TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_equipped_items_user ON equipped_items(user_id,category)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', thumbnail_url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS sakura_groups (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, description TEXT NOT NULL DEFAULT '', avatar_url TEXT NOT NULL DEFAULT '', owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS sakura_groups (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, description TEXT NOT NULL DEFAULT '', avatar_url TEXT NOT NULL DEFAULT '', is_verified INTEGER NOT NULL DEFAULT 0, owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS group_image_files (id TEXT PRIMARY KEY, group_id TEXT NOT NULL UNIQUE REFERENCES sakura_groups(id) ON DELETE CASCADE, image_data BLOB NOT NULL, content_type TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS group_members (group_id TEXT NOT NULL REFERENCES sakura_groups(id) ON DELETE CASCADE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL DEFAULT 'MEMBER' CHECK(role IN ('OWNER','MEMBER')), joined_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(group_id,user_id))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS trades (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, offered_items TEXT NOT NULL DEFAULT '[]', requested_items TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','DECLINED','CANCELLED')), created_at TEXT NOT NULL DEFAULT (datetime('now')), responded_at TEXT)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS trade_locks (owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE CASCADE, PRIMARY KEY(owner_id,item_id))"),
@@ -226,6 +227,9 @@ async function ensureSiteSettings(env) {
       const groupColumns = await env.DB.prepare("PRAGMA table_info(sakura_groups)").all();
       if (!(groupColumns.results || []).some(column => column.name === "avatar_url")) {
         await env.DB.prepare("ALTER TABLE sakura_groups ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''").run();
+      }
+      if (!(groupColumns.results || []).some(column => column.name === "is_verified")) {
+        await env.DB.prepare("ALTER TABLE sakura_groups ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0").run();
       }
       await env.DB.prepare(`UPDATE users SET
         banned_at=COALESCE(banned_at,(SELECT created_at FROM owner_audit_log WHERE target_user_id=users.id AND action='BAN' ORDER BY created_at DESC LIMIT 1)),
@@ -1197,6 +1201,34 @@ async function route(request, env) {
     }});
   }
 
+  if (path === "/api/owner/groups" || path.startsWith("/api/owner/groups/")) {
+    const actor = await requireUser(request,env);
+    if (!actor) return fail("Please sign in.",401);
+    if (actor.role !== "OWNER") return fail("Owner access required.",403);
+    if (path === "/api/owner/groups" && request.method === "GET") {
+      const rows = await env.DB.prepare(`SELECT g.id,g.name,g.is_verified,g.created_at,u.username AS owner_name,
+        COUNT(m.user_id) AS member_count
+        FROM sakura_groups g JOIN users u ON u.id=g.owner_id
+        LEFT JOIN group_members m ON m.group_id=g.id
+        GROUP BY g.id ORDER BY g.created_at DESC,g.name LIMIT 200`).all();
+      return json({groups:rows.results||[]});
+    }
+    const match = path.match(/^\/api\/owner\/groups\/([A-Za-z0-9-]+)$/);
+    if (!match || request.method !== "POST") return fail("Unsupported group verification action.",405);
+    const groupId = match[1];
+    const group = await env.DB.prepare("SELECT id,name,owner_id,is_verified FROM sakura_groups WHERE id=?").bind(groupId).first();
+    if (!group) return fail("Group not found.",404);
+    const data = await body(request);
+    const action = String(data?.action||"");
+    if (!["verify","unverify"].includes(action)) return fail("Choose verify or unverify.");
+    const verified = action==="verify" ? 1 : 0;
+    await env.DB.batch([
+      env.DB.prepare("UPDATE sakura_groups SET is_verified=? WHERE id=?").bind(verified,groupId),
+      env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,group.owner_id,verified?"GROUP_VERIFIED":"GROUP_UNVERIFIED",group.name+" ("+group.id+")")
+    ]);
+    return json({ok:true,is_verified:verified});
+  }
+
   if (path.startsWith("/api/owner/users")) {
     const actor = await requireUser(request,env);
     if (!actor) return fail("Please sign in.",401);
@@ -1286,11 +1318,63 @@ async function route(request, env) {
     return json({games:rows.results||[]});
   }
 
+  const groupAvatarUploadMatch = path.match(/^\/api\/groups\/([A-Za-z0-9-]+)\/avatar$/);
+  if (groupAvatarUploadMatch && request.method === "PUT") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const groupId = groupAvatarUploadMatch[1];
+    const group = await env.DB.prepare("SELECT id,owner_id FROM sakura_groups WHERE id=?").bind(groupId).first();
+    if (!group) return fail("Group not found.",404);
+    if (group.owner_id !== user.id) return fail("Only the group owner can change its image.",403);
+    const maxBytes = 2 * 1024 * 1024;
+    const length = Number(request.headers.get("content-length")||0);
+    if (length > maxBytes) return fail("Group image must be 2 MB or smaller.",413);
+    const contentType = (request.headers.get("content-type")||"").toLowerCase().split(";")[0].trim();
+    if (!["image/png","image/jpeg","image/webp"].includes(contentType)) return fail("Choose a PNG, JPG or WebP image.",415);
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (!bytes.byteLength || bytes.byteLength > maxBytes) return fail("Group image must be between 1 byte and 2 MB.",413);
+    const png = bytes.length>=8 && bytes[0]===0x89 && bytes[1]===0x50 && bytes[2]===0x4e && bytes[3]===0x47 && bytes[4]===0x0d && bytes[5]===0x0a && bytes[6]===0x1a && bytes[7]===0x0a;
+    const jpeg = bytes.length>=3 && bytes[0]===0xff && bytes[1]===0xd8 && bytes[2]===0xff;
+    const webp = bytes.length>=12 && bytes[0]===0x52 && bytes[1]===0x49 && bytes[2]===0x46 && bytes[3]===0x46 && bytes[8]===0x57 && bytes[9]===0x45 && bytes[10]===0x42 && bytes[11]===0x50;
+    if (!((contentType==="image/png"&&png)||(contentType==="image/jpeg"&&jpeg)||(contentType==="image/webp"&&webp))) return fail("The selected file does not match its image format.",415);
+    const imageId=id();
+    const imageUrl="/api/group-images/"+imageId;
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM group_image_files WHERE group_id=?").bind(groupId),
+      env.DB.prepare("INSERT INTO group_image_files (id,group_id,image_data,content_type) VALUES (?,?,?,?)").bind(imageId,groupId,bytes,contentType),
+      env.DB.prepare("UPDATE sakura_groups SET avatar_url=? WHERE id=? AND owner_id=?").bind(imageUrl,groupId,user.id)
+    ]);
+    return json({ok:true,avatar_url:imageUrl});
+  }
+  if (groupAvatarUploadMatch && request.method === "DELETE") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const groupId = groupAvatarUploadMatch[1];
+    const group = await env.DB.prepare("SELECT owner_id FROM sakura_groups WHERE id=?").bind(groupId).first();
+    if (!group) return fail("Group not found.",404);
+    if (group.owner_id !== user.id) return fail("Only the group owner can remove its image.",403);
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM group_image_files WHERE group_id=?").bind(groupId),
+      env.DB.prepare("UPDATE sakura_groups SET avatar_url='' WHERE id=? AND owner_id=?").bind(groupId,user.id)
+    ]);
+    return json({ok:true});
+  }
+  const groupImageMatch = path.match(/^\/api\/group-images\/([A-Za-z0-9-]+)$/);
+  if (groupImageMatch && request.method === "GET") {
+    const image = await env.DB.prepare("SELECT image_data,content_type FROM group_image_files WHERE id=?").bind(groupImageMatch[1]).first();
+    if (!image?.image_data) return fail("Group image not found.",404);
+    return new Response(image.image_data,{headers:{
+      "content-type":image.content_type||"application/octet-stream",
+      "cache-control":"public, max-age=3600",
+      "x-content-type-options":"nosniff"
+    }});
+  }
+
   const groupDetailMatch = path.match(/^\/api\/groups\/([A-Za-z0-9-]+)$/);
   if (groupDetailMatch && request.method === "GET") {
     const viewer = await currentUser(request,env);
     const groupId = groupDetailMatch[1];
-    const group = await env.DB.prepare(`SELECT g.id,g.name,g.description,g.avatar_url,g.created_at,g.owner_id,
+    const group = await env.DB.prepare(`SELECT g.id,g.name,g.description,g.avatar_url,g.is_verified,g.created_at,g.owner_id,
         u.username AS owner_name,u.public_id AS owner_public_id,
         COUNT(m.user_id) AS member_count,
         MAX(CASE WHEN m.user_id=? THEN 1 ELSE 0 END) AS is_member,
@@ -1310,22 +1394,17 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const groupId = groupDetailMatch[1];
-    const existing = await env.DB.prepare("SELECT id,name,description,avatar_url,owner_id FROM sakura_groups WHERE id=?").bind(groupId).first();
+    const existing = await env.DB.prepare("SELECT id,name,description,owner_id FROM sakura_groups WHERE id=?").bind(groupId).first();
     if (!existing) return fail("Group not found.",404);
     if (existing.owner_id !== user.id) return fail("Only the group owner can edit these settings.",403);
     const data = await body(request);
     const name = String(data?.name ?? existing.name).trim();
     const description = String(data?.description ?? existing.description).trim();
-    const avatarUrl = String(data?.avatar_url ?? existing.avatar_url ?? "").trim();
     if (!/^[a-z0-9а-яёіїєґ _.-]{3,32}$/i.test(name)) return fail("Group names must be 3–32 characters.");
     if (description.length>300) return fail("Group description must be 300 characters or less.");
-    if (avatarUrl) {
-      try { const image = new URL(avatarUrl); if (image.protocol!=="https:") throw new Error(); }
-      catch { return fail("Group avatar must be a valid HTTPS image URL."); }
-    }
     const duplicate = await env.DB.prepare("SELECT id FROM sakura_groups WHERE name=? COLLATE NOCASE AND id<>?").bind(name,groupId).first();
     if (duplicate) return fail("A group with this name already exists.",409);
-    await env.DB.prepare("UPDATE sakura_groups SET name=?,description=?,avatar_url=? WHERE id=? AND owner_id=?").bind(name,description,avatarUrl,groupId,user.id).run();
+    await env.DB.prepare("UPDATE sakura_groups SET name=?,description=? WHERE id=? AND owner_id=?").bind(name,description,groupId,user.id).run();
     return json({ok:true});
   }
 
@@ -1343,7 +1422,7 @@ async function route(request, env) {
 
   if (path === "/api/groups" && request.method === "GET") {
     const viewer = await currentUser(request,env);
-    const rows = await env.DB.prepare(`SELECT g.id,g.name,g.description,g.avatar_url,g.created_at,u.username AS owner_name,
+    const rows = await env.DB.prepare(`SELECT g.id,g.name,g.description,g.avatar_url,g.is_verified,g.created_at,u.username AS owner_name,
       COUNT(m.user_id) AS member_count,
       MAX(CASE WHEN m.user_id=? THEN 1 ELSE 0 END) AS is_member
       FROM sakura_groups g JOIN users u ON u.id=g.owner_id
@@ -1384,7 +1463,7 @@ async function route(request, env) {
       return fail("A group with this name may already exist. Please try another name.",409);
     }
     const updated = await env.DB.prepare("SELECT balance FROM users WHERE id=?").bind(user.id).first();
-    const group = await env.DB.prepare("SELECT g.id,g.name,g.description,g.created_at,u.username AS owner_name,1 AS member_count,1 AS is_member FROM sakura_groups g JOIN users u ON u.id=g.owner_id WHERE g.id=?").bind(groupId).first();
+    const group = await env.DB.prepare("SELECT g.id,g.name,g.description,g.avatar_url,g.is_verified,g.created_at,u.username AS owner_name,1 AS member_count,1 AS is_member FROM sakura_groups g JOIN users u ON u.id=g.owner_id WHERE g.id=?").bind(groupId).first();
     return json({ok:true,balance:Number(updated?.balance||0),group},201);
   }
 
