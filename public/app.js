@@ -131,6 +131,7 @@ function renderSidebar(active="home"){
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-trade","Trades"],
   ["inventory","icon-nav-inventory","Inventory"],
+  ["resale","icon-nav-trade","Resale Market"],
   ["groups","icon-nav-group","Groups"],
   ["currency","icon-nav-robux","Currency"],
   ["membership","icon-nav-robux","Membership"],
@@ -278,11 +279,13 @@ async function showItem(itemId,updateHistory=true){
  renderSidebar("catalog");
  if(updateHistory)history.pushState({page:"item",itemId},"","/item/"+encodeURIComponent(itemId||""));
  let item=items.find(x=>x.id===itemId);
+ let resaleSnapshot=null;
  if(!item||(me&&!ownershipLoaded)){
   try{
-   const [catalogResult,inventoryResult]=await Promise.allSettled([
+   const [catalogResult,inventoryResult,resaleResult]=await Promise.allSettled([
     item?Promise.resolve({items}):api("/api/catalog"),
-    me?api("/api/inventory"):Promise.resolve({items:[]})
+    me?api("/api/inventory"):Promise.resolve({items:[]}),
+    api("/api/resale/item/"+encodeURIComponent(itemId))
    ]);
    if(!isActiveView(view)||(me?.id||null)!==requestedUserId)return;
    if(catalogResult.status!=="fulfilled")throw catalogResult.reason;
@@ -299,7 +302,8 @@ async function showItem(itemId,updateHistory=true){
     ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
     ownershipLoaded=true;
    }
-   item=item||(inventoryData.items||[]).find(x=>x.id===itemId);
+   item=item||(inventoryData.items||[]).find(x=>x.id===itemId)||(resaleResult.status==="fulfilled"?resaleResult.value.item:null);
+   if(resaleResult.status==="fulfilled")resaleSnapshot=resaleResult.value;
   }catch(error){
    if(isActiveView(view))app.innerHTML='<div class="empty">Could not verify item and inventory: '+esc(error.message)+'</div>';
    return;
@@ -307,13 +311,43 @@ async function showItem(itemId,updateHistory=true){
  }
  if(!isActiveView(view))return;
  if(!item){app.innerHTML='<div class="empty">Item not found. <a href="#catalog" data-page="catalog">Back to Catalog</a></div>';return}
+ if(!resaleSnapshot){try{resaleSnapshot=await api("/api/resale/item/"+encodeURIComponent(item.id))}catch{resaleSnapshot={listings:[]}}}
+ if(!isActiveView(view))return;
  const isOwned=ownedItemIds.has(item.id),isOffsale=Number(item.is_offsale)===1,stock=itemStockState(item);
+ const resaleEligible=Number(item.is_limited)===1||isOffsale;
+ const resaleListings=Array.isArray(resaleSnapshot.listings)?resaleSnapshot.listings:[];
+ const myListing=me?resaleListings.find(listing=>listing.seller_id===me.id):null;
+ const otherListings=resaleListings.filter(listing=>!me||listing.seller_id!==me.id);
+ const sellerMarkup=listing=>'<a href="#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'+(Number(listing.seller_verified)===1?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified seller">':'');
+ const listingRows=otherListings.length?otherListings.map(listing=>'<article class="resale-offer-row"><div class="resale-offer-seller"><strong>'+sellerMarkup(listing)+'</strong><span class="muted">Seller</span></div><strong class="resale-offer-price">'+currencyMarkup(listing.price,"P$")+'</strong><button class="primary resale-buy-button" type="button" data-resale-buy="'+esc(listing.id)+'" data-item-id="'+esc(item.id)+'" '+(!me||isOwned?'disabled':'')+'>'+(!me?'Log in to buy':isOwned?'Owned':'Buy')+'</button></article>').join(""):'<p class="muted">No player listings for this item yet.</p>';
+ const ownListingMarkup=myListing?'<div class="resale-own-listing"><div><strong>Your listing is active</strong><p class="muted">Asking price: '+currencyMarkup(myListing.price,"P$")+'</p></div><button class="button secondary" type="button" id="cancelResaleListing" data-listing-id="'+esc(myListing.id)+'">Remove listing</button></div>':(me&&isOwned&&resaleEligible?'<form id="createResaleListing" class="resale-create-form"><h3>Sell your copy</h3><p class="muted">Set your own price. Your item stays in your inventory until another player buys it.</p><label>Price in P$ <input type="number" name="price" min="1" max="1000000" step="1" value="1" required></label><button class="primary" type="submit">List for sale</button><span id="resaleCreateMessage" class="muted" role="status"></span></form>':"");
+ const resalePanel=resaleEligible?'<section class="resale-section"><div class="resale-section-heading"><div><h2>Player Marketplace</h2><p class="muted">Limited and Off Sale items can be resold by players.</p></div><a href="#resale" data-page="resale">Open market</a></div>'+ownListingMarkup+'<div class="resale-offer-list">'+listingRows+'</div></section>':"";
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
   '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+currencyMarkup(item.price,item.currency||"P$")+'</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
-  '</div></div>';
+  '</div></div>'+resalePanel;
  if(!isOwned&&!isOffsale&&!stock.soldOut&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
  document.getElementById("copyItemLink")?.addEventListener("click",async()=>{const shareUrl=new URL("/item/"+encodeURIComponent(item.id),location.origin).href;try{await navigator.clipboard.writeText(shareUrl);toast("Item link copied")}catch{toast("Could not copy link. Copy it from the address bar.")}});
+ document.getElementById("createResaleListing")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const form=event.currentTarget,button=form.querySelector('button[type="submit"]'),message=document.getElementById("resaleCreateMessage");
+  const price=Number(new FormData(form).get("price"));
+  button.disabled=true;message.textContent="Creating listing...";
+  try{
+   await api("/api/resale/listings",{method:"POST",body:JSON.stringify({itemId:item.id,price})});
+   toast("Item listed for sale");
+   await showItem(item.id,false);
+  }catch(error){message.textContent=error.message;button.disabled=false}
+ });
+ document.getElementById("cancelResaleListing")?.addEventListener("click",async event=>{
+  const button=event.currentTarget;button.disabled=true;button.textContent="Removing...";
+  try{
+   await api("/api/resale/listings/"+encodeURIComponent(button.dataset.listingId),{method:"DELETE"});
+   toast("Listing removed");
+   await showItem(item.id,false);
+  }catch(error){toast(error.message);button.disabled=false;button.textContent="Remove listing"}
+ });
+ document.querySelectorAll("[data-resale-buy]").forEach(button=>button.addEventListener("click",()=>buyResaleListing(button.dataset.resaleBuy,item.id,button)));
 }
 
 
@@ -458,6 +492,42 @@ function drawCatalog(category,q){
   if(detailButton?.isConnected&&!ownedItemIds.has(itemId)){detailButton.disabled=false;detailButton.textContent="Buy"}
  }
 }
+async function buyResaleListing(listingId,itemId,button){
+ if(!me){page("login");return}
+ if(button){button.disabled=true;button.textContent="Buying..."}
+ try{
+  const result=await api("/api/resale/listings/"+encodeURIComponent(listingId)+"/buy",{method:"POST",body:"{}"});
+  setUser({...me,balance:Number(result.balance||0),tixBalance:Number(result.tixBalance??me.tixBalance??0)});
+  ownedItemIds=new Set();ownershipLoaded=false;
+  try{
+   const inventoryData=await api("/api/inventory");
+   ownedItemIds=new Set((inventoryData.items||[]).map(item=>item.id));
+   ownershipLoaded=true;
+  }catch(error){console.warn("[Sakura resale] Could not refresh inventory:",error)}
+  toast("Purchased from "+(result.seller||"seller"));
+  const route=currentRoute().split("?",1)[0];
+  if(route==="resale")await resaleMarketPage();
+  else await showItem(itemId,false);
+ }catch(error){
+  toast(error.message);
+  if(button?.isConnected){button.disabled=false;button.textContent="Buy"}
+ }
+}
+
+async function resaleMarketPage(){
+ const view=beginView();
+ renderSidebar("resale");
+ app.innerHTML='<div class="resale-market-page"><div class="resale-market-heading"><div><h1 class="page-title">Resale Market</h1><p class="muted">Limited and Off Sale items listed by Sakura players.</p></div><a class="button secondary" href="#inventory" data-page="inventory">My Inventory</a></div><div id="resaleMarketGrid" class="resale-market-list">Loading listings...</div></div>';
+ const host=document.getElementById("resaleMarketGrid");
+ try{
+  const data=await api("/api/resale/listings");
+  if(!isActiveView(view)||!host?.isConnected)return;
+  const listings=data.listings||[];
+  host.innerHTML=listings.length?listings.map(listing=>'<article class="resale-market-card"><a class="resale-market-image" href="/item/'+encodeURIComponent(listing.item_id)+'" data-item-view="'+esc(listing.item_id)+'">'+itemPreview(listing)+itemBadgeMarkup(listing)+'</a><div class="resale-market-details"><h2><a href="/item/'+encodeURIComponent(listing.item_id)+'" data-item-view="'+esc(listing.item_id)+'">'+esc(listing.name)+'</a></h2><span class="muted">'+esc(listing.category)+' · '+(Number(listing.is_limited)===1?'LIMITED':'OFF SALE')+'</span><div class="resale-market-seller">Seller: <a href="#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'+(Number(listing.seller_verified)===1?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified seller">':'')+'</div><strong class="resale-market-price">'+currencyMarkup(listing.price,"P$")+'</strong></div><button class="primary resale-buy-button" type="button" data-resale-buy="'+esc(listing.id)+'" data-item-id="'+esc(listing.item_id)+'" '+(!me?'disabled':'')+'>'+(!me?'Log in to buy':'Buy')+'</button></article>').join(""):'<div class="empty">There are no player listings yet.</div>';
+  host.querySelectorAll("[data-resale-buy]").forEach(button=>button.addEventListener("click",()=>buyResaleListing(button.dataset.resaleBuy,button.dataset.itemId,button)));
+ }catch(error){if(host?.isConnected)host.textContent=error.message}
+}
+
 function auth(kind){
  const view=beginView();
  renderSidebar("");
@@ -498,71 +568,29 @@ async function ownerRecoveryPage(){
 }
 
 async function logout(){try{await api("/api/logout",{method:"POST"});setUser(null);page("home")}catch(e){toast(e.message)}}
-function inventorySellCard(item,selectedId){
- const selected=selectedId===item.id;
- return '<article class="item-card inventory-sell-card'+(selected?' is-selected':'')+'">'+
-  '<div class="item-image">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
-  '<h3>'+esc(item.name)+'</h3>'+
-  '<div class="muted">'+esc(item.category)+'</div>'+
-  '<div class="inventory-item-price">Current value: '+currencyMarkup(item.price,item.currency||"P$")+'</div>'+
-  '<button class="button secondary inventory-select-button" type="button" data-select-inventory="'+esc(item.id)+'" aria-pressed="'+(selected?'true':'false')+'">'+(selected?'Selected':'Select item')+'</button>'+
+function inventoryItemCard(item){
+ const eligible=Number(item.is_limited)===1||Number(item.is_offsale)===1;
+ const status=item.active_listing_id
+  ?'<span class="inventory-listing-status">Listed · '+currencyMarkup(item.active_listing_price,"P$")+'</span>'
+  :eligible?'<span class="inventory-resale-hint">Eligible for resale</span>':"";
+ return '<article class="item-card inventory-item-card">'+
+  '<a class="item-image" href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+itemPreview(item)+itemBadgeMarkup(item)+'</a>'+
+  '<h3><a href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+esc(item.name)+'</a></h3>'+
+  '<div class="muted">'+esc(item.category)+'</div>'+status+
   '</article>';
 }
 async function inventory(){
  const view=beginView();
  renderSidebar("inventory");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your inventory.</div>';return}
- app.innerHTML='<h1 class="page-title">Inventory</h1><p class="inventory-sell-intro">Select an item to sell it for its current value.</p><div id="inventoryGrid" class="item-grid">Loading...</div><div id="inventorySellPanel" class="inventory-sell-panel" hidden></div>';
- const grid=document.getElementById("inventoryGrid"),panel=document.getElementById("inventorySellPanel");
- let ownedItems=[],selectedItemId=null;
-
- function renderSelection(){
-  const selected=ownedItems.find(item=>item.id===selectedItemId);
-  grid.querySelectorAll("[data-select-inventory]").forEach(button=>{
-   const active=button.dataset.selectInventory===selectedItemId;
-   button.setAttribute("aria-pressed",active?"true":"false");
-   button.textContent=active?"Selected":"Select item";
-   button.closest(".inventory-sell-card")?.classList.toggle("is-selected",active);
-  });
-  if(!selected){panel.hidden=true;panel.innerHTML="";return}
-  panel.hidden=false;
-  panel.innerHTML='<div class="inventory-sell-summary"><strong>'+esc(selected.name)+'</strong><p>You will receive '+currencyMarkup(selected.price,selected.currency||"P$")+' at the current listed price.</p><p class="muted">Selling removes this item from your inventory.</p></div><button class="primary inventory-confirm-sell" type="button" data-sell-selected>Sell item</button>';
- }
-
- grid.addEventListener("click",event=>{
-  const button=event.target.closest("[data-select-inventory]");
-  if(!button)return;
-  selectedItemId=button.dataset.selectInventory;
-  renderSelection();
- });
- panel.addEventListener("click",async event=>{
-  const button=event.target.closest("[data-sell-selected]");
-  if(!button||!selectedItemId)return;
-  const selected=ownedItems.find(item=>item.id===selectedItemId);
-  if(!selected)return;
-  const shownPrice=Number(selected.price||0),shownCurrency=selected.currency==="Tix"?"Tix":"P$";
-  if(!confirm('Sell "'+selected.name+'" for '+shownPrice.toLocaleString()+' '+shownCurrency+'? This cannot be undone.'))return;
-  button.disabled=true;
-  button.textContent="Selling...";
-  try{
-   const result=await api("/api/inventory/sell",{method:"POST",body:JSON.stringify({itemId:selected.id})});
-   setUser({...me,balance:result.balance,tixBalance:result.tixBalance});
-   selectedItemId=null;
-   if(isActiveView(view))await inventory();
-   toast('Sold '+result.item.name+' for '+Number(result.item.price).toLocaleString()+' '+(result.item.currency==="Tix"?"Tix":"P$"));
-  }catch(error){
-   toast(error.message);
-   if(button.isConnected){button.disabled=false;button.textContent="Sell item"}
-  }
- });
-
+ app.innerHTML='<h1 class="page-title">Inventory</h1><p class="inventory-sell-intro">Select an item to view its details and available actions.</p><div id="inventoryGrid" class="item-grid">Loading...</div>';
+ const grid=document.getElementById("inventoryGrid");
  try{
   const d=await api("/api/inventory");
   if(!isActiveView(view)||!grid?.isConnected)return;
-  ownedItems=Array.isArray(d.items)?d.items:[];
-  grid.innerHTML=ownedItems.length?ownedItems.map(item=>inventorySellCard(item,selectedItemId)).join(""):'<div class="empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
-  renderSelection();
- }catch(e){if(isActiveView(view)&&grid?.isConnected)grid.textContent=e.message}
+  const ownedItems=Array.isArray(d.items)?d.items:[];
+  grid.innerHTML=ownedItems.length?ownedItems.map(inventoryItemCard).join(""):'<div class="empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+ }catch(error){if(isActiveView(view)&&grid?.isConnected)grid.textContent=error.message}
 }
 
 
@@ -884,7 +912,7 @@ async function groupsPage(){
   try{
    const result=await api("/api/groups",{method:"POST",body:JSON.stringify(data)});
    setUser({...me,balance:result.balance});
-   form.reset();message.textContent="Group created. 100 P$ was transferred to Admin.";
+   form.reset();message.textContent="Group created.";
    toast("Group created");
    await loadGroups();
   }catch(error){message.textContent=error.message}
@@ -1464,6 +1492,7 @@ async function render(name){
  else if(name==="login"||name==="register")auth(name);
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
+ else if(name==="resale")await resaleMarketPage();
  else if(name==="avatar")await avatarPage();
  else if(name==="groups")await groupsPage();
  else if(name==="group")await groupPage(query.get("id"));
