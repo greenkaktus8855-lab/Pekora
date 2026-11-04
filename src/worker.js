@@ -186,7 +186,7 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_settings (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, body_colors TEXT NOT NULL DEFAULT '{}', rig_type TEXT NOT NULL DEFAULT 'R6' CHECK(rig_type IN ('R6','R15')), scales_json TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_equipped_items_user ON equipped_items(user_id,category)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', thumbnail_url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS sakura_groups (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, description TEXT NOT NULL DEFAULT '', owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS sakura_groups (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, description TEXT NOT NULL DEFAULT '', avatar_url TEXT NOT NULL DEFAULT '', owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS group_members (group_id TEXT NOT NULL REFERENCES sakura_groups(id) ON DELETE CASCADE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL DEFAULT 'MEMBER' CHECK(role IN ('OWNER','MEMBER')), joined_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(group_id,user_id))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS trades (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, offered_items TEXT NOT NULL DEFAULT '[]', requested_items TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','DECLINED','CANCELLED')), created_at TEXT NOT NULL DEFAULT (datetime('now')), responded_at TEXT)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS trade_locks (owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE CASCADE, PRIMARY KEY(owner_id,item_id))"),
@@ -215,6 +215,20 @@ async function ensureSiteSettings(env) {
       if (!(userColumns.results || []).some(column => column.name === "tix_balance")) {
         await env.DB.prepare("ALTER TABLE users ADD COLUMN tix_balance INTEGER NOT NULL DEFAULT 0").run();
       }
+      if (!(userColumns.results || []).some(column => column.name === "banned_at")) {
+        await env.DB.prepare("ALTER TABLE users ADD COLUMN banned_at TEXT").run();
+      }
+      if (!(userColumns.results || []).some(column => column.name === "ban_reason")) {
+        await env.DB.prepare("ALTER TABLE users ADD COLUMN ban_reason TEXT NOT NULL DEFAULT ''").run();
+      }
+      const groupColumns = await env.DB.prepare("PRAGMA table_info(sakura_groups)").all();
+      if (!(groupColumns.results || []).some(column => column.name === "avatar_url")) {
+        await env.DB.prepare("ALTER TABLE sakura_groups ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''").run();
+      }
+      await env.DB.prepare(`UPDATE users SET
+        banned_at=COALESCE(banned_at,(SELECT created_at FROM owner_audit_log WHERE target_user_id=users.id AND action='BAN' ORDER BY created_at DESC LIMIT 1)),
+        ban_reason=CASE WHEN COALESCE(ban_reason,'')='' THEN COALESCE((SELECT details FROM owner_audit_log WHERE target_user_id=users.id AND action='BAN' ORDER BY created_at DESC LIMIT 1),'Account banned by Sakura moderation') ELSE ban_reason END
+        WHERE is_banned=1`).run();
       const tixInitialization = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='tix_initial_balances_2026_11_03'").first();
       if (!tixInitialization) {
         await env.DB.batch([
@@ -587,9 +601,15 @@ async function route(request, env) {
     const user = await env.DB.prepare("SELECT * FROM users WHERE username=? COLLATE NOCASE").bind(data.username.trim()).first();
     const candidateHash = await passwordHash(data.password,user?.password_salt||DUMMY_PASSWORD_SALT);
     const passwordMatches = constantTimeEqual(candidateHash,user?.password_hash||"");
-    if (!user || user.is_banned || !passwordMatches) {
+    if (!user || !passwordMatches) {
       const blocked = await recordRateLimitFailure(env,key);
       return blocked?json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"}):fail("Incorrect username or password.",401);
+    }
+    if (Number(user.is_banned) === 1) {
+      await clearRateLimit(env,key);
+      const reason = String(user.ban_reason || "Account banned by Sakura moderation");
+      const bannedAt = String(user.banned_at || "Date unavailable");
+      return json({error:"This account is banned from Sakura. Reason: "+reason+" · Banned on: "+bannedAt,banned:true,banReason:reason,bannedAt},403);
     }
     await clearRateLimit(env,key);
     const token = randomToken();
@@ -605,7 +625,19 @@ async function route(request, env) {
 
   if (request.method === "GET" && path === "/api/me") {
     const user = await currentUser(request,env);
-    return json({ user:user ? publicUser(user) : null });
+    if (user) return json({user:publicUser(user),bannedAccount:null});
+    const token = getCookie(request,"pekora_session");
+    if (token) {
+      const blocked = await env.DB.prepare(`SELECT u.username,u.public_id,u.role,u.created_at,u.banned_at,u.ban_reason
+        FROM sessions s JOIN users u ON u.id=s.user_id
+        WHERE s.token_hash=? AND s.expires_at>datetime('now') AND u.is_banned=1`).bind(await digest(token)).first();
+      if (blocked) return json({user:null,bannedAccount:{
+        username:blocked.username,public_id:blocked.public_id,role:blocked.role,
+        created_at:blocked.created_at,banned_at:blocked.banned_at,
+        ban_reason:blocked.ban_reason||"Account banned by Sakura moderation"
+      }});
+    }
+    return json({user:null,bannedAccount:null});
   }
 
   if (request.method === "GET" && path === "/api/membership") {
@@ -944,6 +976,20 @@ async function route(request, env) {
     return json({ok:true,action,equipped:true});
   }
 
+  if (request.method === "GET" && path.startsWith("/api/banned-account/")) {
+    let identifier;
+    try { identifier = decodeURIComponent(path.slice("/api/banned-account/".length)); }
+    catch { return fail("Invalid account identifier.",400); }
+    if (!identifier || identifier.length>32) return fail("Invalid account identifier.",400);
+    const numericId = /^\d+$/.test(identifier) && Number.isSafeInteger(Number(identifier)) ? Number(identifier) : -1;
+    const account = await env.DB.prepare(`SELECT u.public_id,u.username,u.role,u.created_at,
+        COALESCE(u.banned_at,(SELECT created_at FROM owner_audit_log WHERE target_user_id=u.id AND action='BAN' ORDER BY created_at DESC LIMIT 1)) AS banned_at,
+        COALESCE(NULLIF(u.ban_reason,''),(SELECT details FROM owner_audit_log WHERE target_user_id=u.id AND action='BAN' ORDER BY created_at DESC LIMIT 1),'Account banned by Sakura moderation') AS ban_reason
+      FROM users u WHERE u.is_banned=1 AND (u.username=? COLLATE NOCASE OR u.public_id=?)`).bind(identifier,numericId).first();
+    if (!account) return fail("This account is not currently banned or could not be found.",404);
+    return json({account:{...account,status:"BANNED"}});
+  }
+
   if (request.method === "GET" && path.startsWith("/api/profile/")) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
@@ -1158,7 +1204,7 @@ async function route(request, env) {
       const q = (url.searchParams.get("q") || "").trim().slice(0,32);
       if (q.length < 1) return json({users:[]});
       const numericId = /^\d+$/.test(q) && Number.isSafeInteger(Number(q)) ? Number(q) : -1;
-      const rows = await env.DB.prepare(`SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified FROM users
+      const rows = await env.DB.prepare(`SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified,banned_at,ban_reason FROM users
         WHERE instr(lower(username),lower(?))>0 OR id=? OR public_id=? ORDER BY username LIMIT 30`).bind(q,q,numericId).all();
       return json({users:rows.results||[]});
     }
@@ -1166,7 +1212,7 @@ async function route(request, env) {
     const userMatch = path.match(/^\/api\/owner\/users\/([A-Za-z0-9-]+)$/);
     if (!userMatch) return fail("User not found.",404);
     const targetId = userMatch[1];
-    const target = await env.DB.prepare("SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified FROM users WHERE id=?").bind(targetId).first();
+    const target = await env.DB.prepare("SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified,banned_at,ban_reason FROM users WHERE id=?").bind(targetId).first();
     if (!target) return fail("User not found.",404);
 
     if (request.method === "GET") {
@@ -1213,14 +1259,14 @@ async function route(request, env) {
     } else if (action === "ban" || action === "unban") {
       if (action === "ban" && details.length < 3) return fail("Enter a ban reason (at least 3 characters).");
       await env.DB.batch([
-        env.DB.prepare("UPDATE users SET is_banned=? WHERE id=?").bind(action==="ban"?1:0,targetId),
-        ...(action==="ban"?[env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(targetId)]:[]),
+        env.DB.prepare("UPDATE users SET is_banned=?,banned_at=CASE WHEN ?=1 THEN datetime('now') ELSE NULL END,ban_reason=CASE WHEN ?=1 THEN ? ELSE '' END WHERE id=?").bind(action==="ban"?1:0,action==="ban"?1:0,action==="ban"?1:0,details,targetId),
+        ...(action==="unban"?[env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(targetId)]:[]),
         env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,action.toUpperCase(),details)
       ]);
     } else {
       return fail("Unknown user management action.");
     }
-    const updated = await env.DB.prepare("SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified FROM users WHERE id=?").bind(targetId).first();
+    const updated = await env.DB.prepare("SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified,banned_at,ban_reason FROM users WHERE id=?").bind(targetId).first();
     return json({ok:true,user:updated});
   }
 
@@ -1236,9 +1282,64 @@ async function route(request, env) {
     return json({games:rows.results||[]});
   }
 
+  const groupDetailMatch = path.match(/^\/api\/groups\/([A-Za-z0-9-]+)$/);
+  if (groupDetailMatch && request.method === "GET") {
+    const viewer = await currentUser(request,env);
+    const groupId = groupDetailMatch[1];
+    const group = await env.DB.prepare(`SELECT g.id,g.name,g.description,g.avatar_url,g.created_at,g.owner_id,
+        u.username AS owner_name,u.public_id AS owner_public_id,
+        COUNT(m.user_id) AS member_count,
+        MAX(CASE WHEN m.user_id=? THEN 1 ELSE 0 END) AS is_member,
+        MAX(CASE WHEN g.owner_id=? THEN 1 ELSE 0 END) AS is_owner
+      FROM sakura_groups g JOIN users u ON u.id=g.owner_id
+      LEFT JOIN group_members m ON m.group_id=g.id
+      WHERE g.id=? GROUP BY g.id`).bind(viewer?.id||"",viewer?.id||"",groupId).first();
+    if (!group) return fail("Group not found.",404);
+    const members = await env.DB.prepare(`SELECT u.username,u.public_id,u.role AS account_role,m.role AS group_role,m.joined_at
+      FROM group_members m JOIN users u ON u.id=m.user_id
+      WHERE m.group_id=? AND u.is_banned=0
+      ORDER BY CASE WHEN m.role='OWNER' THEN 0 ELSE 1 END,u.username`).bind(groupId).all();
+    return json({group,members:members.results||[]});
+  }
+
+  if (groupDetailMatch && request.method === "PATCH") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const groupId = groupDetailMatch[1];
+    const existing = await env.DB.prepare("SELECT id,name,description,avatar_url,owner_id FROM sakura_groups WHERE id=?").bind(groupId).first();
+    if (!existing) return fail("Group not found.",404);
+    if (existing.owner_id !== user.id) return fail("Only the group owner can edit these settings.",403);
+    const data = await body(request);
+    const name = String(data?.name ?? existing.name).trim();
+    const description = String(data?.description ?? existing.description).trim();
+    const avatarUrl = String(data?.avatar_url ?? existing.avatar_url ?? "").trim();
+    if (!/^[a-z0-9а-яёіїєґ _.-]{3,32}$/i.test(name)) return fail("Group names must be 3–32 characters.");
+    if (description.length>300) return fail("Group description must be 300 characters or less.");
+    if (avatarUrl) {
+      try { const image = new URL(avatarUrl); if (image.protocol!=="https:") throw new Error(); }
+      catch { return fail("Group avatar must be a valid HTTPS image URL."); }
+    }
+    const duplicate = await env.DB.prepare("SELECT id FROM sakura_groups WHERE name=? COLLATE NOCASE AND id<>?").bind(name,groupId).first();
+    if (duplicate) return fail("A group with this name already exists.",409);
+    await env.DB.prepare("UPDATE sakura_groups SET name=?,description=?,avatar_url=? WHERE id=? AND owner_id=?").bind(name,description,avatarUrl,groupId,user.id).run();
+    return json({ok:true});
+  }
+
+  if (groupDetailMatch && request.method === "DELETE") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const groupId = groupDetailMatch[1];
+    const result = await env.DB.prepare("DELETE FROM sakura_groups WHERE id=? AND owner_id=?").bind(groupId,user.id).run();
+    if (!result?.meta?.changes) {
+      const exists = await env.DB.prepare("SELECT id FROM sakura_groups WHERE id=?").bind(groupId).first();
+      return exists ? fail("Only the group owner can delete this group.",403) : fail("Group not found.",404);
+    }
+    return json({ok:true});
+  }
+
   if (path === "/api/groups" && request.method === "GET") {
     const viewer = await currentUser(request,env);
-    const rows = await env.DB.prepare(`SELECT g.id,g.name,g.description,g.created_at,u.username AS owner_name,
+    const rows = await env.DB.prepare(`SELECT g.id,g.name,g.description,g.avatar_url,g.created_at,u.username AS owner_name,
       COUNT(m.user_id) AS member_count,
       MAX(CASE WHEN m.user_id=? THEN 1 ELSE 0 END) AS is_member
       FROM sakura_groups g JOIN users u ON u.id=g.owner_id
@@ -1293,6 +1394,17 @@ async function route(request, env) {
     if (!group) return fail("Group not found.",404);
     const result = await env.DB.prepare("INSERT OR IGNORE INTO group_members (group_id,user_id,role) VALUES (?,?, 'MEMBER')").bind(group.id,user.id).run();
     return json({ok:true,joined:Boolean(result?.meta?.changes)});
+  }
+  const groupLeaveMatch = path.match(/^\/api\/groups\/([A-Za-z0-9-]+)\/leave$/);
+  if (groupLeaveMatch && request.method === "DELETE") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const groupId = groupLeaveMatch[1];
+    const group = await env.DB.prepare("SELECT owner_id FROM sakura_groups WHERE id=?").bind(groupId).first();
+    if (!group) return fail("Group not found.",404);
+    if (group.owner_id === user.id) return fail("The owner cannot leave their own group. Delete it from group settings instead.",409);
+    await env.DB.prepare("DELETE FROM group_members WHERE group_id=? AND user_id=?").bind(groupId,user.id).run();
+    return json({ok:true});
   }
 
   if (path.startsWith("/api/owner/games")) {
@@ -1511,7 +1623,7 @@ async function route(request, env) {
     const q = (url.searchParams.get("q") || "").trim().slice(0,32);
     if (q.length < 1) return json({users:[]});
     const numericId = /^\d+$/.test(q) && Number.isSafeInteger(Number(q)) ? Number(q) : -1;
-    const rows = await env.DB.prepare("SELECT username,role,public_id,is_verified FROM users WHERE (instr(lower(username),lower(?))>0 OR public_id=?) AND is_banned=0 ORDER BY username LIMIT 20").bind(q,numericId).all();
+    const rows = await env.DB.prepare("SELECT username,role,public_id,is_verified,is_banned FROM users WHERE (instr(lower(username),lower(?))>0 OR public_id=?) ORDER BY is_banned DESC,username LIMIT 20").bind(q,numericId).all();
     return json({users:rows.results || []});
   }
 
