@@ -1144,3 +1144,63 @@ model-viewer.pekora-model{display:block;width:100%;height:100%;min-height:150px;
  .resale-market-heading{align-items:flex-start;flex-wrap:wrap}
  .resale-section{padding:13px}
 }
+
+
+/* Asset Moderator Panel */
+.asset-panel-page{width:100%;max-width:1040px;margin:8px auto 32px;color:#f2eff8}
+.asset-panel-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.asset-panel-heading .page-title{margin-bottom:4px}
+.asset-panel-heading .page-subtitle{margin:0;color:#aaa2b8}
+.asset-queue-list{display:grid;gap:14px}
+.asset-submission-card{padding:16px;border:1px solid #453755;border-radius:10px;background:#191622;color:#f2eff8;box-shadow:0 8px 20px rgba(0,0,0,.16)}
+.asset-submission-kind{display:inline-flex;margin-bottom:12px;padding:4px 9px;border:1px solid #65498a;border-radius:999px;background:#2a2038;color:#d9c2ff;font-size:11px;font-weight:800;letter-spacing:.04em}
+.asset-submission-layout{display:grid;grid-template-columns:minmax(190px,260px) minmax(0,1fr);gap:18px;align-items:start}
+.asset-submission-preview{display:flex;align-items:center;justify-content:center;min-height:190px;overflow:hidden;border:1px solid #40364d;border-radius:8px;background:#211d2a}
+.asset-submission-preview>img{display:block;width:100%;max-height:320px;object-fit:contain}
+.asset-submission-preview model-viewer{display:block;width:100%;height:250px;--poster-color:#211d2a}
+.asset-model-preview{display:flex;flex-direction:column;gap:8px;padding:8px}
+.asset-model-preview>img{max-height:125px}
+.asset-preview-missing{padding:35px 12px;color:#aaa2b8;text-align:center}
+.asset-submission-details{min-width:0}
+.asset-submission-details h3{margin:0 0 8px;color:#f7f2ff;font-size:21px;overflow-wrap:anywhere}
+.asset-submission-details p{margin:7px 0;color:#d6cfe0;line-height:1.5;overflow-wrap:anywhere}
+.asset-submission-details p.muted,.asset-submission-meta{color:#aaa2b8!important;font-size:12px}
+.asset-submission-details a{color:#d1adff}
+.asset-submission-details a:hover{color:#fff}
+.asset-external-link{display:inline-block;margin:4px 12px 4px 0;font-size:13px;font-weight:700}
+.asset-review-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:15px;padding-top:13px;border-top:1px solid #40364d}
+.asset-review-actions button{min-width:118px}
+.asset-review-actions button:disabled{opacity:.55;cursor:wait}
+.asset-review-actions .danger-button{border:1px solid rgba(255,111,111,.45);background:#4a2029;color:#ffd9d9}
+.asset-review-actions .danger-button:hover{background:#612630}
+.asset-tutorial{display:grid;gap:14px;margin-top:28px;padding:20px;border:1px solid #453755;border-radius:10px;background:#191622;color:#eae3f2}
+.asset-tutorial h2{margin:0;color:#f6efff;font-size:23px}
+.asset-tutorial-intro{margin:0;padding:12px 14px;border:1px solid #55426d;border-radius:7px;background:#231d30;color:#cfc3de;line-height:1.55}
+.asset-tutorial article{padding:13px 0 0;border-top:1px solid #40364d}
+.asset-tutorial article h3{margin:0 0 6px;color:#d6baff;font-size:16px}
+.asset-tutorial article p{margin:6px 0;color:#c8bfd3;line-height:1.6}
+.asset-tutorial code{color:#f0dfff}
+.owner-badge-manager{display:grid;gap:8px;margin-top:18px;padding:14px;border:1px solid #514064;border-radius:8px;background:#211b2b}
+.owner-badge-manager h4{margin:0;color:#f3eafa;font-size:16px}
+.owner-badge-manager>p{margin:0 0 4px;color:#aaa2b8!important}
+.owner-badge-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid #3d334a}
+.owner-badge-row>span{display:grid;gap:2px}
+.owner-badge-row strong{color:#eee5fa;font-size:13px}
+.owner-badge-row small{color:#aaa2b8;font-size:11px}
+.owner-badge-row button{min-width:88px}
+.profile-badge-symbol{display:flex;align-items:center;justify-content:center;width:64px;height:64px;border:2px solid #8962b2;border-radius:50%;background:#30233f;color:#eadbff;font-size:25px;font-weight:900}
+.asset-moderator-symbol{border-color:#8b6bc0;background:#2b2240;font-size:18px}
+.early-supporter-symbol{border-color:#bf9a56;background:#392d1b;color:#ffe3a6}
+.contributor-symbol{border-color:#5b9a86;background:#1e352f;color:#b4f1dc}
+.creator-symbol{border-color:#9b70c4;background:#332244;color:#f2d9ff}
+.helper-symbol{border-color:#6388b2;background:#1d3043;color:#cce4ff}
+@media(max-width:700px){
+ .asset-panel-heading{align-items:stretch;flex-direction:column}
+ .asset-panel-heading button{width:100%}
+ .asset-submission-layout{grid-template-columns:1fr}
+ .asset-submission-preview{min-height:150px}
+ .asset-submission-preview model-viewer{height:220px}
+ .asset-review-actions button{flex:1 1 0;min-width:0}
+ .asset-tutorial{padding:14px}
+ .owner-badge-row{align-items:flex-start}
+}
