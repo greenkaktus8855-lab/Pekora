@@ -75,6 +75,7 @@ const checks = [
   ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
   ["Sakura app and stylesheet cache versions are refreshed", index.includes("app.js?v=20261104-group-upload-verify-1") && index.includes("style.css?v=20261104-group-dark-upload-verify-1") && index.includes("openpekora-components.css?v=20261103-sakura-home-avatar-2")],
   ["Group avatars are uploaded as validated image files and stored in D1", worker.includes("CREATE TABLE IF NOT EXISTS group_image_files") && worker.includes("request.arrayBuffer()") && worker.includes("The selected file does not match its image format.") && worker.includes("/api/group-images/")],
+  ["Group image BLOBs are converted to browser-readable bytes", worker.includes("Array.isArray(storedImage)") && worker.includes("Uint8Array.from(storedImage)") && worker.includes("new Response(imageBytes")],
   ["Group avatar upload is restricted to the group owner", worker.includes("Only the group owner can change its image.") && worker.includes('groupAvatarUploadMatch && request.method === "PUT"')],
   ["Group verification is persisted and owner-only", worker.includes("ALTER TABLE sakura_groups ADD COLUMN is_verified") && worker.includes('path === "/api/owner/groups"') && worker.includes('actor.role !== "OWNER"')],
   ["Group verification badges appear in public group pages", app.includes("group-verified-badge") && app.includes("Verified group") && app.includes("data-group-verify")],
