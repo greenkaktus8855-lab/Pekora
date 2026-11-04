@@ -851,3 +851,131 @@ model-viewer.pekora-model{display:block;width:100%;height:100%;min-height:150px;
  .owner-group-row{align-items:flex-start}
  .owner-group-row button{width:100%}
 }
+
+
+/* Dark Sakura public banned-account page */
+.banned-account-page{
+ width:100%;
+ max-width:none;
+ min-height:calc(100vh - 170px);
+ margin:0;
+ padding:22px 18px 42px;
+ box-sizing:border-box;
+ background:#111019;
+ color:#f2eff8;
+}
+.banned-account-page .item-back-link{
+ display:inline-flex;
+ margin:0 auto 14px;
+ color:#c49aff;
+ font-weight:700;
+ text-decoration:none;
+}
+.banned-account-page .item-back-link:hover{color:#e0c8ff;text-decoration:underline}
+.banned-account-card{
+ width:100%;
+ max-width:760px;
+ margin:0 auto;
+ padding:22px;
+ box-sizing:border-box;
+ background:#17151f!important;
+ color:#f2eff8!important;
+ border:1px solid #393247!important;
+ border-radius:12px;
+ box-shadow:0 10px 30px rgba(0,0,0,.28)!important;
+}
+.ban-status-label{
+ display:inline-flex;
+ align-items:center;
+ gap:7px;
+ padding:6px 10px;
+ border:1px solid rgba(255,111,111,.28);
+ border-radius:5px;
+ background:rgba(180,35,24,.16);
+ color:#ff9690;
+ font-size:11px;
+ font-weight:900;
+ letter-spacing:.09em;
+}
+.banned-account-heading{
+ display:flex;
+ align-items:center;
+ gap:17px;
+ margin:20px 0 22px;
+}
+.banned-account-avatar{
+ display:grid;
+ place-items:center;
+ flex:0 0 82px;
+ width:82px;
+ height:82px;
+ overflow:hidden;
+ border:1px solid #514760;
+ border-radius:12px;
+ background:#292334!important;
+ color:#d8baff!important;
+ font-size:32px;
+ font-weight:900;
+}
+.banned-account-heading h1{
+ margin:0 0 5px;
+ color:#fff;
+ font-size:30px;
+ font-weight:900;
+ line-height:1.15;
+ overflow-wrap:anywhere;
+}
+.banned-account-heading .muted{margin:0 0 8px;color:#aaa2b8!important}
+.ban-pill{
+ display:inline-flex;
+ margin:0;
+ padding:4px 9px;
+ border:1px solid rgba(255,111,111,.25);
+ border-radius:5px;
+ background:rgba(180,35,24,.16);
+ color:#ff9690;
+ font-size:10px;
+ font-weight:900;
+ letter-spacing:.07em;
+}
+.ban-detail-row{
+ display:grid;
+ grid-template-columns:145px minmax(0,1fr);
+ align-items:start;
+ gap:14px;
+ padding:14px 0;
+ border-top:1px solid #393247;
+ color:#e8e1f0;
+}
+.ban-detail-row strong{
+ color:#c8b4df!important;
+ font-size:13px;
+ font-weight:800;
+}
+.ban-detail-row span,.ban-detail-row p{
+ min-width:0;
+ margin:0;
+ color:#f2eff8;
+ font-size:14px;
+ line-height:1.5;
+ overflow-wrap:anywhere;
+}
+.banned-account-card>p.muted{
+ margin:18px 0 0;
+ padding:13px 14px;
+ border:1px solid #393247;
+ border-radius:7px;
+ background:#201c2b;
+ color:#bcb3c9!important;
+ line-height:1.5;
+}
+.banned-account-card a{color:#c49aff}
+.banned-account-card a:hover{color:#e0c8ff}
+@media(max-width:560px){
+ .banned-account-page{padding:14px 10px 28px}
+ .banned-account-card{padding:16px}
+ .banned-account-heading{gap:12px}
+ .banned-account-avatar{flex-basis:64px;width:64px;height:64px;font-size:25px}
+ .banned-account-heading h1{font-size:23px}
+ .ban-detail-row{grid-template-columns:1fr;gap:5px;padding:12px 0}
+}
