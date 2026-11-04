@@ -768,7 +768,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id WHERE i.is_for_sale=1 ORDER BY i.created_at DESC,i.rowid DESC").all();
     return json({ items:rows.results || [] });
   }
 
