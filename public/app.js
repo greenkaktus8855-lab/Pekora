@@ -136,7 +136,6 @@ function renderSidebar(active="home"){
   ["groups","icon-nav-group","Groups"],
   ["currency","icon-nav-robux","Currency"],
   ["membership","icon-bc","Membership"],
-  ["verification","icon-nav-profile","Verification Application"],
   ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
  ];
@@ -756,69 +755,6 @@ async function membershipPage(){
   if(isActiveView(view))app.innerHTML='<div class="empty">Could not load membership: '+esc(error.message)+'</div>';
  }
 }
-async function verificationApplicationPage(){
- const view=beginView();
- renderSidebar("verification");
- if(!me){
-  app.innerHTML='<div class="verification-page"><h1 class="page-title">Verification Application</h1><p class="muted">Please <a href="#login" data-page="login">log in</a> to apply for the Sakura Verified badge.</p></div>';
-  return;
- }
- app.innerHTML='<div class="verification-page"><h1 class="page-title">Verification Application</h1><p class="verification-intro">Apply for the Sakura Verified badge. Tell us who you are in the community, what you contribute, and why your account should be recognized.</p><div id="verificationApplicationContent" class="verification-application-content">Loading your application...</div></div>';
- const host=document.getElementById("verificationApplicationContent");
- try{
-  const data=await api("/api/verification-application");
-  if(!isActiveView(view)||!host?.isConnected)return;
-  const application=data.application;
-  if(data.isVerified){
-   host.innerHTML='<section class="verification-status-card is-approved"><h2>Account verified</h2><p>Your Sakura account already has the Verified badge.</p></section>';
-   return;
-  }
-  if(application?.status==="PENDING"){
-   host.innerHTML='<section class="verification-status-card is-pending"><h2>Application under review</h2><p>Your application has been received and is waiting for the Sakura team to review it.</p><p class="muted">Submitted '+esc(new Date(application.created_at+"Z").toLocaleString())+'</p><p class="muted">You can submit another application after this one has been reviewed.</p></section>';
-   return;
-  }
-  const rejected=application?.status==="REJECTED";
-  host.innerHTML=(rejected?'<section class="verification-status-card is-rejected"><h2>Previous application not approved</h2><p>Your previous application was not approved. You can review your answers and submit a new application.</p>'+(application.review_note?'<p><strong>Review note:</strong> '+esc(application.review_note)+'</p>':'')+'<p class="muted">Reviewed '+esc(application.reviewed_at?new Date(application.reviewed_at+"Z").toLocaleString():"")+'</p></section>':'')+
-   '<section class="verification-form-card"><h2>Apply for Verification</h2><p class="muted">Answer every required question in English. Be clear and honest. Verification is reviewed manually and is not guaranteed.</p>'+
-   '<form id="verificationApplicationForm" class="verification-application-form" autocomplete="off">'+
-    '<label>1. Why would you like to receive the Verified badge?<textarea name="reason" rows="4" minlength="30" maxlength="800" required placeholder="Explain why verification matters to you and how it would help the Sakura community recognize your account."></textarea><small>30–800 characters</small></label>'+
-    '<label>2. How do you contribute to Sakura?<textarea name="contributions" rows="4" minlength="30" maxlength="800" required placeholder="Tell us about your creations, community activity, helpful contributions, events, or other work."></textarea><small>30–800 characters</small></label>'+
-    '<label>3. What makes your account recognizable or notable?<textarea name="recognition" rows="3" minlength="20" maxlength="600" required placeholder="Describe what other Sakura players may know you for."></textarea><small>20–600 characters</small></label>'+
-    '<label>4. How active are you on Sakura?<select name="activity" required><option value="">Choose an activity level</option><option>Daily</option><option>Several times a week</option><option>Weekly</option><option>Occasionally</option></select></label>'+
-    '<label>5. Supporting links (optional)<textarea name="links" rows="3" maxlength="600" placeholder="Add public links to your work, social profiles, videos, or community contributions. One link per line."></textarea><small>Up to 600 characters. Do not include passwords or private information.</small></label>'+
-    '<label>6. Anything else the Sakura team should know? (optional)<textarea name="additional_info" rows="3" maxlength="600" placeholder="Share any additional context that may help us review your application."></textarea><small>Up to 600 characters</small></label>'+
-    '<p class="verification-disclaimer">By submitting, you confirm that the information is accurate. Do not submit passwords, private messages, or sensitive personal information.</p>'+
-    '<div class="verification-form-footer"><button class="primary" type="submit">Submit Application</button><span id="verificationApplicationMessage" class="muted" role="status"></span></div>'+
-   '</form></section>';
-  const form=document.getElementById("verificationApplicationForm");
-  form?.addEventListener("submit",async event=>{
-   event.preventDefault();
-   const values=new FormData(form);
-   const payload={
-    reason:String(values.get("reason")||"").trim(),
-    contributions:String(values.get("contributions")||"").trim(),
-    recognition:String(values.get("recognition")||"").trim(),
-    activity:String(values.get("activity")||""),
-    links:String(values.get("links")||"").trim(),
-    additional_info:String(values.get("additional_info")||"").trim()
-   };
-   const button=form.querySelector('button[type="submit"]');
-   const message=document.getElementById("verificationApplicationMessage");
-   button.disabled=true;message.textContent="Submitting application...";
-   try{
-    await api("/api/verification-application",{method:"POST",body:JSON.stringify(payload)});
-    if(!isActiveView(view))return;
-    toast("Verification application submitted");
-    await verificationApplicationPage();
-   }catch(error){
-    if(isActiveView(view)){message.textContent=error.message;button.disabled=false}
-   }
-  });
- }catch(error){
-  if(isActiveView(view)&&host?.isConnected)host.innerHTML='<p class="error">Could not load your application: '+esc(error.message)+'</p>';
- }
-}
-
 async function promocodesPage(){
  const view=beginView();
  renderSidebar("promocodes");
@@ -1317,7 +1253,7 @@ async function owner(){
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>'+
  '<section class="owner-section owner-creator-submissions"><h2>Clothing submissions</h2><p class="muted">Review player Shirts and Pants. The player’s suggested price is prefilled and can be changed before publishing.</p><div id="ownerCreatorSubmissions" class="owner-creator-submissions-list">Loading submissions...</div></section>'+
- '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section owner-group-verification"><h2>Group Verification</h2><p class="muted">Give or remove the verified badge for Sakura groups. Only the site owner can change this.</p><div id="ownerGroups" class="owner-group-list">Loading groups...</div></section><section class="owner-section owner-verification-review"><h2>Verification Applications</h2><p class="muted">Review player applications and approve or reject requests for the Sakura Verified badge.</p><label class="verification-filter-label">Show applications<select id="ownerVerificationFilter"><option value="PENDING">Pending</option><option value="ALL">All applications</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select></label><div id="ownerVerificationApplications" class="owner-verification-list">Loading applications...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Sakura currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="1" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
+ '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section owner-group-verification"><h2>Group Verification</h2><p class="muted">Give or remove the verified badge for Sakura groups. Only the site owner can change this.</p><div id="ownerGroups" class="owner-group-list">Loading groups...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Sakura currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="1" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
  app.insertAdjacentHTML("beforeend",
   '<section class="owner-section owner-promocode-section"><h2>Promo Code Management</h2><p class="muted">Create codes that grant Sakura currency and one or more items from the catalog. Set a total claim limit and optional expiry date.</p>'+
   '<form id="ownerPromoForm" class="owner-item-form owner-promo-form">'+
@@ -1396,62 +1332,6 @@ async function owner(){
   }
  }
  loadOwnerCreatorSubmissions();
- const ownerVerificationHost=document.getElementById("ownerVerificationApplications");
- const ownerVerificationFilter=document.getElementById("ownerVerificationFilter");
- async function loadOwnerVerificationApplications(){
-  if(!ownerVerificationHost)return;
-  ownerVerificationHost.textContent="Loading applications...";
-  try{
-   const filter=String(ownerVerificationFilter?.value||"PENDING");
-   const data=await api("/api/owner/verification-applications?status="+encodeURIComponent(filter));
-   if(!isActiveView(view)||!ownerVerificationHost.isConnected)return;
-   const applications=data.applications||[];
-   if(!applications.length){
-    ownerVerificationHost.innerHTML='<p class="muted">'+(filter==="PENDING"?"No verification applications are waiting for review.":"No applications found.")+'</p>';
-    return;
-   }
-   ownerVerificationHost.innerHTML=applications.map(application=>{
-    const username=application.current_username||application.username_snapshot;
-    const links=String(application.links||"").split(/[\s,]+/).filter(Boolean).map(raw=>{
-     try{
-      const url=new URL(raw);
-      if(!["https:","http:"].includes(url.protocol))return "";
-      return '<a href="'+esc(url.href)+'" target="_blank" rel="noopener noreferrer">'+esc(url.hostname+url.pathname)+'</a>';
-     }catch{return ""}
-    }).filter(Boolean).join(" · ");
-    const pending=application.status==="PENDING";
-    return '<article class="verification-review-card" data-verification-application="'+esc(application.id)+'">'+
-     '<header class="verification-review-header"><div><h3><a href="#profile?id='+encodeURIComponent(application.public_id||"")+'" data-profile="'+esc(username)+'">'+esc(username)+'</a></h3><p class="muted">User ID '+esc(application.public_id||"—")+' · Submitted '+esc(new Date(application.created_at+"Z").toLocaleString())+'</p></div><span class="verification-review-status status-'+esc(application.status.toLowerCase())+'">'+esc(application.status)+'</span></header>'+
-     '<div class="verification-review-answers">'+
-      '<section><h4>Why they want verification</h4><p>'+esc(application.reason)+'</p></section>'+
-      '<section><h4>Contributions to Sakura</h4><p>'+esc(application.contributions)+'</p></section>'+
-      '<section><h4>What makes the account notable</h4><p>'+esc(application.recognition)+'</p></section>'+
-      '<section><h4>Activity</h4><p>'+esc(application.activity)+'</p></section>'+
-      (links?'<section><h4>Supporting links</h4><p>'+links+'</p></section>':'')+
-      (application.additional_info?'<section><h4>Additional information</h4><p>'+esc(application.additional_info)+'</p></section>':'')+
-      (application.review_note?'<section><h4>Review note</h4><p>'+esc(application.review_note)+'</p></section>':'')+
-     '</div>'+
-     (pending?'<div class="verification-review-actions"><label>Note to applicant (optional)<textarea data-verification-note="'+esc(application.id)+'" rows="2" maxlength="500" placeholder="Optional feedback"></textarea></label><div><button class="primary" type="button" data-verification-action="APPROVE" data-verification-id="'+esc(application.id)+'">Approve & verify</button> <button class="button secondary" type="button" data-verification-action="REJECT" data-verification-id="'+esc(application.id)+'">Reject</button></div></div>':'')+
-    '</article>';
-   }).join("");
-   ownerVerificationHost.querySelectorAll("[data-verification-action]").forEach(button=>button.addEventListener("click",async()=>{
-    const applicationId=button.dataset.verificationId;
-    const action=button.dataset.verificationAction;
-    const note=ownerVerificationHost.querySelector('[data-verification-note="'+CSS.escape(applicationId)+'"]')?.value.trim()||"";
-    if(action==="REJECT"&&!confirm("Reject this verification application?"))return;
-    button.disabled=true;
-    try{
-     await api("/api/owner/verification-applications/"+encodeURIComponent(applicationId),{method:"POST",body:JSON.stringify({action,note})});
-     toast(action==="APPROVE"?"Account verified":"Application rejected");
-     await loadOwnerVerificationApplications();
-    }catch(error){toast(error.message);button.disabled=false}
-   }));
-  }catch(error){
-   if(ownerVerificationHost?.isConnected)ownerVerificationHost.textContent=error.message;
-  }
- }
- ownerVerificationFilter?.addEventListener("change",loadOwnerVerificationApplications);
- loadOwnerVerificationApplications();
  const promoForm=document.getElementById("ownerPromoForm");
  const promoItemSelect=document.getElementById("ownerPromoItems");
  const promoList=document.getElementById("ownerPromoList");
@@ -1851,7 +1731,6 @@ async function render(name){
  else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
  else if(name==="currency")await currencyPage();
  else if(name==="membership")await membershipPage();
- else if(name==="verification")await verificationApplicationPage();
  else if(name==="promocodes")await promocodesPage();
  else if(name==="games")await gamesPage();
  else if(name==="trades")await tradesPage();
