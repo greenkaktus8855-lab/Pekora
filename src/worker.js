@@ -185,6 +185,11 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_render_cache (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, source_hash TEXT NOT NULL, thumbnail_data BLOB NOT NULL, rendered_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_settings (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, body_colors TEXT NOT NULL DEFAULT '{}', rig_type TEXT NOT NULL DEFAULT 'R6' CHECK(rig_type IN ('R6','R15')), scales_json TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_equipped_items_user ON equipped_items(user_id,category)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS creator_submissions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, username TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', category TEXT NOT NULL CHECK(category IN ('Shirts','Pants')), roblox_url TEXT NOT NULL, asset_id INTEGER NOT NULL CHECK(asset_id>0), status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')), image_url TEXT NOT NULL DEFAULT '', reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_item_id TEXT REFERENCES items(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), reviewed_at TEXT)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_creator_submissions_user ON creator_submissions(user_id,created_at DESC)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_creator_submissions_status ON creator_submissions(status,created_at)"),
+        env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_creator_submissions_active_asset ON creator_submissions(asset_id) WHERE status IN ('PENDING','APPROVED')"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS item_creators (item_id TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE, creator_id TEXT REFERENCES users(id) ON DELETE SET NULL, creator_name TEXT NOT NULL, original_url TEXT NOT NULL, submission_id TEXT UNIQUE REFERENCES creator_submissions(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', thumbnail_url TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS sakura_groups (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, description TEXT NOT NULL DEFAULT '', avatar_url TEXT NOT NULL DEFAULT '', is_verified INTEGER NOT NULL DEFAULT 0, owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS group_image_files (id TEXT PRIMARY KEY, group_id TEXT NOT NULL UNIQUE REFERENCES sakura_groups(id) ON DELETE CASCADE, image_data BLOB NOT NULL, content_type TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
@@ -732,8 +737,55 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id WHERE i.is_for_sale=1 ORDER BY i.category,i.name").all();
     return json({ items:rows.results || [] });
+  }
+
+  if (path === "/api/creator/submissions" && request.method === "GET") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const rows = await env.DB.prepare(`SELECT id,name,description,category,roblox_url,status,created_item_id,created_at,reviewed_at
+      FROM creator_submissions WHERE user_id=? ORDER BY created_at DESC LIMIT 40`).bind(user.id).all();
+    return json({submissions:rows.results||[]});
+  }
+
+  if (path === "/api/creator/submissions" && request.method === "POST") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const data = await body(request);
+    const name = String(data?.name||"").trim();
+    const description = String(data?.description||"").trim();
+    const category = String(data?.category||"");
+    const suppliedUrl = String(data?.roblox_url||"").trim();
+    if (!name || name.length>80) return fail("Item name must be 1–80 characters.");
+    if (!["Shirts","Pants"].includes(category)) return fail("Only Shirts and Pants can be submitted.");
+    if (description.length>500) return fail("Description must be 500 characters or less.");
+    if (suppliedUrl.length>500) return fail("Roblox catalog link is too long.");
+    let assetId = 0;
+    try {
+      const source = new URL(suppliedUrl);
+      if (source.protocol!=="https:" || !["roblox.com","www.roblox.com"].includes(source.hostname.toLowerCase())) throw new Error();
+      const match = source.pathname.match(/^\/catalog\/(\d+)(?:\/|$)/);
+      if (!match) throw new Error();
+      assetId = Number(match[1]);
+      if (!Number.isSafeInteger(assetId) || assetId<1 || assetId>2147483647) throw new Error();
+    } catch {
+      return fail("Enter the original Roblox catalog link, for example https://www.roblox.com/catalog/123456789/Item.");
+    }
+    const pending = await env.DB.prepare("SELECT COUNT(*) AS count FROM creator_submissions WHERE user_id=? AND status='PENDING'").bind(user.id).first();
+    if (Number(pending?.count||0)>=10) return fail("You already have 10 requests waiting for review.",429);
+    const submissionId = id();
+    const canonicalUrl = "https://www.roblox.com/catalog/"+assetId;
+    try {
+      await env.DB.prepare("INSERT INTO creator_submissions (id,user_id,username,name,description,category,roblox_url,asset_id) VALUES (?,?,?,?,?,?,?,?)")
+        .bind(submissionId,user.id,user.username,name,description,category,canonicalUrl,assetId).run();
+    } catch (error) {
+      const message = String(error?.message||"").toLowerCase();
+      if (message.includes("unique") || message.includes("constraint")) return fail("This Roblox item already has a pending or approved submission.",409);
+      console.error("[Sakura creator] Submission creation failed:",error);
+      return fail("Could not submit this item. Please try again.",500);
+    }
+    return json({ok:true,id:submissionId,status:"PENDING"},201);
   }
 
   if (request.method === "GET" && path === "/api/resale/listings") {
@@ -752,7 +804,7 @@ async function route(request, env) {
 
   const resaleItemMatch = path.match(/^\/api\/resale\/item\/([A-Za-z0-9_-]{1,80})$/);
   if (request.method === "GET" && resaleItemMatch) {
-    const item = await env.DB.prepare("SELECT id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,is_offsale,stock_limit,stock_sold,is_for_sale,created_at FROM items WHERE id=?").bind(resaleItemMatch[1]).first();
+    const item = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,ic.creator_name,cu.public_id AS creator_public_id FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id WHERE i.id=?").bind(resaleItemMatch[1]).first();
     if (!item) return fail("Item not found.",404);
     const rows = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,r.created_at,
         u.username AS seller_name,u.public_id AS seller_public_id,u.is_verified AS seller_verified
@@ -1716,6 +1768,350 @@ async function route(request, env) {
     return json({ok:true,status});
   }
 
+  if (path.startsWith("/api/owner/creator-submissions")) {
+    const actor = await requireUser(request,env);
+    if (!actor) return fail("Please sign in.",401);
+    if (actor.role !== "OWNER") return fail("Owner access required.",403);
+    if (path === "/api/owner/creator-submissions" && request.method === "GET") {
+      const rows = await env.DB.prepare(`SELECT s.id,s.user_id,s.username,s.name,s.description,s.category,s.roblox_url,s.created_at,u.public_id AS creator_public_id
+        FROM creator_submissions s LEFT JOIN users u ON u.id=s.user_id
+        WHERE s.status='PENDING' ORDER BY s.created_at ASC LIMIT 100`).all();
+      return json({submissions:rows.results||[]});
+    }
+    const match = path.match(/^\/api\/owner\/creator-submissions\/([A-Za-z0-9_-]{1,80})$/);
+    if (!match || request.method!=="PATCH") return fail("Unsupported clothing review action.",405);
+    const data = await body(request);
+    const action = String(data?.action||"");
+    const pending = await env.DB.prepare("SELECT id FROM creator_submissions WHERE id=? AND status='PENDING'").bind(match[1]).first();
+    if (!pending) return fail("This request has already been reviewed or no longer exists.",409);
+    if (action==="reject") {
+      const result = await env.DB.prepare("UPDATE creator_submissions SET status='REJECTED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING'")
+        .bind(actor.id,match[1]).run();
+      if (!result?.meta?.changes) return fail("This request has already been reviewed.",409);
+      return json({ok:true,status:"REJECTED"});
+    }
+    if (action!=="approve") return fail("Choose approve or reject.");
+    const imageUrl = String(data?.image_url||"").trim();
+    if (!imageUrl || imageUrl.length>500) return fail("Add a catalog image URL (maximum 500 characters).");
+    try {
+      const image = new URL(imageUrl);
+      if (image.protocol!=="https:") throw new Error();
+    } catch {
+      return fail("Catalog image URL must be a valid HTTPS link.");
+    }
+    const rawPrice = data?.price===undefined ? 50 : data.price;
+    const price = Number(rawPrice);
+    if (!Number.isSafeInteger(price) || price<0 || price>1000000) return fail("Price must be a whole number from 0 to 1,000,000 P$.");
+    const itemId = id();
+    const results = await env.DB.batch([
+      env.DB.prepare("UPDATE creator_submissions SET status='APPROVED',reviewed_by=?,reviewed_at=datetime('now'),image_url=?,created_item_id=? WHERE id=? AND status='PENDING' AND created_item_id IS NULL")
+        .bind(actor.id,imageUrl,itemId,match[1]),
+      env.DB.prepare(`INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale)
+        SELECT s.created_item_id,s.name,s.description,s.category,?,'P
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    if (user.role !== "OWNER") return fail("Owner access required.",403);
+    if (path === "/api/owner/items" && request.method === "GET") {
+      try { await announceMissingLimitedItems(env, url.origin); }
+      catch (error) { console.error("[Sakura Discord] Missing Limited scan failed:",error); }
+      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id ORDER BY i.created_at DESC,i.name").all();
+      return json({items:rows.results||[]});
+    }
+    if (path === "/api/owner/items" && request.method === "DELETE") {
+      const result = await env.DB.prepare("UPDATE items SET is_for_sale=0 WHERE is_for_sale=1").run();
+      return json({ok:true,hidden:result?.meta?.changes||0});
+    }
+    if (path === "/api/owner/items" && request.method === "POST") {
+      const data = await body(request), error = validItem(data);
+      if (error) return fail(error);
+      if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item catalog visibility must be true or false.");
+      if (data.is_offsale !== undefined && typeof data.is_offsale !== "boolean") return fail("Off Sale status must be true or false.");
+      if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
+      const isLimited = data.is_limited === true;
+      const stockLimit = data.stock_limit === undefined || data.stock_limit === null || data.stock_limit === "" ? 0 : Number(data.stock_limit);
+      if (!Number.isSafeInteger(stockLimit) || stockLimit < 0 || stockLimit > 1000000) return fail("Stock must be a whole number from 0 to 1,000,000.");
+      if (isLimited && stockLimit < 1) return fail("A Limited item must have a stock quantity of at least 1.");
+      const itemId=id();
+      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+      const assetId = Number(data.asset_id || 0);
+      const assetTypeId = Number(data.asset_type_id || (assetId ? (defaultAssetTypes[data.category] || 0) : 0));
+      if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID (for example neck, back, front, shoulder or waist).");
+      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),data.currency||"P$",String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,isLimited?1:0,stockLimit,0,data.is_for_sale===false?0:1,data.is_offsale===true?1:0).run();
+      if (isLimited && data.is_for_sale !== false) {
+        try {
+          await announceLimitedItem({id:itemId,name:data.name,category:data.category,price:Number(data.price),currency:data.currency||"P$",image_url:String(data.image_url||"").trim(),stock_limit:stockLimit},env,url.origin);
+        } catch (error) { console.error("[Sakura Discord] New Limited announcement failed:",error); }
+      }
+      return json({ok:true,id:itemId},201);
+    }
+    const match=path.match(/^\/api\/owner\/items\/([A-Za-z0-9_-]{1,80})$/i);
+    if (match && request.method === "PATCH") {
+      const current=await env.DB.prepare("SELECT * FROM items WHERE id=?").bind(match[1]).first();
+      if (!current) return fail("Item not found.",404);
+      const data=await body(request);
+      if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid item update.");
+      if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item catalog visibility must be true or false.");
+       if (data.is_offsale !== undefined && typeof data.is_offsale !== "boolean") return fail("Off Sale status must be true or false.");
+      if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
+      const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,currency:data.currency??current.currency??"P$",image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0),is_offsale:data.is_offsale===undefined?Number(current.is_offsale||0)===1:data.is_offsale,is_limited:data.is_limited===undefined?Number(current.is_limited)===1:data.is_limited,stock_limit:data.stock_limit===undefined?Number(current.stock_limit||0):Number(data.stock_limit)};
+      if (!Number.isSafeInteger(merged.stock_limit) || merged.stock_limit < 0 || merged.stock_limit > 1000000) return fail("Stock must be a whole number from 0 to 1,000,000.");
+      if (merged.is_limited && merged.stock_limit < 1) return fail("A Limited item must have a stock quantity of at least 1.");
+      if (merged.stock_limit > 0 && merged.stock_limit < Number(current.stock_sold||0)) return fail("Stock cannot be lower than the number already sold.");
+      const keepLegacyImage = String(merged.image_url||"") === String(current.image_url||"");
+      const error=validItem(merged,keepLegacyImage); if(error)return fail(error);
+      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+      const assetId = Number(merged.asset_id || 0);
+      const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
+      if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
+      await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,currency=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=?,is_offsale=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),merged.currency,String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,merged.is_offsale?1:0,match[1]).run();
+      if (String(merged.currency||"P$")===String(current.currency||"P$") && Number(merged.price) > Number(current.price || 0) && Number(merged.is_for_sale) === 1) {
+        try {
+          await announcePriceIncrease({
+            id:match[1],
+            name:merged.name,
+            image_url:String(merged.image_url||"").trim(),
+            currency:merged.currency
+          },Number(current.price || 0),Number(merged.price),env,url.origin);
+        } catch (error) {
+          console.error("[Sakura Discord] Price increase announcement failed:",error);
+        }
+      }
+      return json({ok:true});
+    }
+    if (match && request.method === "DELETE") {
+      await env.DB.prepare("UPDATE items SET is_for_sale=0 WHERE id=?").bind(match[1]).run();
+      return json({ok:true});
+    }
+    return fail("Unsupported catalog management action.",405);
+  }
+
+  if (request.method === "GET" && path === "/api/owner/stats") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    if (user.role !== "OWNER") return fail("Owner access required.",403);
+    const [users,items,purchases] = await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) n FROM users").first(),
+      env.DB.prepare("SELECT COUNT(*) n FROM items WHERE is_for_sale=1").first(),
+      env.DB.prepare("SELECT COUNT(*) n FROM purchases").first()
+    ]);
+    return json({users:users.n,items:items.n,purchases:purchases.n});
+  }
+
+  if (request.method === "GET" && path === "/api/search-users") {
+    const q = (url.searchParams.get("q") || "").trim().slice(0,32);
+    if (q.length < 1) return json({users:[]});
+    const numericId = /^\d+$/.test(q) && Number.isSafeInteger(Number(q)) ? Number(q) : -1;
+    const rows = await env.DB.prepare("SELECT username,role,public_id,is_verified,is_banned FROM users WHERE (instr(lower(username),lower(?))>0 OR public_id=?) ORDER BY is_banned DESC,username LIMIT 20").bind(q,numericId).all();
+    return json({users:rows.results || []});
+  }
+
+  if (path === "/api/promocodes" && request.method === "GET") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const rows = await env.DB.prepare(`
+      SELECT c.code,c.claimed_at,p.reward_amount,p.reward_currency,
+        (SELECT GROUP_CONCAT(i.name, ', ') FROM promo_code_items pi JOIN items i ON i.id=pi.item_id WHERE pi.code=p.code) AS item_names
+      FROM promo_code_claims c
+      JOIN promo_codes p ON p.code=c.code
+      WHERE c.user_id=?
+      ORDER BY c.claimed_at DESC
+      LIMIT 25
+    `).bind(user.id).all();
+    return json({claims:rows.results||[]});
+  }
+
+  if (path === "/api/promocodes/redeem" && request.method === "POST") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const data = await body(request);
+    const code = String(data?.code||"").trim().toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(code)) return fail("Enter a valid promo code.");
+    const promo = await env.DB.prepare("SELECT code,reward_amount,reward_currency,max_uses,expires_at,is_active FROM promo_codes WHERE code=? COLLATE NOCASE").bind(code).first();
+    if (!promo || Number(promo.is_active)!==1) return fail("This promo code is invalid or inactive.",404);
+    if (promo.expires_at && Date.parse(promo.expires_at)<=Date.now()) return fail("This promo code has expired.",410);
+    const rewardItems = await env.DB.prepare("SELECT pi.item_id,i.name FROM promo_code_items pi JOIN items i ON i.id=pi.item_id WHERE pi.code=? ORDER BY i.name").bind(code).all();
+    if (Number(promo.reward_amount||0)<=0 && !(rewardItems.results||[]).length) return fail("This promo code has no reward configured.",409);
+    const claimId = randomToken();
+    const statements = [
+      env.DB.prepare(`
+        INSERT INTO promo_code_claims (code,user_id,claim_id)
+        SELECT ?,?,?
+        WHERE EXISTS (
+          SELECT 1 FROM promo_codes p
+          WHERE p.code=? COLLATE NOCASE
+            AND p.is_active=1
+            AND (p.expires_at IS NULL OR datetime(p.expires_at)>datetime('now'))
+            AND (p.max_uses IS NULL OR (SELECT COUNT(*) FROM promo_code_claims c WHERE c.code=p.code)<p.max_uses)
+        )
+        ON CONFLICT(code,user_id) DO NOTHING
+      `).bind(code,user.id,claimId,code),
+      env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND ?='P$' AND EXISTS (SELECT 1 FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=? AND claim_id=?)")
+        .bind(Number(promo.reward_amount||0),user.id,promo.reward_currency||"P$",code,user.id,claimId),
+      env.DB.prepare("UPDATE users SET tix_balance=tix_balance+? WHERE id=? AND ?='Tix' AND EXISTS (SELECT 1 FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=? AND claim_id=?)")
+        .bind(Number(promo.reward_amount||0),user.id,promo.reward_currency||"P$",code,user.id,claimId),
+      ...(rewardItems.results||[]).map(item=>env.DB.prepare("INSERT OR IGNORE INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE EXISTS (SELECT 1 FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=? AND claim_id=?)")
+        .bind(id(),user.id,item.item_id,code,user.id,claimId))
+    ];
+    const results = await env.DB.batch(statements);
+    if (Number(results?.[0]?.meta?.changes||0)!==1) {
+      const duplicate = await env.DB.prepare("SELECT 1 AS claimed FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=?").bind(code,user.id).first();
+      if (duplicate) return fail("You have already redeemed this promo code.",409);
+      return fail("This promo code has reached its maximum number of uses or is no longer available.",410);
+    }
+    return json({ok:true,reward:{amount:Number(promo.reward_amount||0),currency:promo.reward_currency||"P$",items:(rewardItems.results||[]).map(item=>item.name)}});
+  }
+
+  if (path === "/api/owner/promocodes" || path.startsWith("/api/owner/promocodes/")) {
+    const actor = await requireUser(request,env);
+    if (!actor) return fail("Please sign in.",401);
+    if (actor.role !== "OWNER") return fail("Owner access required.",403);
+    if (path === "/api/owner/promocodes" && request.method === "GET") {
+      const [codes,items] = await Promise.all([
+        env.DB.prepare(`
+          SELECT p.code,p.reward_amount,p.reward_currency,p.max_uses,p.expires_at,p.is_active,p.created_at,
+            (SELECT COUNT(*) FROM promo_code_claims c WHERE c.code=p.code) AS usage_count,
+            (SELECT GROUP_CONCAT(i.name, ', ') FROM promo_code_items pi JOIN items i ON i.id=pi.item_id WHERE pi.code=p.code) AS item_names
+          FROM promo_codes p
+          ORDER BY p.created_at DESC,p.code
+        `).all(),
+        env.DB.prepare("SELECT id,name,category,image_url FROM items ORDER BY name").all()
+      ]);
+      return json({promocodes:codes.results||[],items:items.results||[]});
+    }
+    if (path === "/api/owner/promocodes" && request.method === "POST") {
+      const data = await body(request);
+      const code = String(data?.code||"").trim().toUpperCase();
+      if (!/^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(code)) return fail("Promo codes must be 3–32 characters and use letters, numbers, _ or -.");
+      const amount = Number(data?.reward_amount ?? 0);
+      if (!Number.isSafeInteger(amount) || amount < 0 || amount > 1000000) return fail("Reward amount must be from 0 to 1,000,000.");
+      const currency = String(data?.reward_currency||"P$");
+      if (!["P$","Tix"].includes(currency)) return fail("Choose P$ or Tix for the reward.");
+      const rawItems = Array.isArray(data?.item_ids) ? data.item_ids : [];
+      const itemIds = [...new Set(rawItems.map(value=>String(value||"").trim()).filter(Boolean))];
+      if (itemIds.length>25) return fail("Choose up to 25 reward items.");
+      if (!amount && !itemIds.length) return fail("Choose at least one currency or item reward.");
+      if (itemIds.length) {
+        const placeholders = itemIds.map(()=>"?").join(",");
+        const found = await env.DB.prepare("SELECT COUNT(*) AS n FROM items WHERE id IN ("+placeholders+")").bind(...itemIds).first();
+        if (Number(found?.n||0)!==itemIds.length) return fail("One or more selected reward items were not found.",404);
+      }
+      const maxUsesRaw = data?.max_uses;
+      const maxUses = maxUsesRaw===undefined || maxUsesRaw===null || maxUsesRaw==="" ? null : Number(maxUsesRaw);
+      if (maxUses!==null && (!Number.isSafeInteger(maxUses) || maxUses<1 || maxUses>1000000)) return fail("Maximum uses must be between 1 and 1,000,000.");
+      let expiresAt = null;
+      if (data?.expires_at) {
+        const expiry = Date.parse(String(data.expires_at));
+        if (!Number.isFinite(expiry) || expiry<=Date.now()) return fail("Expiry date must be a valid future date.");
+        expiresAt = new Date(expiry).toISOString();
+      }
+      const existing = await env.DB.prepare("SELECT code FROM promo_codes WHERE code=? COLLATE NOCASE").bind(code).first();
+      if (existing) return fail("That promo code already exists.",409);
+      const createStatements = [
+        env.DB.prepare("INSERT INTO promo_codes (code,reward_amount,reward_currency,max_uses,expires_at,created_by) VALUES (?,?,?,?,?,?)").bind(code,amount,currency,maxUses,expiresAt,actor.id),
+        ...itemIds.map(itemId=>env.DB.prepare("INSERT INTO promo_code_items (code,item_id) VALUES (?,?)").bind(code,itemId))
+      ];
+      await env.DB.batch(createStatements);
+      return json({ok:true,code},201);
+    }
+    const promoMatch = path.match(/^\/api\/owner\/promocodes\/([A-Za-z0-9_-]{3,32})$/i);
+    if (promoMatch && request.method === "PATCH") {
+      const data = await body(request);
+      if (typeof data?.is_active !== "boolean") return fail("Promo code status must be true or false.");
+      const result = await env.DB.prepare("UPDATE promo_codes SET is_active=? WHERE code=? COLLATE NOCASE").bind(data.is_active?1:0,promoMatch[1]).run();
+      if (!result?.meta?.changes) return fail("Promo code not found.",404);
+      return json({ok:true,is_active:data.is_active});
+    }
+    return fail("Unsupported promo code management action.",405);
+  }
+
+  return fail("API route not found.",404);
+}
+
+export default {
+  async scheduled(controller,env,ctx) {
+    const task = runDailyMembershipPayout(controller,env).catch(error => {
+      console.error("[Sakura membership] Daily payout failed:",error);
+      throw error;
+    });
+    ctx.waitUntil(task);
+  },
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const avatarSupportRoute = url.pathname === "/v1.1/avatar-fetch" || url.pathname.toLowerCase() === "/asset/bodycolors.ashx" || url.pathname.toLowerCase() === "/asset" || url.pathname.toLowerCase() === "/asset/";
+    if (url.pathname.startsWith("/api/") || avatarSupportRoute) {
+      try { return await route(request,env); }
+      catch (error) {
+        if (error instanceof RequestBodyTooLarge) return fail("Request body must be 16 KB or smaller.",413);
+        console.error("[Pekora API] Unhandled error:", request.method, url.pathname, error);
+        return fail("Server error. Check the Worker logs. Reference: " + crypto.randomUUID().slice(0,8),500);
+      }
+    }
+    if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
+      return new Response("Static asset binding ASSETS is missing.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+    }
+    const itemShareMatch = url.pathname.match(new RegExp("^/item/([A-Za-z0-9_-]{1,80})/?$"));
+    if (request.method === "GET" && itemShareMatch && env.DB) {
+      const sharedItem = await env.DB.prepare("SELECT id,name,description,category,price,currency,image_url FROM items WHERE id=? AND is_for_sale=1").bind(itemShareMatch[1]).first();
+      if (sharedItem) {
+        const pageResponse = await env.ASSETS.fetch(new Request(new URL("/",url), { method:"GET", headers:request.headers }));
+        if (pageResponse.ok && (pageResponse.headers.get("content-type")||"").includes("text/html")) {
+          const escapeHtml = value => String(value??"").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+          const title = String(sharedItem.name||"Sakura item").slice(0,100);
+          const description = (sharedItem.category+" · "+Number(sharedItem.price||0).toLocaleString("en-US")+" "+(sharedItem.currency||"P$")+(String(sharedItem.description||"").trim()?" · "+String(sharedItem.description).trim():"")).slice(0,300);
+          const image = /^https:\/\//i.test(String(sharedItem.image_url||"")) ? String(sharedItem.image_url) : "https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/pekora-logo.png";
+          const canonical = new URL("/item/"+encodeURIComponent(sharedItem.id),url.origin).href;
+          const metadata = '<meta name="description" content="'+escapeHtml(description)+'">' +
+            '<meta property="og:type" content="website"><meta property="og:site_name" content="Sakura">' +
+            '<meta property="og:title" content="'+escapeHtml(title)+'">' +
+            '<meta property="og:description" content="'+escapeHtml(description)+'">' +
+            '<meta property="og:image" content="'+escapeHtml(image)+'"><meta property="og:url" content="'+escapeHtml(canonical)+'">' +
+            '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="'+escapeHtml(title)+'">' +
+            '<meta name="twitter:description" content="'+escapeHtml(description)+'"><meta name="twitter:image" content="'+escapeHtml(image)+'">';
+          let html = await pageResponse.text();
+          html = html.replace(/<title>[\s\S]*?<\/title>/i,'<title>'+escapeHtml(title)+' | Sakura</title>');
+          html = html.replace(/<meta\s+name=["']description["'][^>]*>/i,"");
+          html = html.replace("</head>",metadata+"</head>");
+          const headers = new Headers(pageResponse.headers);
+          headers.set("content-type","text/html; charset=utf-8");
+          headers.set("cache-control","public, max-age=60, s-maxage=300");
+          headers.set("X-Content-Type-Options","nosniff");
+          headers.set("X-Frame-Options","DENY");
+          headers.set("Referrer-Policy","strict-origin-when-cross-origin");
+          headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
+          headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
+          return new Response(html,{status:200,headers});
+        }
+      }
+    }
+    const response = await env.ASSETS.fetch(request);
+    const headers = new Headers(response.headers);
+    headers.set("X-Content-Type-Options","nosniff");
+    headers.set("X-Frame-Options","DENY");
+    headers.set("Referrer-Policy","strict-origin-when-cross-origin");
+    headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
+    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
+    return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+  }
+};
+,?,'',s.asset_id,CASE WHEN s.category='Shirts' THEN 11 ELSE 12 END,0,0,0,1,0
+        FROM creator_submissions s
+        WHERE s.id=? AND s.status='APPROVED' AND s.reviewed_by=? AND s.created_item_id=? AND changes()=1`)
+        .bind(price,imageUrl,match[1],actor.id,itemId),
+      env.DB.prepare(`INSERT INTO item_creators (item_id,creator_id,creator_name,original_url,submission_id)
+        SELECT s.created_item_id,s.user_id,s.username,s.roblox_url,s.id
+        FROM creator_submissions s
+        WHERE s.id=? AND s.status='APPROVED' AND s.reviewed_by=? AND s.created_item_id=?
+          AND EXISTS (SELECT 1 FROM items WHERE id=s.created_item_id)`)
+        .bind(match[1],actor.id,itemId)
+    ]);
+    if (!results?.[0]?.meta?.changes) return fail("This request has already been reviewed.",409);
+    if (!results?.[1]?.meta?.changes || !results?.[2]?.meta?.changes) {
+      console.error("[Sakura creator] Approval did not create a catalog item:",JSON.stringify(results));
+      return fail("The request was approved but its catalog item could not be created. Please check Worker logs.",500);
+    }
+    return json({ok:true,status:"APPROVED",itemId});
+  }
+
   if (path.startsWith("/api/owner/items")) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
@@ -1723,7 +2119,7 @@ async function route(request, env) {
     if (path === "/api/owner/items" && request.method === "GET") {
       try { await announceMissingLimitedItems(env, url.origin); }
       catch (error) { console.error("[Sakura Discord] Missing Limited scan failed:",error); }
-      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i ORDER BY i.created_at DESC,i.name").all();
+      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id ORDER BY i.created_at DESC,i.name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
