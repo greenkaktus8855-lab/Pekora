@@ -18,7 +18,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 function currencyIconMarkup(currencyCode){
  return currencyCode==="Tix"
   ? '<span class="icon-tix-16x16 currency-icon-original" aria-hidden="true"></span>'
-  : '<span class="icon-robux-16x16 currency-icon-original" aria-hidden="true"></span>';
+  : '<span class="currency-p-coin" aria-hidden="true">P$</span>';
 }
 function currencyMarkup(amount,currencyCode="P$",extraClass=""){
  const code=currencyCode==="Tix"?"Tix":"P$";
@@ -133,8 +133,8 @@ function renderSidebar(active="home"){
   ["inventory","icon-nav-inventory","Inventory"],
   ["resale","icon-nav-trade","Resale Market"],
   ["groups","icon-nav-group","Groups"],
-  ["currency","icon-nav-robux","Currency"],
-  ["membership","icon-nav-robux","Membership"],
+  ["currency","icon-nav-sakura-currency","Currency"],
+  ["membership","icon-nav-sakura-currency","Membership"],
   ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
  ];
@@ -718,7 +718,7 @@ async function membershipPage(){
    '<form id="membershipForm" method="post" autocomplete="off"><select class="form-control" name="membershipType">'+options+'</select>'+
    (!canUseAdvanced?'<p class="membership-openpekora-lock-note">OBC and Premium unlock after your account is more than 3 days old'+(unlockDate?' · '+esc(unlockDate):'')+'</p>':'')+
    '<button class="primary membership-openpekora-submit" type="submit">Submit Changes</button></form>'+
-   '<p class="membership-openpekora-footnote">Memberships are currently free. Daily rewards are virtual Sakura P$ credits, not real Roblox Robux, and are credited at 00:00 Kyiv time.</p>'+
+   '<p class="membership-openpekora-footnote">Memberships are currently free. Daily rewards are Sakura P$ credits and are added at 00:00 Kyiv time.</p>'+
    '</div></div></div></div>';
   const form=document.getElementById("membershipForm");
   form.elements.membershipType.value=current;
@@ -882,7 +882,7 @@ async function groupsPage(){
  const view=beginView();
  renderSidebar("groups");
  app.innerHTML='<div class="groups-page"><h1 class="page-title">Groups</h1>'+
-  (me?'<section class="owner-section"><h2>Create a group</h2><p class="muted">Creating a group costs '+currencyMarkup(100,"P$")+'. The fee is transferred to the Sakura Admin account.</p><form id="groupCreateForm" class="group-create-form"><label>Group name<input name="name" minlength="3" maxlength="32" required placeholder="Your group name"></label><label>Description<textarea name="description" maxlength="300" rows="2" placeholder="What is this group about?"></textarea></label><button class="primary" type="submit">Create group · '+currencyMarkup(100,"P$")+'</button><span id="groupCreateMessage" class="muted"></span></form></section>':'<section class="owner-section"><p>Please <a href="#login" data-page="login">log in</a> to create or join groups.</p></section>')+
+  (me?'<section class="owner-section"><h2>Create a group</h2><p class="muted">Creating a group costs '+currencyMarkup(100,"P$")+'</p><form id="groupCreateForm" class="group-create-form"><label>Group name<input name="name" minlength="3" maxlength="32" required placeholder="Your group name"></label><label>Description<textarea name="description" maxlength="300" rows="2" placeholder="What is this group about?"></textarea></label><button class="primary" type="submit">Create group · '+currencyMarkup(100,"P$")+'</button><span id="groupCreateMessage" class="muted"></span></form></section>':'<section class="owner-section"><p>Please <a href="#login" data-page="login">log in</a> to create or join groups.</p></section>')+
   '<section class="owner-section"><h2>All Groups</h2><div id="groupsList" class="groups-list">Loading groups...</div></section></div>';
  const host=document.getElementById("groupsList");
  async function loadGroups(){
