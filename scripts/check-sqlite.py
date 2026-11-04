@@ -217,6 +217,7 @@ db.commit()
 db.commit()
 db.execute("INSERT INTO items (id,name,category,price,image_url,is_for_sale,is_limited,is_offsale,stock_limit,stock_sold) VALUES (?,?,?,?,?,?,?,?,?,?)",
            ("admin-store-item","Admin Store Item","Hats",5,"",1,0,0,0,0))
+db.commit()
 db.execute("BEGIN IMMEDIATE")
 db.execute("""UPDATE items SET stock_sold=stock_sold+1
  WHERE id='admin-store-item' AND is_for_sale=1 AND is_offsale=0
