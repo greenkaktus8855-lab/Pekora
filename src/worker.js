@@ -195,6 +195,7 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS moderation_warnings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, moderator_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), acknowledged INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_moderation_warnings_user ON moderation_warnings(user_id,created_at DESC)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS owner_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL REFERENCES users(id), target_user_id TEXT REFERENCES users(id) ON DELETE SET NULL, action TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS banned_session_notices (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at TEXT NOT NULL)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_owner_audit_target ON owner_audit_log(target_user_id,created_at DESC)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_friends_friend_status ON friends(friend_id,status)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_items_category_name ON items(category,name)"),
@@ -203,7 +204,8 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_auth_rate_window ON auth_rate_limits(window_started_at)"),
         env.DB.prepare("DELETE FROM auth_rate_limits WHERE window_started_at < CAST(strftime('%s','now') AS INTEGER)-86400"),
-        env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')")
+        env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')"),
+        env.DB.prepare("DELETE FROM banned_session_notices WHERE expires_at <= datetime('now')")
       ]);
       const userColumns = await env.DB.prepare("PRAGMA table_info(users)").all();
       if (!(userColumns.results || []).some(column => column.name === "public_id")) {
@@ -629,7 +631,7 @@ async function route(request, env) {
     const token = getCookie(request,"pekora_session");
     if (token) {
       const blocked = await env.DB.prepare(`SELECT u.username,u.public_id,u.role,u.created_at,u.banned_at,u.ban_reason
-        FROM sessions s JOIN users u ON u.id=s.user_id
+        FROM banned_session_notices s JOIN users u ON u.id=s.user_id
         WHERE s.token_hash=? AND s.expires_at>datetime('now') AND u.is_banned=1`).bind(await digest(token)).first();
       if (blocked) return json({user:null,bannedAccount:{
         username:blocked.username,public_id:blocked.public_id,role:blocked.role,
@@ -1260,7 +1262,9 @@ async function route(request, env) {
       if (action === "ban" && details.length < 3) return fail("Enter a ban reason (at least 3 characters).");
       await env.DB.batch([
         env.DB.prepare("UPDATE users SET is_banned=?,banned_at=CASE WHEN ?=1 THEN datetime('now') ELSE NULL END,ban_reason=CASE WHEN ?=1 THEN ? ELSE '' END WHERE id=?").bind(action==="ban"?1:0,action==="ban"?1:0,action==="ban"?1:0,details,targetId),
-        ...(action==="unban"?[env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(targetId)]:[]),
+        ...(action==="ban"?[env.DB.prepare("INSERT OR REPLACE INTO banned_session_notices (token_hash,user_id,expires_at) SELECT token_hash,user_id,expires_at FROM sessions WHERE user_id=?").bind(targetId)]:[]),
+        ...(action==="ban"?[env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(targetId)]:[]),
+        ...(action==="unban"?[env.DB.prepare("DELETE FROM banned_session_notices WHERE user_id=?").bind(targetId),env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(targetId)]:[]),
         env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,action.toUpperCase(),details)
       ]);
     } else {
