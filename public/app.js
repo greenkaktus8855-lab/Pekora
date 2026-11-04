@@ -2,7 +2,7 @@ const app=document.getElementById("app");
 const accountArea=document.getElementById("accountArea");
 const currency=document.getElementById("currency");
 const sidebar=document.getElementById("sidebar");
-let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set(),ownershipLoaded=true,ownershipUserId=null,pendingPurchases=new Set();
+let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set(),ownershipLoaded=true,ownershipUserId=null,pendingPurchases=new Set(),detectedBannedAccount=null;
 let activeView=0;
 const ITEM_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 const MEMBERSHIP_PLANS=[
@@ -148,13 +148,28 @@ function setUser(user){
  const currentPage=(location.hash.slice(1).split("?")[0]||"home");
  renderSidebar(currentPage==="item"?"catalog":currentPage);
 }
-async function refreshMe(){try{const d=await api("/api/me");setUser(d.user)}catch{setUser(null)}}
+async function refreshMe(){try{const d=await api("/api/me");detectedBannedAccount=d.bannedAccount||null;setUser(d.user)}catch{detectedBannedAccount=null;setUser(null)}}
 function page(name){const base=location.pathname.startsWith("/item/")?"/":"";const target=name==="profile"&&me?.publicId?"profile?id="+encodeURIComponent(me.publicId):name;history.pushState({page:name},"",base+"#"+target);render(target)}
 function currentRoute(){const match=location.pathname.match(new RegExp("^/item/([A-Za-z0-9_-]{1,80})/?$"));return match?"item?id="+encodeURIComponent(match[1]):(location.hash.slice(1)||"home")}
 window.addEventListener("popstate",()=>render(currentRoute()));
 document.addEventListener("click",e=>{
  const a=e.target.closest("[data-page]");
  if(a){e.preventDefault();sidebar.classList.remove("mobile-open");page(a.dataset.page)}
+ const banned=e.target.closest("[data-banned-account]");
+ if(banned){
+  e.preventDefault();
+  sidebar.classList.remove("mobile-open");
+  const username=banned.dataset.bannedAccount;
+  history.pushState({page:"banned",username},"","/#banned?username="+encodeURIComponent(username));
+  render("banned?username="+encodeURIComponent(username));
+ }
+ const group=e.target.closest("[data-group-view]");
+ if(group){
+  e.preventDefault();
+  const groupId=group.dataset.groupView;
+  history.pushState({page:"group",groupId},"","/#group?id="+encodeURIComponent(groupId));
+  render("group?id="+encodeURIComponent(groupId));
+ }
  const p=e.target.closest("[data-profile]");
  if(p){
   e.preventDefault();
@@ -440,7 +455,11 @@ function auth(kind){
    if(isActiveView(view))page("home");
   }catch(err){
    const error=document.getElementById("authError");
-   if(isActiveView(view)&&error)error.textContent=err.message;
+   if(isActiveView(view)&&error){
+    if(!reg&&String(err.message).startsWith("This account is banned")){
+     error.innerHTML=esc(err.message)+'<p><a href="#banned?username='+encodeURIComponent(String(f.get("username")||""))+'">View ban details</a></p>';
+    }else error.textContent=err.message;
+   }
   }
  });
 }
@@ -530,6 +549,31 @@ async function inventory(){
  }catch(e){if(isActiveView(view)&&grid?.isConnected)grid.textContent=e.message}
 }
 
+
+async function bannedAccountPage(identifier){
+ const view=beginView();
+ renderSidebar("");
+ if(!identifier){app.innerHTML='<div class="empty">Choose a username or User ID to view ban information.</div>';return}
+ app.innerHTML='<div class="empty">Loading banned account...</div>';
+ try{
+  const data=await api("/api/banned-account/"+encodeURIComponent(identifier));
+  if(!isActiveView(view))return;
+  const account=data.account||{};
+  const parsedDate=account.banned_at?new Date(String(account.banned_at).replace(" ","T")+"Z"):null;
+  const bannedDate=parsedDate&&!Number.isNaN(parsedDate.valueOf())?parsedDate.toLocaleString():"Date unavailable";
+  const joinedDate=account.created_at?new Date(account.created_at).toLocaleDateString():"Unknown";
+  app.innerHTML='<div class="banned-account-page"><a href="#users" data-page="users" class="item-back-link">‹ Back to People</a>'+
+   '<section class="banned-account-card"><div class="ban-status-label">BANNED ACCOUNT</div>'+
+   '<div class="banned-account-heading"><div class="banned-account-avatar">'+avatar(account.username)+'</div><div><h1>'+esc(account.username)+'</h1><p class="muted">User ID: '+esc(account.public_id)+' · '+esc(account.role||"USER")+'</p><span class="ban-pill">BANNED</span></div></div>'+
+   '<div class="ban-detail-row"><strong>Status</strong><span>Account banned from Sakura</span></div>'+
+   '<div class="ban-detail-row"><strong>Reason</strong><p>'+esc(account.ban_reason||"Account banned by Sakura moderation")+'</p></div>'+
+   '<div class="ban-detail-row"><strong>Banned on</strong><span>'+esc(bannedDate)+'</span></div>'+
+   '<div class="ban-detail-row"><strong>Joined Sakura</strong><span>'+esc(joinedDate)+'</span></div>'+
+   '<p class="muted">This account is currently banned. Its profile and inventory are unavailable.</p></section></div>';
+ }catch(error){
+  if(isActiveView(view))app.innerHTML='<div class="banned-account-page"><section class="banned-account-card"><h1>Banned account not found</h1><p>'+esc(error.message)+'</p><a href="#users" data-page="users">Search People</a></section></div>';
+ }
+}
 
 async function profile(identifier=me?.username,byId=false){
  const view=beginView();
@@ -742,8 +786,21 @@ async function tradesPage(){
    }).join(""):'<div class="empty">You do not have any trades yet.</div>';
    host.querySelectorAll("[data-trade-action]").forEach(button=>button.addEventListener("click",async()=>{
     button.disabled=true;
-    try{await api("/api/trades/"+encodeURIComponent(button.dataset.tradeId),{method:"POST",body:JSON.stringify({action:button.dataset.tradeAction})});toast("Trade updated");await loadTrades()}
-    catch(e){toast(e.message);button.disabled=false}
+    try{
+     const action=button.dataset.tradeAction;
+     await api("/api/trades/"+encodeURIComponent(button.dataset.tradeId),{method:"POST",body:JSON.stringify({action})});
+     if(action==="accept"){
+      ownershipLoaded=false;
+      ownedItemIds=new Set();
+      try{
+       const inventoryState=await api("/api/inventory");
+       ownedItemIds=new Set((inventoryState.items||[]).map(item=>item.id));
+       ownershipLoaded=true;
+      }catch(error){console.warn("[Sakura trades] Could not refresh inventory after trade:",error)}
+     }
+     toast("Trade updated");
+     await loadTrades();
+    }catch(e){toast(e.message);button.disabled=false}
    }));
   }catch(e){host.textContent=e.message}
  }
@@ -789,7 +846,7 @@ async function groupsPage(){
    const data=await api("/api/groups");
    if(!isActiveView(view)||!host?.isConnected)return;
    const groups=data.groups||[];
-   host.innerHTML=groups.length?groups.map(group=>'<article class="group-card"><div class="group-card-mark">'+esc(String(group.name||"?").slice(0,1).toUpperCase())+'</div><div class="group-card-info"><h3>'+esc(group.name)+'</h3><p>'+esc(group.description||"No description.")+'</p><span class="muted">Owner: '+esc(group.owner_name)+' · '+Number(group.member_count||0).toLocaleString()+' members</span></div>'+(me?(Number(group.is_member)===1?'<button class="button secondary" type="button" disabled>Joined</button>':'<button class="button" type="button" data-join-group="'+esc(group.id)+'">Join</button>'):'')+'</article>').join(""):'<div class="empty">No groups yet. Be the first to create one.</div>';
+   host.innerHTML=groups.length?groups.map(group=>'<article class="group-card"><div class="group-card-mark">'+(group.avatar_url?'<img src="'+esc(group.avatar_url)+'" alt="">':esc(String(group.name||"?").slice(0,1).toUpperCase()))+'</div><div class="group-card-info"><h3><a href="#group?id='+encodeURIComponent(group.id)+'" data-group-view="'+esc(group.id)+'">'+esc(group.name)+'</a></h3><p>'+esc(group.description||"No description.")+'</p><span class="muted">Owner: '+esc(group.owner_name)+' · '+Number(group.member_count||0).toLocaleString()+' members</span></div>'+(me?(Number(group.is_member)===1?'<button class="button secondary" type="button" disabled>Joined</button>':'<button class="button" type="button" data-join-group="'+esc(group.id)+'">Join</button>'):'')+'</article>').join(""):'<div class="empty">No groups yet. Be the first to create one.</div>';
   }catch(error){if(host?.isConnected)host.textContent=error.message}
  }
  host?.addEventListener("click",async event=>{
@@ -818,6 +875,55 @@ async function groupsPage(){
   finally{if(button.isConnected)button.disabled=false}
  });
  await loadGroups();
+}
+
+async function groupPage(groupId){
+ const view=beginView();
+ renderSidebar("groups");
+ if(!groupId){app.innerHTML='<div class="empty">Group not found.</div>';return}
+ app.innerHTML='<div class="empty">Loading group...</div>';
+ try{
+  const data=await api("/api/groups/"+encodeURIComponent(groupId));
+  if(!isActiveView(view))return;
+  const group=data.group||{},members=data.members||[];
+  const mark=group.avatar_url?'<img src="'+esc(group.avatar_url)+'" alt="'+esc(group.name)+'">':esc(String(group.name||"?").slice(0,1).toUpperCase());
+  const owner=Number(group.is_owner)===1;
+  const member=Number(group.is_member)===1;
+  const memberList=members.length?members.map(person=>'<article class="group-member"><div class="people-avatar">'+avatar(person.username)+'</div><div class="people-user-info"><strong><a href="#profile?username='+encodeURIComponent(person.username)+'" data-profile="'+esc(person.username)+'">'+esc(person.username)+'</a>'+(person.group_role==="OWNER"?' <span class="group-owner-tag">OWNER</span>':'')+'</strong><span>'+esc(person.account_role||"USER")+' · Joined '+esc(new Date(person.joined_at+"Z").toLocaleDateString())+'</span></div></article>').join(""):'<div class="empty">No members yet.</div>';
+  app.innerHTML='<div class="groups-page"><a href="#groups" data-page="groups" class="item-back-link">‹ Back to Groups</a>'+
+   '<section class="group-detail-card"><div class="group-detail-heading"><div class="group-detail-avatar">'+mark+'</div><div><h1>'+esc(group.name)+'</h1><p class="muted">Owner: <a href="#profile?username='+encodeURIComponent(group.owner_name)+'" data-profile="'+esc(group.owner_name)+'">'+esc(group.owner_name)+'</a> · '+Number(group.member_count||0).toLocaleString()+' members</p><span class="muted">Created '+esc(new Date(group.created_at+"Z").toLocaleDateString())+'</span></div></div>'+
+   '<p class="group-detail-description">'+esc(group.description||"No description.")+'</p>'+
+   (owner?'<form id="groupSettingsForm" class="group-create-form group-settings-form"><h2>Group settings</h2><label>Group name<input name="name" minlength="3" maxlength="32" required value="'+esc(group.name)+'"></label><label>Description<textarea name="description" maxlength="300" rows="3">'+esc(group.description||"")+'</textarea></label><label>Group avatar URL<input name="avatar_url" type="url" maxlength="1000" placeholder="https://..." value="'+esc(group.avatar_url||"")+'"></label><button class="primary" type="submit">Save settings</button><button class="button danger-button" id="deleteGroupBtn" type="button">Delete group</button><span id="groupSettingsMessage" class="muted"></span></form>':
+    (me?(member?'<button class="button secondary" id="leaveGroupBtn" type="button">Leave group</button>':'<button class="primary" id="joinGroupBtn" type="button">Join group</button>'):'<p class="muted">Log in to join this group.</p>'))+
+   '</section><section class="owner-section group-members-section"><h2>Members ('+Number(group.member_count||0).toLocaleString()+')</h2><div class="group-members-list">'+memberList+'</div></section></div>';
+  document.getElementById("groupSettingsForm")?.addEventListener("submit",async event=>{
+   event.preventDefault();
+   const form=event.currentTarget,values=new FormData(form),message=document.getElementById("groupSettingsMessage"),button=form.querySelector('button[type="submit"]');
+   const payload={name:String(values.get("name")||"").trim(),description:String(values.get("description")||"").trim(),avatar_url:String(values.get("avatar_url")||"").trim()};
+   button.disabled=true;message.textContent="Saving...";
+   try{await api("/api/groups/"+encodeURIComponent(groupId),{method:"PATCH",body:JSON.stringify(payload)});toast("Group settings saved");await groupPage(groupId)}
+   catch(error){message.textContent=error.message;button.disabled=false}
+  });
+  document.getElementById("deleteGroupBtn")?.addEventListener("click",async()=>{
+   if(!confirm('Delete the group "'+group.name+'"? This cannot be undone.'))return;
+   const button=document.getElementById("deleteGroupBtn");button.disabled=true;button.textContent="Deleting...";
+   try{await api("/api/groups/"+encodeURIComponent(groupId),{method:"DELETE"});toast("Group deleted");page("groups")}
+   catch(error){toast(error.message);button.disabled=false;button.textContent="Delete group"}
+  });
+  document.getElementById("joinGroupBtn")?.addEventListener("click",async()=>{
+   const button=document.getElementById("joinGroupBtn");button.disabled=true;
+   try{await api("/api/groups/"+encodeURIComponent(groupId)+"/join",{method:"POST"});toast("Joined group");await groupPage(groupId)}
+   catch(error){toast(error.message);button.disabled=false}
+  });
+  document.getElementById("leaveGroupBtn")?.addEventListener("click",async()=>{
+   if(!confirm("Leave this group?"))return;
+   const button=document.getElementById("leaveGroupBtn");button.disabled=true;
+   try{await api("/api/groups/"+encodeURIComponent(groupId)+"/leave",{method:"DELETE"});toast("Left group");await groupPage(groupId)}
+   catch(error){toast(error.message);button.disabled=false}
+  });
+ }catch(error){
+  if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(error.message)+' <a href="#groups" data-page="groups">Back to Groups</a></div>';
+ }
 }
 
 async function settings(){
@@ -874,7 +980,7 @@ function users(){
    if(requestId!==latest||!isActiveView(view))return;
    const found=Array.isArray(d.users)?d.users:[];
    hint.style.display="none";
-   results.innerHTML=found.length?found.map(u=>'<article class="people-user"><div class="people-avatar">'+avatar(u.username)+'</div><div class="people-user-info"><strong>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</strong><span>'+esc(u.role||"USER")+' · ID '+esc(u.public_id)+'</span></div><button class="button" type="button" data-profile="'+esc(u.username)+'">View Profile</button></article>').join(""):'<div class="empty">No users found for “'+esc(q)+'”.</div>';
+   results.innerHTML=found.length?found.map(u=>'<article class="people-user"><div class="people-avatar">'+avatar(u.username)+'</div><div class="people-user-info"><strong>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+(u.is_banned?' <span class="ban-pill">BANNED</span>':'')+'</strong><span>'+esc(u.role||"USER")+' · ID '+esc(u.public_id)+'</span></div>'+(u.is_banned?'<button class="button secondary" type="button" data-banned-account="'+esc(u.username)+'">View ban info</button>':'<button class="button" type="button" data-profile="'+esc(u.username)+'">View Profile</button>')+'</article>').join(""):'<div class="empty">No users found for “'+esc(q)+'”.</div>';
   }catch(e){if(requestId!==latest||!isActiveView(view))return;hint.textContent="Could not load users: "+e.message;hint.style.display="block";results.innerHTML=""}
  }
  form.addEventListener("submit",e=>{
@@ -1290,6 +1396,8 @@ async function render(name){
  else if(name==="inventory")await inventory();
  else if(name==="avatar")await avatarPage();
  else if(name==="groups")await groupsPage();
+ else if(name==="group")await groupPage(query.get("id"));
+ else if(name==="banned")await bannedAccountPage(query.get("username")||query.get("id"));
  else if(name==="profile")await (query.get("id")?profile(query.get("id"),true):profile(query.get("username")||me?.username));
  else if(name==="item")await showItem(query.get("id"),false);
  else if(name==="users"||name==="community")users();
@@ -1304,4 +1412,23 @@ async function render(name){
  else if(name==="owner")await owner();
  else home();
 }
-(async()=>{await refreshMe();await render(currentRoute())})();
+(async()=>{
+ await refreshMe();
+ if(detectedBannedAccount){
+  history.replaceState({page:"banned",username:detectedBannedAccount.username},"","/#banned?username="+encodeURIComponent(detectedBannedAccount.username));
+ }
+ await render(currentRoute());
+})();
+window.setInterval(async()=>{
+ if(!me)return;
+ try{
+  const response=await fetch("/api/me",{credentials:"same-origin"});
+  const state=await response.json();
+  if(state.bannedAccount){
+   detectedBannedAccount=state.bannedAccount;
+   setUser(null);
+   history.replaceState({page:"banned",username:state.bannedAccount.username},"","/#banned?username="+encodeURIComponent(state.bannedAccount.username));
+   await render("banned?username="+encodeURIComponent(state.bannedAccount.username));
+  }
+ }catch{}
+},15000);
