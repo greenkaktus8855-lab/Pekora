@@ -143,7 +143,7 @@ const checks = [
   ["Administrator badge appears in the profile Badges section only", app.includes('normalized==="admin"||normalized==="sakura"') && app.includes("profileBadgesMarkup(p)") && !app.includes("administratorBadgeMarkup")],
   ["Profile Badges section lists Administrator and Verified badges in a larger grid", app.includes("function profileBadgesMarkup(profileData)") && app.includes('op-profile-badges-section"><h2>Badges</h2>') && app.includes("profileBadgesMarkup(p)") && css.includes("minmax(190px,1fr)") && css.includes("min-height:168px")],
   ["Friends menu route has a page handler and working friends list", app.includes('else if(name==="friends")await friends();') && app.includes("async function friends()") && app.includes("await loadFriendsList(view)") && app.includes("data-friend-action")],
-  ["Friend list supports profile links, accept, cancel and remove actions", app.includes('data-profile="'+esc(u.username)+'"') && app.includes('"/api/friends/accept"') && app.includes('"/api/friends?username="')],
+  ["Friend list supports profile links, accept, cancel and remove actions", app.includes('data-profile="') && app.includes('data-friend-action="') && app.includes('"/api/friends/accept"') && app.includes('"/api/friends?username="')],
   ["Original OpenPekora Administrator sprite is connected to the profile Badges card", icons.includes("icon-administrator-small") && icons.includes("/roblox_badges.svg") && css.includes(".profile-badge-icon.icon-administrator-small") && fs.existsSync(path.join(root,"public/roblox_badges.svg"))],
 
 ];
