@@ -960,14 +960,16 @@ async function route(request, env) {
     const price = Number(item.price || 0);
     if (available < price) return fail("Not enough " + currencyCode + ".",400);
     if (await env.DB.prepare("SELECT id FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first()) return fail("You already own this item.",409);
-    const adminAccount = await env.DB.prepare("SELECT id FROM users WHERE username='Admin' COLLATE NOCASE AND role='OWNER' AND is_banned=0 LIMIT 1").first();
-    if (!adminAccount) return fail("The site payment account is unavailable.",503);
+    const creatorAccount = await env.DB.prepare("SELECT u.id FROM item_creators ic JOIN users u ON u.id=ic.creator_id WHERE ic.item_id=? LIMIT 1").bind(item.id).first();
+    const payoutAccount = creatorAccount || await env.DB.prepare("SELECT id FROM users WHERE username='Admin' COLLATE NOCASE AND role='OWNER' AND is_banned=0 LIMIT 1").first();
+    if (!payoutAccount) return fail("The site payment account is unavailable.",503);
     const purchaseId=id(), inventoryId=id();
     try {
       const results = await env.DB.batch([
-        env.DB.prepare(`UPDATE items SET stock_sold=stock_sold+1 WHERE id=? AND is_for_sale=1 AND is_offsale=0 AND (stock_limit=0 OR stock_sold<stock_limit) AND EXISTS (SELECT 1 FROM users WHERE id=? AND ${walletColumn}>=?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM users WHERE id=? AND is_banned=0)`).bind(item.id,user.id,price,user.id,item.id,adminAccount.id),
+        env.DB.prepare(`UPDATE items SET stock_sold=stock_sold+1 WHERE id=? AND is_for_sale=1 AND is_offsale=0 AND (stock_limit=0 OR stock_sold<stock_limit) AND EXISTS (SELECT 1 FROM users WHERE id=? AND ${walletColumn}>=?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM users WHERE id=?)`).bind(item.id,user.id,price,user.id,item.id,payoutAccount.id),
         env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}-? WHERE id=? AND ${walletColumn}>=? AND changes()=1`).bind(price,user.id,price),
-        env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}+? WHERE id=? AND changes()=1`).bind(price,adminAccount.id),
+        // Creator-made Shirts and Pants pay their attributed creator; ordinary catalog items still pay Admin.
+        env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}+? WHERE id=? AND changes()=1`).bind(price,payoutAccount.id),
         env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE changes()=1").bind(inventoryId,user.id,item.id),
         env.DB.prepare("INSERT INTO purchases (id,user_id,item_id,price,currency) SELECT ?,?,?,?,? WHERE changes()=1").bind(purchaseId,user.id,item.id,price,currencyCode)
       ]);
