@@ -53,7 +53,7 @@ const checks = [
   ["Sakura RCC avatar page and refresh control are present", app.includes("async function avatarPage()") && app.includes("sakuraAvatarImage") && app.includes("refreshSakuraAvatar")],
   ["Avatar preview removes the rendered white background", app.includes("removeAvatarWhiteBackground") && app.includes("avatarBgProcessed")],
   ["Avatar equipped items support copying links and IDs", app.includes("data-copy-avatar-link") && app.includes("data-copy-avatar-id") && app.includes("copyAvatarItemIds")],
-  ["Avatar sidebar and route are connected", app.includes('["avatar","icon-nav-profile","Avatar"]') && app.includes('else if(name==="avatar")await avatarPage();')],
+  ["Avatar route remains available without a sidebar tab", !app.includes('["avatar","icon-nav-profile","Avatar"]') && app.includes('else if(name==="avatar")await avatarPage();')],
   ["Renderer thumbnail API is configured", worker.includes("/api/avatar/thumbnail/") && worker.includes("AVATAR_RENDERER_URL") && worker.includes("AVATAR_RENDERER_SECRET")],
   ["RCC avatar appearance and asset routes are present", worker.includes("/v1.1/avatar-fetch") && worker.includes("/asset/bodycolors.ashx") && worker.includes("assetdelivery.roblox.com/v1/asset/")],
   ["RCC support routes are dispatched through the Worker", worker.includes('url.pathname === "/v1.1/avatar-fetch"') && worker.includes('url.pathname.toLowerCase() === "/asset"')],
