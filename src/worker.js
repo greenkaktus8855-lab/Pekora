@@ -38,7 +38,8 @@ async function currentUser(request, env) {
   const token = getCookie(request, "pekora_session");
   if (!token) return null;
   const tokenHash = await digest(token);
-  const row = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.tix_balance,u.created_at,u.is_banned,u.public_id,u.is_verified
+  const row = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.tix_balance,u.created_at,u.is_banned,u.public_id,u.is_verified,
+      EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=u.id AND ub.badge_key='ASSET_MODERATOR') AS is_asset_moderator
     FROM sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=? AND s.expires_at > datetime('now')`).bind(tokenHash).first();
   if (!row || row.is_banned) return null;
@@ -80,7 +81,9 @@ async function body(request) {
     return null;
   }
 }
-const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:Number(u.balance||0), tixBalance:Number(u.tix_balance||0), createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified) });
+const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:Number(u.balance||0), tixBalance:Number(u.tix_balance||0), createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified), isAssetModerator:Boolean(u.is_asset_moderator) });
+const USER_BADGE_KEYS = Object.freeze(["ADMINISTRATOR","ASSET_MODERATOR","EARLY_SUPPORTER","CONTRIBUTOR","CREATOR","COMMUNITY_HELPER"]);
+const USER_BADGE_LABELS = Object.freeze({ADMINISTRATOR:"Administrator",ASSET_MODERATOR:"Asset Moderator",EARLY_SUPPORTER:"Early Supporter",CONTRIBUTOR:"Contributor",CREATOR:"Creator",COMMUNITY_HELPER:"Community Helper"});
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 const DEFAULT_AVATAR_BODY_COLORS = Object.freeze({headColorId:125,torsoColorId:125,leftArmColorId:125,rightArmColorId:125,leftLegColorId:125,rightLegColorId:125});
 const AVATAR_COLOR_IDS = new Set([361,192,217,153,359,352,5,101,1007,1014,38,18,125,1030,133,106,105,1017,24,334,226,141,1021,28,37,310,317,119,1011,1012,1010,23,305,102,45,107,1018,1027,1019,1013,11,1024,104,1023,321,1015,1031,1006,1026,21,1004,1032,1016,330,9,1025,364,351,1008,29,1022,151,135,1020,1028,1009,1029,1003,26,199,194,1002,208,1,1001]);
@@ -184,6 +187,11 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS equipped_items (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, category TEXT NOT NULL, equipped_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,item_id))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_render_cache (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, source_hash TEXT NOT NULL, thumbnail_data BLOB NOT NULL, rendered_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_settings (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, body_colors TEXT NOT NULL DEFAULT '{}', rig_type TEXT NOT NULL DEFAULT 'R6' CHECK(rig_type IN ('R6','R15')), scales_json TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS user_badges (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, badge_key TEXT NOT NULL CHECK(badge_key IN ('ADMINISTRATOR','ASSET_MODERATOR','EARLY_SUPPORTER','CONTRIBUTOR','CREATOR','COMMUNITY_HELPER')), granted_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,badge_key))"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_user_badges_key ON user_badges(badge_key,user_id)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS model_submissions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, username TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', model_url TEXT NOT NULL, image_url TEXT NOT NULL DEFAULT '', price INTEGER NOT NULL DEFAULT 50 CHECK(price>=0 AND price<=1000000), status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')), reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_item_id TEXT REFERENCES items(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), reviewed_at TEXT)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_model_submissions_status ON model_submissions(status,created_at)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_model_submissions_user ON model_submissions(user_id,created_at DESC)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_equipped_items_user ON equipped_items(user_id,category)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS creator_submissions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, username TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', category TEXT NOT NULL CHECK(category IN ('Shirts','Pants')), roblox_url TEXT NOT NULL, asset_id INTEGER NOT NULL CHECK(asset_id>0), status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')), image_url TEXT NOT NULL DEFAULT '', reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_item_id TEXT REFERENCES items(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), reviewed_at TEXT)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_creator_submissions_user ON creator_submissions(user_id,created_at DESC)"),
@@ -219,6 +227,7 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')"),
         env.DB.prepare("DELETE FROM banned_session_notices WHERE expires_at <= datetime('now')")
       ]);
+      await env.DB.prepare("INSERT OR IGNORE INTO user_badges (user_id,badge_key) SELECT id,'ADMINISTRATOR' FROM users WHERE username COLLATE NOCASE IN ('Admin','Sakura')").run();
       // Keep the catalog price synchronized with the latest valid active player listing.
       // When a listing is removed, the last displayed price remains until another active listing changes it.
       await env.DB.prepare(`
@@ -1020,8 +1029,11 @@ async function route(request, env) {
     const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1 AND COALESCE(rap_item.is_offsale,0)=0 AND COALESCE(rap_item.base_currency,rap_item.currency,'P$')='P$') AS total_rap
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.public_id=? AND u.is_banned=0`).bind(Number(profileIdMatch[1])).first();
     if (!profile) return fail("User not found.",404);
-    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap:Number(profile.total_rap||0),isVerified:Boolean(profile.is_verified)} });
+    const [count,badgeRows] = await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first(),
+      env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all()
+    ]);
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap:Number(profile.total_rap||0),isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
   }
 
   const profileInventoryMatch = path.match(/^\/api\/profile\/([A-Za-z0-9_]{1,20})\/inventory$/);
@@ -1189,8 +1201,11 @@ async function route(request, env) {
     const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1 AND COALESCE(rap_item.is_offsale,0)=0 AND COALESCE(rap_item.base_currency,rap_item.currency,'P$')='P$') AS total_rap
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap:Number(profile.total_rap||0),isVerified:Boolean(profile.is_verified)} });
+    const [count,badgeRows] = await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first(),
+      env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all()
+    ]);
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap:Number(profile.total_rap||0),isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
   }
 
   if (request.method === "PUT" && path === "/api/profile") {
@@ -1415,6 +1430,34 @@ async function route(request, env) {
     return json({ok:true,is_verified:verified});
   }
 
+  if (path.startsWith("/api/owner/badges/")) {
+    const actor=await requireUser(request,env);
+    if(!actor)return fail("Please sign in.",401);
+    if(actor.role!=="OWNER")return fail("Owner access required.",403);
+    const targetId=path.slice("/api/owner/badges/".length);
+    if(!/^[A-Za-z0-9-]{1,80}$/.test(targetId))return fail("Invalid user ID.");
+    const target=await env.DB.prepare("SELECT id FROM users WHERE id=?").bind(targetId).first();
+    if(!target)return fail("User not found.",404);
+    if(request.method!=="POST")return fail("Unsupported badge action.",405);
+    const data=await body(request),action=String(data?.action||""),badgeKey=String(data?.badgeKey||"");
+    if(!["grant_badge","revoke_badge"].includes(action))return fail("Choose a valid badge action.");
+    if(badgeKey==="VERIFIED"){
+      const verified=action==="grant_badge"?1:0;
+      await env.DB.prepare("UPDATE users SET is_verified=? WHERE id=?").bind(verified,targetId).run();
+    }else{
+      if(!USER_BADGE_KEYS.includes(badgeKey))return fail("Choose a valid badge.");
+      if(action==="grant_badge")await env.DB.prepare("INSERT OR IGNORE INTO user_badges (user_id,badge_key,granted_by) VALUES (?,?,?)").bind(targetId,badgeKey,actor.id).run();
+      else await env.DB.prepare("DELETE FROM user_badges WHERE user_id=? AND badge_key=?").bind(targetId,badgeKey).run();
+    }
+    const label=badgeKey==="VERIFIED"?"Verified":USER_BADGE_LABELS[badgeKey];
+    await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,action==="grant_badge"?"BADGE_GRANTED":"BADGE_REVOKED",label).run();
+    const [user,badges]=await Promise.all([
+      env.DB.prepare("SELECT id,username,public_id,role,is_verified,EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=users.id AND ub.badge_key='ASSET_MODERATOR') AS is_asset_moderator FROM users WHERE id=?").bind(targetId).first(),
+      env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(targetId).all()
+    ]);
+    return json({ok:true,user:{...user,badges:(badges.results||[]).map(row=>row.badge_key)}});
+  }
+
   if (path.startsWith("/api/owner/users")) {
     const actor = await requireUser(request,env);
     if (!actor) return fail("Please sign in.",401);
@@ -1436,11 +1479,12 @@ async function route(request, env) {
     if (!target) return fail("User not found.",404);
 
     if (request.method === "GET") {
-      const [warnings,logs] = await Promise.all([
+      const [warnings,logs,badgeRows] = await Promise.all([
         env.DB.prepare("SELECT id,reason,created_at,acknowledged FROM moderation_warnings WHERE user_id=? ORDER BY created_at DESC LIMIT 20").bind(targetId).all(),
-        env.DB.prepare("SELECT action,details,created_at FROM owner_audit_log WHERE target_user_id=? ORDER BY created_at DESC LIMIT 20").bind(targetId).all()
+        env.DB.prepare("SELECT action,details,created_at FROM owner_audit_log WHERE target_user_id=? ORDER BY created_at DESC LIMIT 20").bind(targetId).all(),
+        env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(targetId).all()
       ]);
-      return json({user:target,warnings:warnings.results||[],logs:logs.results||[]});
+      return json({user:{...target,badges:(badgeRows.results||[]).map(row=>row.badge_key)},warnings:warnings.results||[],logs:logs.results||[]});
     }
 
     if (request.method !== "POST") return fail("Unsupported user management action.",405);
