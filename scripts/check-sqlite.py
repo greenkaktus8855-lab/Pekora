@@ -167,6 +167,7 @@ try:
     raise AssertionError("A listed item must not be trade-locked")
 except sqlite3.IntegrityError:
     pass
+db.commit()
 
 # Buying the listing atomically transfers the item and P$ from buyer to seller.
 db.execute("BEGIN IMMEDIATE")
@@ -212,6 +213,7 @@ assert db.execute("SELECT changes()").fetchone()[0] == 1
 print("PASS Off Sale items can be listed by players")
 
 # Regular Catalog purchases credit the exact Admin account.
+db.commit()
 db.execute("INSERT INTO items (id,name,category,price,image_url,is_for_sale,is_limited,is_offsale,stock_limit,stock_sold) VALUES (?,?,?,?,?,?,?,?,?,?)",
            ("admin-store-item","Admin Store Item","Hats",5,"",1,0,0,0,0))
 db.execute("BEGIN IMMEDIATE")
