@@ -21,3 +21,15 @@
 .icon-robux-gray-16x16{background-position:0 -112px}
 .icon-tix-gray-16x16{background-position:0 -80px;filter:grayscale(1);opacity:.65}
 .currency-icon-original{flex:0 0 16px;margin:0}
+
+/* Original OpenPekora Builders Club badge, scaled to the sidebar icon slot */
+.icon-bc{
+ background-image:url('/bc.svg');
+ background-repeat:no-repeat;
+ background-size:52px 42px;
+ background-position:0 7px;
+ width:28px;
+ height:28px;
+ display:inline-block;
+ vertical-align:middle;
+}
