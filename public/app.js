@@ -115,7 +115,6 @@ function renderSidebar(active="home"){
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-trade","Trades"],
   ["inventory","icon-nav-inventory","Inventory"],
-  ["avatar","icon-nav-profile","Avatar"],
   ["groups","icon-nav-group","Groups"],
   ["currency","icon-nav-robux","Currency"],
   ["membership","icon-nav-robux","Membership"],
