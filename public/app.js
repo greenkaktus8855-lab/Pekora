@@ -29,7 +29,23 @@ async function api(path,options={}){
  const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});
  let data={};try{data=await res.json()}catch{}
  if(!res.ok){
-  if(res.status===401&&me&&!["/api/login","/api/register"].includes(path)){setUser(null);page("login");}
+  if(res.status===401&&me&&!["/api/login","/api/register"].includes(path)){
+   let banNotice=null;
+   try{
+    const noticeResponse=await fetch("/api/me",{credentials:"same-origin"});
+    const noticeState=await noticeResponse.json();
+    banNotice=noticeState.bannedAccount||null;
+   }catch{}
+   if(banNotice){
+    detectedBannedAccount=banNotice;
+    setUser(null);
+    history.replaceState({page:"banned",username:banNotice.username},"","/#banned?username="+encodeURIComponent(banNotice.username));
+    await render("banned?username="+encodeURIComponent(banNotice.username));
+   }else{
+    setUser(null);
+    page("login");
+   }
+  }
   throw new Error(data.error||"Something went wrong");
  }
  return data;
