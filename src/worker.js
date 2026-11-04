@@ -1916,7 +1916,8 @@ async function route(request, env) {
     const results=await env.DB.batch([
       env.DB.prepare("UPDATE model_submissions SET status='APPROVED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(actor.id,submissionId),
       env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) SELECT ?,name,description,'Accessories',?,'P$',image_url,model_url,0,0,0,0,0,1,0 FROM model_submissions WHERE id=? AND status='APPROVED' AND reviewed_by=? AND created_item_id IS NULL AND changes()=1").bind(itemId,model.price,submissionId,actor.id),
-      env.DB.prepare("UPDATE model_submissions SET created_item_id=? WHERE id=? AND status='APPROVED' AND reviewed_by=? AND EXISTS (SELECT 1 FROM items WHERE id=?)").bind(itemId,submissionId,actor.id,itemId),
+      env.DB.prepare("INSERT INTO item_creators (item_id,creator_id,creator_name,original_url) SELECT ?,user_id,username,model_url FROM model_submissions WHERE id=? AND status='APPROVED' AND EXISTS (SELECT 1 FROM items WHERE id=?)").bind(itemId,submissionId,itemId),
+      env.DB.prepare("UPDATE model_submissions SET created_item_id=? WHERE id=? AND status='APPROVED' AND reviewed_by=? AND EXISTS (SELECT 1 FROM item_creators WHERE item_id=?)").bind(itemId,submissionId,actor.id,itemId),
       env.DB.prepare("INSERT OR IGNORE INTO inventory (id,user_id,item_id) SELECT ?,user_id,? FROM model_submissions WHERE id=? AND status='APPROVED' AND reviewed_by=? AND created_item_id=?").bind(inventoryId,itemId,submissionId,actor.id,itemId)
     ]);
     if(!results||!results.length||!results[0]||!results[0].meta||!results[0].meta.changes)return fail("This model has already been reviewed.",409);
