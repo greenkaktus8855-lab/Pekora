@@ -1363,8 +1363,27 @@ async function route(request, env) {
   if (groupImageMatch && request.method === "GET") {
     const image = await env.DB.prepare("SELECT image_data,content_type FROM group_image_files WHERE id=?").bind(groupImageMatch[1]).first();
     if (!image?.image_data) return fail("Group image not found.",404);
-    return new Response(image.image_data,{headers:{
+
+    // D1 returns BLOB values as number arrays, not as a Response-compatible body.
+    const storedImage = image.image_data;
+    let imageBytes;
+    if (Array.isArray(storedImage)) {
+      imageBytes = Uint8Array.from(storedImage);
+    } else if (storedImage instanceof ArrayBuffer) {
+      imageBytes = new Uint8Array(storedImage);
+    } else if (ArrayBuffer.isView(storedImage)) {
+      imageBytes = new Uint8Array(storedImage.buffer.slice(
+        storedImage.byteOffset,
+        storedImage.byteOffset + storedImage.byteLength
+      ));
+    } else {
+      return fail("Group image data is invalid.",500);
+    }
+
+    if (!imageBytes.byteLength) return fail("Group image not found.",404);
+    return new Response(imageBytes,{headers:{
       "content-type":image.content_type||"application/octet-stream",
+      "content-length":String(imageBytes.byteLength),
       "cache-control":"public, max-age=3600",
       "x-content-type-options":"nosniff"
     }});
