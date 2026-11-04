@@ -760,17 +760,21 @@ async function route(request, env) {
     if (!name || name.length>80) return fail("Item name must be 1–80 characters.");
     if (!["Shirts","Pants"].includes(category)) return fail("Only Shirts and Pants can be submitted.");
     if (description.length>500) return fail("Description must be 500 characters or less.");
-    if (suppliedUrl.length>500) return fail("Roblox catalog link is too long.");
+    if (suppliedUrl.length>500) return fail("Roblox catalog link or item ID is too long.");
     let assetId = 0;
     try {
-      const source = new URL(suppliedUrl);
-      if (source.protocol!=="https:" || !["roblox.com","www.roblox.com"].includes(source.hostname.toLowerCase())) throw new Error();
-      const match = source.pathname.match(/^\/catalog\/(\d+)(?:\/|$)/);
-      if (!match) throw new Error();
-      assetId = Number(match[1]);
+      if (/^\\d{1,10}$/.test(suppliedUrl)) {
+        assetId = Number(suppliedUrl);
+      } else {
+        const source = new URL(suppliedUrl);
+        if (source.protocol!=="https:" || !["roblox.com","www.roblox.com","m.roblox.com"].includes(source.hostname.toLowerCase())) throw new Error();
+        const match = source.pathname.match(/^\\/(?:catalog|library)\\/(\\d+)(?:\\/|$)|^\\/marketplace\\/asset\\/(\\d+)(?:\\/|$)/i);
+        if (!match) throw new Error();
+        assetId = Number(match[1]||match[2]||0);
+      }
       if (!Number.isSafeInteger(assetId) || assetId<1 || assetId>2147483647) throw new Error();
     } catch {
-      return fail("Enter the original Roblox catalog link, for example https://www.roblox.com/catalog/123456789/Item.");
+      return fail("Enter a Roblox catalog link or numeric item ID, for example https://www.roblox.com/catalog/123456789/Item. A Sakura page or image link is not a Roblox clothing item.");
     }
     const pending = await env.DB.prepare("SELECT COUNT(*) AS count FROM creator_submissions WHERE user_id=? AND status='PENDING'").bind(user.id).first();
     if (Number(pending?.count||0)>=10) return fail("You already have 10 requests waiting for review.",429);
