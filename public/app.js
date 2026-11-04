@@ -862,7 +862,7 @@ async function groupsPage(){
    const data=await api("/api/groups");
    if(!isActiveView(view)||!host?.isConnected)return;
    const groups=data.groups||[];
-   host.innerHTML=groups.length?groups.map(group=>'<article class="group-card"><div class="group-card-mark">'+(group.avatar_url?'<img src="'+esc(group.avatar_url)+'" alt="">':esc(String(group.name||"?").slice(0,1).toUpperCase()))+'</div><div class="group-card-info"><h3><a href="#group?id='+encodeURIComponent(group.id)+'" data-group-view="'+esc(group.id)+'">'+esc(group.name)+'</a></h3><p>'+esc(group.description||"No description.")+'</p><span class="muted">Owner: '+esc(group.owner_name)+' · '+Number(group.member_count||0).toLocaleString()+' members</span></div>'+(me?(Number(group.is_member)===1?'<button class="button secondary" type="button" disabled>Joined</button>':'<button class="button" type="button" data-join-group="'+esc(group.id)+'">Join</button>'):'')+'</article>').join(""):'<div class="empty">No groups yet. Be the first to create one.</div>';
+   host.innerHTML=groups.length?groups.map(group=>'<article class="group-card"><div class="group-card-mark">'+(group.avatar_url?'<img src="'+esc(group.avatar_url)+'" alt="">':esc(String(group.name||"?").slice(0,1).toUpperCase()))+'</div><div class="group-card-info"><h3><a href="#group?id='+encodeURIComponent(group.id)+'" data-group-view="'+esc(group.id)+'">'+esc(group.name)+'</a>'+(Number(group.is_verified)===1?' <img class="verified-badge group-verified-badge" src="/verified.svg" alt="Verified group" title="Verified group">':'')+'</h3><p>'+esc(group.description||"No description.")+'</p><span class="muted">Owner: '+esc(group.owner_name)+' · '+Number(group.member_count||0).toLocaleString()+' members</span></div>'+(me?(Number(group.is_member)===1?'<button class="button secondary" type="button" disabled>Joined</button>':'<button class="button" type="button" data-join-group="'+esc(group.id)+'">Join</button>'):'')+'</article>').join(""):'<div class="empty">No groups yet. Be the first to create one.</div>';
   }catch(error){if(host?.isConnected)host.textContent=error.message}
  }
  host?.addEventListener("click",async event=>{
@@ -903,22 +903,57 @@ async function groupPage(groupId){
   if(!isActiveView(view))return;
   const group=data.group||{},members=data.members||[];
   const mark=group.avatar_url?'<img src="'+esc(group.avatar_url)+'" alt="'+esc(group.name)+'">':esc(String(group.name||"?").slice(0,1).toUpperCase());
+  const verifiedMark=Number(group.is_verified)===1?' <img class="verified-badge group-verified-badge" src="/verified.svg" alt="Verified group" title="Verified group">':'';
   const owner=Number(group.is_owner)===1;
   const member=Number(group.is_member)===1;
   const memberList=members.length?members.map(person=>'<article class="group-member"><div class="people-avatar">'+avatar(person.username)+'</div><div class="people-user-info"><strong><a href="#profile?username='+encodeURIComponent(person.username)+'" data-profile="'+esc(person.username)+'">'+esc(person.username)+'</a>'+(person.group_role==="OWNER"?' <span class="group-owner-tag">OWNER</span>':'')+'</strong><span>'+esc(person.account_role||"USER")+' · Joined '+esc(new Date(person.joined_at+"Z").toLocaleDateString())+'</span></div></article>').join(""):'<div class="empty">No members yet.</div>';
   app.innerHTML='<div class="groups-page"><a href="#groups" data-page="groups" class="item-back-link">‹ Back to Groups</a>'+
-   '<section class="group-detail-card"><div class="group-detail-heading"><div class="group-detail-avatar">'+mark+'</div><div><h1>'+esc(group.name)+'</h1><p class="muted">Owner: <a href="#profile?username='+encodeURIComponent(group.owner_name)+'" data-profile="'+esc(group.owner_name)+'">'+esc(group.owner_name)+'</a> · '+Number(group.member_count||0).toLocaleString()+' members</p><span class="muted">Created '+esc(new Date(group.created_at+"Z").toLocaleDateString())+'</span></div></div>'+
+   '<section class="group-detail-card"><div class="group-detail-heading"><div class="group-detail-avatar">'+mark+'</div><div><h1>'+esc(group.name)+verifiedMark+'</h1><p class="muted">Owner: <a href="#profile?username='+encodeURIComponent(group.owner_name)+'" data-profile="'+esc(group.owner_name)+'">'+esc(group.owner_name)+'</a> · '+Number(group.member_count||0).toLocaleString()+' members</p><span class="muted">Created '+esc(new Date(group.created_at+"Z").toLocaleDateString())+'</span></div></div>'+
    '<p class="group-detail-description">'+esc(group.description||"No description.")+'</p>'+
-   (owner?'<form id="groupSettingsForm" class="group-create-form group-settings-form"><h2>Group settings</h2><label>Group name<input name="name" minlength="3" maxlength="32" required value="'+esc(group.name)+'"></label><label>Description<textarea name="description" maxlength="300" rows="3">'+esc(group.description||"")+'</textarea></label><label>Group avatar URL<input name="avatar_url" type="url" maxlength="1000" placeholder="https://..." value="'+esc(group.avatar_url||"")+'"></label><button class="primary" type="submit">Save settings</button><button class="button danger-button" id="deleteGroupBtn" type="button">Delete group</button><span id="groupSettingsMessage" class="muted"></span></form>':
+   (owner?'<form id="groupSettingsForm" class="group-create-form group-settings-form"><h2>Group settings</h2><label>Group name<input name="name" minlength="3" maxlength="32" required value="'+esc(group.name)+'"></label><label>Description<textarea name="description" maxlength="300" rows="3">'+esc(group.description||"")+'</textarea></label><div class="group-avatar-upload"><label for="groupAvatarFile">Group image</label><div class="group-avatar-upload-row"><div class="group-avatar-preview" id="groupAvatarPreview">'+mark+'</div><div class="group-avatar-file-controls"><input id="groupAvatarFile" name="avatar_file" type="file" accept="image/png,image/jpeg,image/webp"><span class="muted">PNG, JPG or WebP · up to 2 MB</span>'+(group.avatar_url?'<button class="button secondary" id="removeGroupAvatarBtn" type="button">Remove image</button>':'')+'</div></div></div><button class="primary" type="submit">Save settings</button><button class="button danger-button" id="deleteGroupBtn" type="button">Delete group</button><span id="groupSettingsMessage" class="muted"></span></form>':
     (me?(member?'<button class="button secondary" id="leaveGroupBtn" type="button">Leave group</button>':'<button class="primary" id="joinGroupBtn" type="button">Join group</button>'):'<p class="muted">Log in to join this group.</p>'))+
    '</section><section class="owner-section group-members-section"><h2>Members ('+Number(group.member_count||0).toLocaleString()+')</h2><div class="group-members-list">'+memberList+'</div></section></div>';
   document.getElementById("groupSettingsForm")?.addEventListener("submit",async event=>{
    event.preventDefault();
    const form=event.currentTarget,values=new FormData(form),message=document.getElementById("groupSettingsMessage"),button=form.querySelector('button[type="submit"]');
-   const payload={name:String(values.get("name")||"").trim(),description:String(values.get("description")||"").trim(),avatar_url:String(values.get("avatar_url")||"").trim()};
-   button.disabled=true;message.textContent="Saving...";
-   try{await api("/api/groups/"+encodeURIComponent(groupId),{method:"PATCH",body:JSON.stringify(payload)});toast("Group settings saved");await groupPage(groupId)}
-   catch(error){message.textContent=error.message;button.disabled=false}
+   const payload={name:String(values.get("name")||"").trim(),description:String(values.get("description")||"").trim()};
+   const avatarFile=values.get("avatar_file");
+   button.disabled=true;message.textContent="Saving group settings...";
+   try{
+    if(avatarFile instanceof File&&avatarFile.size){
+     if(!["image/png","image/jpeg","image/webp"].includes(avatarFile.type))throw new Error("Choose a PNG, JPG or WebP image.");
+     if(avatarFile.size>2*1024*1024)throw new Error("Group image must be 2 MB or smaller.");
+     message.textContent="Uploading group image...";
+     const upload=await fetch("/api/groups/"+encodeURIComponent(groupId)+"/avatar",{method:"PUT",credentials:"same-origin",headers:{"content-type":avatarFile.type},body:avatarFile});
+     let uploaded={};try{uploaded=await upload.json()}catch{}
+     if(!upload.ok)throw new Error(uploaded.error||"Group image upload failed.");
+    }
+    message.textContent="Saving group settings...";
+    await api("/api/groups/"+encodeURIComponent(groupId),{method:"PATCH",body:JSON.stringify(payload)});
+    toast("Group settings saved");
+    await groupPage(groupId);
+   }catch(error){message.textContent=error.message;button.disabled=false}
+  });
+  document.getElementById("groupAvatarFile")?.addEventListener("change",event=>{
+   const file=event.currentTarget.files?.[0];
+   const preview=document.getElementById("groupAvatarPreview");
+   if(!file||!preview)return;
+   if(!["image/png","image/jpeg","image/webp"].includes(file.type)){toast("Choose a PNG, JPG or WebP image.");event.currentTarget.value="";return}
+   if(file.size>2*1024*1024){toast("Group image must be 2 MB or smaller.");event.currentTarget.value="";return}
+   const reader=new FileReader();
+   reader.onload=()=>{if(preview.isConnected)preview.innerHTML='<img src="'+esc(String(reader.result||""))+'" alt="Selected group image preview">'};
+   reader.onerror=()=>toast("Could not preview this image.");
+   reader.readAsDataURL(file);
+  });
+  document.getElementById("removeGroupAvatarBtn")?.addEventListener("click",async()=>{
+   const button=document.getElementById("removeGroupAvatarBtn");
+   button.disabled=true;
+   try{
+    const response=await fetch("/api/groups/"+encodeURIComponent(groupId)+"/avatar",{method:"DELETE",credentials:"same-origin"});
+    let data={};try{data=await response.json()}catch{}
+    if(!response.ok)throw new Error(data.error||"Could not remove group image.");
+    toast("Group image removed");await groupPage(groupId);
+   }catch(error){toast(error.message);button.disabled=false}
   });
   document.getElementById("deleteGroupBtn")?.addEventListener("click",async()=>{
    if(!confirm('Delete the group "'+group.name+'"? This cannot be undone.'))return;
@@ -1041,7 +1076,7 @@ async function owner(){
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>'+
- '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Sakura currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="1" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
+ '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section owner-group-verification"><h2>Group Verification</h2><p class="muted">Give or remove the verified badge for Sakura groups. Only the site owner can change this.</p><div id="ownerGroups" class="owner-group-list">Loading groups...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Sakura currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="1" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
  app.insertAdjacentHTML("beforeend",
   '<section class="owner-section owner-promocode-section"><h2>Promo Code Management</h2><p class="muted">Create codes that grant Sakura currency and one or more items from the catalog. Set a total claim limit and optional expiry date.</p>'+
   '<form id="ownerPromoForm" class="owner-item-form owner-promo-form">'+
@@ -1123,6 +1158,24 @@ async function owner(){
  const userDetails=document.getElementById("ownerUserDetails");
  const gameForm=document.getElementById("newGameForm");
  const ownerGames=document.getElementById("ownerGames");
+ const ownerGroups=document.getElementById("ownerGroups");
+ async function loadOwnerGroups(){
+  if(!ownerGroups)return;
+  try{
+   const data=await api("/api/owner/groups");
+   if(!isActiveView(view))return;
+   const groups=data.groups||[];
+   ownerGroups.innerHTML=groups.length?groups.map(group=>'<article class="owner-group-row"><div><strong>'+esc(group.name)+'</strong><span class="muted">Owner: '+esc(group.owner_name)+' · '+Number(group.member_count||0).toLocaleString()+' members</span></div><span class="group-verification-status '+(Number(group.is_verified)===1?'is-verified':'')+'">'+(Number(group.is_verified)===1?'Verified':'Not verified')+'</span><button class="button '+(Number(group.is_verified)===1?'secondary':'')+'" type="button" data-group-verify="'+esc(group.id)+'" data-next-action="'+(Number(group.is_verified)===1?'unverify':'verify')+'">'+(Number(group.is_verified)===1?'Remove tick':'Give tick')+'</button></article>').join(""):'<p class="muted">No groups have been created yet.</p>';
+   ownerGroups.querySelectorAll("[data-group-verify]").forEach(button=>button.addEventListener("click",async()=>{
+    button.disabled=true;
+    try{
+     await api("/api/owner/groups/"+encodeURIComponent(button.dataset.groupVerify),{method:"POST",body:JSON.stringify({action:button.dataset.nextAction})});
+     toast(button.dataset.nextAction==="verify"?"Group verified":"Group verification removed");
+     await loadOwnerGroups();
+    }catch(error){toast(error.message);button.disabled=false}
+   }));
+  }catch(error){ownerGroups.textContent=error.message}
+ }
  async function loadOwnerGames(){
   if(!ownerGames)return;
   try{
@@ -1147,6 +1200,7 @@ async function owner(){
   catch(error){message.textContent=error.message}
  });
  loadOwnerGames();
+ loadOwnerGroups();
  async function loadOwnerUser(userId){
   userDetails.innerHTML='<p class="muted">Loading account...</p>';
   try{
