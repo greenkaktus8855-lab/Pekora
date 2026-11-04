@@ -32,6 +32,19 @@ function administratorBadgeMarkup(username){
   ? ' <span class="administrator-profile-badge" title="Administrator" aria-label="Administrator"><span class="icon-administrator-small" aria-hidden="true"></span><span>Administrator</span></span>'
   : "";
 }
+function profileBadgesMarkup(profileData){
+ const badges=[];
+ const normalized=String(profileData?.username||"").trim().toLowerCase();
+ if(normalized==="admin"||normalized==="sakura"){
+  badges.push('<article class="profile-badge-card"><span class="profile-badge-icon icon-administrator-small" role="img" aria-label="Administrator"></span><span class="profile-badge-name">Administrator</span></article>');
+ }
+ if(profileData?.isVerified){
+  badges.push('<article class="profile-badge-card"><img class="profile-badge-verified" src="/verified.svg" alt="Verified"><span class="profile-badge-name">Verified</span></article>');
+ }
+ return badges.length
+  ? '<div class="profile-badges-grid">'+badges.join("")+'</div>'
+  : '<div class="op-profile-empty">This user has no badges yet.</div>';
+}
 async function api(path,options={}){
  const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});
  let data={};try{data=await res.json()}catch{}
@@ -666,7 +679,9 @@ async function profile(identifier=me?.username,byId=false){
    '</div></div>'+
    '<section class="op-profile-section"><h2>Inventory</h2>'+
     (owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+
-   '</section></div>';
+   '</section>'+
+   '<section class="op-profile-section op-profile-badges-section"><h2>Badges</h2>'+profileBadgesMarkup(p)+'</section>'+
+   '</div>';
   if(!isSelf&&me)loadProfileFriendAction(p.username);
  }catch(e){if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
