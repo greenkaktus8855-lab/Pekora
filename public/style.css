@@ -361,6 +361,12 @@ button,input,textarea,select{font:inherit}
 .op-profile-items .item-card{padding:4px}
 .op-profile-items .item-image{max-width:132px;border:0}
 .op-profile-empty{padding:18px;background:#b8b8b8;color:#757575;text-align:center;font-size:15px}
+.op-profile-badges-section{margin-top:22px}
+.profile-badges-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px}
+.profile-badge-card{display:flex;min-height:112px;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:12px 8px;border:1px solid #3a3048;border-radius:8px;background:#211b2b;color:#f1eaff;text-align:center}
+.profile-badge-icon{width:40px;height:40px;background-size:80px auto;background-position:-40px -240px}
+.profile-badge-verified{display:block;width:44px;height:30px;object-fit:contain}
+.profile-badge-name{font-size:13px;font-weight:700;line-height:1.25}
 @media(max-width:767px){.op-profile-header{gap:12px}.op-profile-avatar{width:104px;height:104px;flex-basis:104px}.op-profile-info h1{font-size:24px}.op-profile-items{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .catalog-results-header{gap:10px}
