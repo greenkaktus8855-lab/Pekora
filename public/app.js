@@ -28,16 +28,20 @@ function currencyMarkup(amount,currencyCode="P$",extraClass=""){
 }
 function profileBadgesMarkup(profileData){
  const badges=[];
- const normalized=String(profileData?.username||"").trim().toLowerCase();
- if(normalized==="admin"||normalized==="sakura"){
-  badges.push('<article class="profile-badge-card"><span class="profile-badge-icon icon-administrator-small" role="img" aria-label="Administrator"></span><span class="profile-badge-name">Administrator</span></article>');
+ const assigned=new Set(Array.isArray(profileData?.badges)?profileData.badges:[]);
+ const definitions={
+  ADMINISTRATOR:["Administrator",'<span class="profile-badge-icon icon-administrator-small" role="img" aria-label="Administrator"></span>'],
+  ASSET_MODERATOR:["Asset Moderator",'<span class="profile-badge-symbol asset-moderator-symbol" aria-hidden="true">AM</span>'],
+  EARLY_SUPPORTER:["Early Supporter",'<span class="profile-badge-symbol early-supporter-symbol" aria-hidden="true">★</span>'],
+  CONTRIBUTOR:["Contributor",'<span class="profile-badge-symbol contributor-symbol" aria-hidden="true">C</span>'],
+  CREATOR:["Creator",'<span class="profile-badge-symbol creator-symbol" aria-hidden="true">✦</span>'],
+  COMMUNITY_HELPER:["Community Helper",'<span class="profile-badge-symbol helper-symbol" aria-hidden="true">H</span>']
+ };
+ for(const [key,value] of Object.entries(definitions)){
+  if(assigned.has(key))badges.push('<article class="profile-badge-card">'+value[1]+'<span class="profile-badge-name">'+value[0]+'</span></article>');
  }
- if(profileData?.isVerified){
-  badges.push('<article class="profile-badge-card"><img class="profile-badge-verified" src="/verified.svg" alt="Verified"><span class="profile-badge-name">Verified</span></article>');
- }
- return badges.length
-  ? '<div class="profile-badges-grid">'+badges.join("")+'</div>'
-  : '<div class="op-profile-empty">This user has no badges yet.</div>';
+ if(profileData?.isVerified)badges.push('<article class="profile-badge-card"><img class="profile-badge-verified" src="/verified.svg" alt="Verified"><span class="profile-badge-name">Verified</span></article>');
+ return badges.length?'<div class="profile-badges-grid">'+badges.join("")+'</div>':'<div class="op-profile-empty">This user has no badges yet.</div>';
 }
 async function api(path,options={}){
  const res=await fetch(path,{credentials:"same-origin",...options,headers:{"content-type":"application/json",...(options.headers||{})}});
@@ -152,6 +156,7 @@ function renderSidebar(active="home"){
   ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
  ];
+ if(me.role==="OWNER"||me.isAssetModerator)links.push(["asset-panel","icon-nav-inventory","Asset Panel"]);
  sidebar.innerHTML='<div class="sidebar-card">'+
   '<a class="side-user" href="/#profile?id='+encodeURIComponent(me.publicId||"")+'" data-page="profile"><span class="side-avatar">'+avatar()+'</span><span><span class="side-username">'+esc(me.username)+(me.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</span><span class="side-role">Account</span></span></a>'+
   '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span></a>').join("")+
@@ -1272,6 +1277,60 @@ async function createPage(){
  });
 }
 
+async function assetModeratorPage(){
+ const view=beginView();
+ renderSidebar("asset-panel");
+ if(!me){app.innerHTML='<div class="empty">Please log in first.</div>';return}
+ if(me.role!=="OWNER"&&!me.isAssetModerator){app.innerHTML='<div class="empty">Asset Moderator access required.</div>';return}
+ app.innerHTML='<div class="asset-panel-page"><div class="asset-panel-heading"><div><h1 class="page-title">Asset Panel</h1><p class="page-subtitle">Review clothing and 3D model submissions from the Sakura community.</p></div><button type="button" class="button secondary" id="assetQueueRefresh">Refresh queue</button></div><div id="assetQueueList" class="asset-queue-list"><div class="op-profile-empty">Loading pending submissions...</div></div>'+
+  '<section class="asset-tutorial"><h2>Asset Moderator — Full Tutorial</h2><p class="asset-tutorial-intro">This panel is only for reviewing clothing and 3D models. You can approve or reject a submission. You cannot edit catalog items, users, balances, groups, or site settings.</p>'+
+  '<article><h3>1. Review every submission</h3><p>Open the original Roblox item or the 3D preview. Check that the name, description, category, preview image, and actual asset all match. Never approve an item just because its thumbnail looks correct.</p></article>'+
+  '<article><h3>2. How to view and save clothing images</h3><p>For Shirts and Pants, use the preview and original Roblox catalog link. Click <strong>Open preview image</strong> to open the image separately. In the new tab, right-click the image and choose <strong>Save image as…</strong>. On a phone, press and hold the image and choose the save or download option offered by the browser.</p><p>Saved images are for inspection and reference. Do not reuse another creator’s artwork or upload it as your own.</p></article>'+
+  '<article><h3>3. How to inspect a 3D model</h3><p>Use the interactive preview to rotate the model and inspect it from different angles. Check that it loads correctly and matches the submission description. The model file must be a direct HTTPS link ending in <code>.glb</code> or <code>.gltf</code>. If an image preview is supplied, compare it with the actual model.</p><p>To save a preview image, open its image link in a new tab, then use the browser’s Save image or Download option.</p></article>'+
+  '<article><h3>4. What must be rejected</h3><p>Reject content that breaks Sakura rules, includes inappropriate or hateful material, promotes harm, impersonates another creator, or appears copied or stolen. Also reject broken links, files that do not load, misleading names, and submissions where the preview does not match the actual asset.</p></article>'+
+  '<article><h3>5. Approve or reject</h3><p><strong>Approve</strong> publishes the item to the Sakura catalog. The creator receives one free copy in their inventory. <strong>Reject</strong> declines the submission and removes it from the pending queue. Check the item carefully before making a decision.</p></article>'+
+  '<article><h3>6. Important rules</h3><p>Review all submissions fairly, including submissions from friends. Do not share your account or browser session. Your Asset Moderator permission can be removed by the Owner if it is abused.</p></article></section></div>';
+ const host=document.getElementById("assetQueueList");
+ async function loadQueue(){
+  if(!host)return;
+  host.innerHTML='<div class="op-profile-empty">Loading pending submissions...</div>';
+  try{
+   const [clothingData,modelData]=await Promise.all([api("/api/owner/creator-submissions"),api("/api/asset-moderation/models")]);
+   if(!isActiveView(view)||!host.isConnected)return;
+   const clothing=clothingData.submissions||[],models=modelData.submissions||[],cards=[];
+   for(const item of clothing){
+    const assetId=Number(item.asset_id||0);
+    const preview=assetId>0?"https://www.roblox.com/asset-thumbnail/image?assetId="+assetId+"&width=420&height=420&format=png":"";
+    const original=String(item.roblox_url||"");
+    cards.push('<article class="asset-submission-card"><div class="asset-submission-kind">Clothing · '+(item.category==="Pants"?"Pants":"Shirt")+'</div><div class="asset-submission-layout"><div class="asset-submission-preview">'+(preview?'<img src="'+esc(preview)+'" alt="Clothing preview" loading="lazy">':'<div class="asset-preview-missing">No preview available</div>')+'</div><div class="asset-submission-details"><h3>'+esc(item.name)+'</h3><p class="muted">Submitted by <a href="#profile?username='+encodeURIComponent(item.username)+'" data-profile="'+esc(item.username)+'">'+esc(item.username)+'</a></p><p>'+esc(item.description||"No description provided.")+'</p><p class="asset-submission-meta">'+Number(item.price||0).toLocaleString()+' P$ · '+esc(new Date(item.created_at+"Z").toLocaleString())+'</p>'+(original?'<a class="asset-external-link" href="'+esc(original)+'" target="_blank" rel="noopener noreferrer">Open original Roblox item</a>':'')+(preview?'<a class="asset-external-link" href="'+esc(preview)+'" target="_blank" rel="noopener noreferrer">Open preview image</a>':'')+'<div class="asset-review-actions"><button class="primary" type="button" data-asset-review="clothing" data-asset-id="'+esc(item.id)+'" data-asset-action="approve">Approve</button><button class="button danger-button" type="button" data-asset-review="clothing" data-asset-id="'+esc(item.id)+'" data-asset-action="reject">Reject</button></div></div></div></article>');
+   }
+   for(const item of models){
+    const preview=String(item.image_url||"");
+    cards.push('<article class="asset-submission-card"><div class="asset-submission-kind">3D Model · Accessory</div><div class="asset-submission-layout"><div class="asset-submission-preview asset-model-preview">'+(preview?'<img src="'+esc(preview)+'" alt="Model preview" loading="lazy">':'')+'<model-viewer src="'+esc(item.model_url)+'" alt="'+esc(item.name)+'" camera-controls auto-rotate rotation-per-second="20deg" shadow-intensity="1" exposure="1" loading="lazy" reveal="auto"></model-viewer></div><div class="asset-submission-details"><h3>'+esc(item.name)+'</h3><p class="muted">Submitted by <a href="#profile?username='+encodeURIComponent(item.username)+'" data-profile="'+esc(item.username)+'">'+esc(item.username)+'</a></p><p>'+esc(item.description||"No description provided.")+'</p><p class="asset-submission-meta">'+Number(item.price||0).toLocaleString()+' P$ · '+esc(new Date(item.created_at+"Z").toLocaleString())+'</p><a class="asset-external-link" href="'+esc(item.model_url)+'" target="_blank" rel="noopener noreferrer">Open 3D model file</a>'+(preview?'<a class="asset-external-link" href="'+esc(preview)+'" target="_blank" rel="noopener noreferrer">Open preview image</a>':'')+'<div class="asset-review-actions"><button class="primary" type="button" data-asset-review="model" data-asset-id="'+esc(item.id)+'" data-asset-action="approve">Approve</button><button class="button danger-button" type="button" data-asset-review="model" data-asset-id="'+esc(item.id)+'" data-asset-action="reject">Reject</button></div></div></div></article>');
+   }
+   host.innerHTML=cards.length?cards.join(""):'<div class="op-profile-empty">There are no pending asset submissions.</div>';
+   host.querySelectorAll("[data-asset-review]").forEach(button=>button.addEventListener("click",async()=>{
+    const kind=button.dataset.assetReview,submissionId=button.dataset.assetId,action=button.dataset.assetAction,card=button.closest(".asset-submission-card");
+    if(action==="reject"&&!confirm("Reject this submission?"))return;
+    card?.querySelectorAll("button").forEach(b=>b.disabled=true);
+    try{
+     if(kind==="clothing"){
+      const submission=clothing.find(entry=>entry.id===submissionId),assetId=Number(submission?.asset_id||0);
+      const payload={action};
+      if(action==="approve"){payload.image_url=assetId>0?"https://www.roblox.com/asset-thumbnail/image?assetId="+assetId+"&width=420&height=420&format=png":"";payload.price=Number(submission?.price??50);}
+      await api("/api/owner/creator-submissions/"+encodeURIComponent(submissionId),{method:"PATCH",body:JSON.stringify(payload)});
+     }else{
+      await api("/api/asset-moderation/models/"+encodeURIComponent(submissionId),{method:"PATCH",body:JSON.stringify({action})});
+     }
+     toast(action==="approve"?"Submission approved":"Submission rejected");
+     if(isActiveView(view))await loadQueue();
+    }catch(error){toast(error.message);card?.querySelectorAll("button").forEach(b=>b.disabled=false)}
+   }));
+  }catch(error){if(isActiveView(view)&&host.isConnected)host.innerHTML='<div class="op-profile-empty">Could not load submissions: '+esc(error.message)+'</div>'}
+ }
+ document.getElementById("assetQueueRefresh")?.addEventListener("click",loadQueue);
+ await loadQueue();
+}
 async function owner(){
  const view=beginView();
  renderSidebar("owner");
@@ -1778,6 +1837,7 @@ async function render(name){
  else if(name==="games")await gamesPage();
  else if(name==="trades")await tradesPage();
  else if(name==="settings")await settings();
+ else if(name==="asset-panel")await assetModeratorPage();
  else if(name==="owner")await owner();
  else home();
 }
