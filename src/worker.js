@@ -737,7 +737,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/resale/listings") {
-    const rows = await env.DB.prepare(\`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,r.created_at,
+    const rows = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,r.created_at,
         i.name,i.description,i.category,i.image_url,i.model_url,i.is_limited,i.is_offsale,
         u.username AS seller_name,u.public_id AS seller_public_id,u.is_verified AS seller_verified
       FROM resale_listings r
@@ -746,7 +746,7 @@ async function route(request, env) {
       WHERE r.status='ACTIVE' AND u.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1)
         AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
         AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
-      ORDER BY r.created_at DESC LIMIT 200\`).all();
+      ORDER BY r.created_at DESC LIMIT 200`).all();
     return json({listings:rows.results||[]});
   }
 
@@ -754,13 +754,13 @@ async function route(request, env) {
   if (request.method === "GET" && resaleItemMatch) {
     const item = await env.DB.prepare("SELECT id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,is_offsale,stock_limit,stock_sold,is_for_sale,created_at FROM items WHERE id=?").bind(resaleItemMatch[1]).first();
     if (!item) return fail("Item not found.",404);
-    const rows = await env.DB.prepare(\`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,r.created_at,
+    const rows = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,r.created_at,
         u.username AS seller_name,u.public_id AS seller_public_id,u.is_verified AS seller_verified
       FROM resale_listings r JOIN users u ON u.id=r.seller_id
       WHERE r.item_id=? AND r.status='ACTIVE' AND u.is_banned=0
         AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
         AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
-      ORDER BY r.price ASC,r.created_at ASC\`).bind(item.id).all();
+      ORDER BY r.price ASC,r.created_at ASC`).bind(item.id).all();
     return json({item,listings:rows.results||[]});
   }
 
@@ -779,12 +779,12 @@ async function route(request, env) {
     if (locked) return fail("This item is reserved in a pending trade. Cancel that trade before listing it.",409);
     const listingId=id();
     try {
-      const result = await env.DB.prepare(\`INSERT INTO resale_listings (id,item_id,seller_id,price,currency)
+      const result = await env.DB.prepare(`INSERT INTO resale_listings (id,item_id,seller_id,price,currency)
         SELECT ?,?,?,?,'P$'
         WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)
           AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)
           AND NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE')
-          AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1))\`)
+          AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1))`)
         .bind(listingId,itemId,user.id,price,user.id,itemId,user.id,itemId,user.id,itemId,itemId).run();
       if (!result?.meta?.changes) return fail("This item is already listed, reserved in a trade, or no longer eligible.",409);
     } catch (error) {
@@ -807,10 +807,10 @@ async function route(request, env) {
   if (resaleBuyMatch && request.method === "POST") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const listing = await env.DB.prepare(\`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,i.name,s.username AS seller_name
+    const listing = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,i.name,s.username AS seller_name
       FROM resale_listings r JOIN items i ON i.id=r.item_id
       JOIN users s ON s.id=r.seller_id
-      WHERE r.id=? AND r.status='ACTIVE' AND s.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1)\`)
+      WHERE r.id=? AND r.status='ACTIVE' AND s.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1)`)
       .bind(resaleBuyMatch[1]).first();
     if (!listing) return fail("This listing is no longer available.",404);
     if (listing.seller_id===user.id) return fail("You cannot buy your own listing.",403);
@@ -819,13 +819,13 @@ async function route(request, env) {
     const newInventoryId=id();
     try {
       const results = await env.DB.batch([
-        env.DB.prepare(\`UPDATE resale_listings SET status='SOLD',buyer_id=?,sold_at=datetime('now')
+        env.DB.prepare(`UPDATE resale_listings SET status='SOLD',buyer_id=?,sold_at=datetime('now')
           WHERE id=? AND status='ACTIVE' AND seller_id<>?
             AND EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=resale_listings.seller_id AND v.item_id=resale_listings.item_id AND (i.is_limited=1 OR i.is_offsale=1))
             AND EXISTS (SELECT 1 FROM users b WHERE b.id=? AND b.balance>=resale_listings.price)
             AND EXISTS (SELECT 1 FROM users s WHERE s.id=resale_listings.seller_id AND s.is_banned=0)
             AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=resale_listings.item_id)
-            AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=resale_listings.seller_id AND item_id=resale_listings.item_id)\`)
+            AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=resale_listings.seller_id AND item_id=resale_listings.item_id)`)
           .bind(user.id,listing.id,user.id,user.id,user.id),
         env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND changes()=1").bind(listing.price,user.id,listing.price),
         env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND changes()=1").bind(listing.price,listing.seller_id),
@@ -865,9 +865,9 @@ async function route(request, env) {
     const purchaseId=id(), inventoryId=id();
     try {
       const results = await env.DB.batch([
-        env.DB.prepare(\`UPDATE items SET stock_sold=stock_sold+1 WHERE id=? AND is_for_sale=1 AND is_offsale=0 AND (stock_limit=0 OR stock_sold<stock_limit) AND EXISTS (SELECT 1 FROM users WHERE id=? AND \${walletColumn}>=?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM users WHERE id=? AND is_banned=0)\`).bind(item.id,user.id,price,user.id,item.id,adminAccount.id),
-        env.DB.prepare(\`UPDATE users SET \${walletColumn}=\${walletColumn}-? WHERE id=? AND \${walletColumn}>=? AND changes()=1\`).bind(price,user.id,price),
-        env.DB.prepare(\`UPDATE users SET \${walletColumn}=\${walletColumn}+? WHERE id=? AND changes()=1\`).bind(price,adminAccount.id),
+        env.DB.prepare(`UPDATE items SET stock_sold=stock_sold+1 WHERE id=? AND is_for_sale=1 AND is_offsale=0 AND (stock_limit=0 OR stock_sold<stock_limit) AND EXISTS (SELECT 1 FROM users WHERE id=? AND ${walletColumn}>=?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND EXISTS (SELECT 1 FROM users WHERE id=? AND is_banned=0)`).bind(item.id,user.id,price,user.id,item.id,adminAccount.id),
+        env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}-? WHERE id=? AND ${walletColumn}>=? AND changes()=1`).bind(price,user.id,price),
+        env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}+? WHERE id=? AND changes()=1`).bind(price,adminAccount.id),
         env.DB.prepare("INSERT INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE changes()=1").bind(inventoryId,user.id,item.id),
         env.DB.prepare("INSERT INTO purchases (id,user_id,item_id,price,currency) SELECT ?,?,?,?,? WHERE changes()=1").bind(purchaseId,user.id,item.id,price,currencyCode)
       ]);
