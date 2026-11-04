@@ -190,6 +190,12 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS group_image_files (id TEXT PRIMARY KEY, group_id TEXT NOT NULL UNIQUE REFERENCES sakura_groups(id) ON DELETE CASCADE, image_data BLOB NOT NULL, content_type TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS group_members (group_id TEXT NOT NULL REFERENCES sakura_groups(id) ON DELETE CASCADE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL DEFAULT 'MEMBER' CHECK(role IN ('OWNER','MEMBER')), joined_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(group_id,user_id))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS trades (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, offered_items TEXT NOT NULL DEFAULT '[]', requested_items TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','DECLINED','CANCELLED')), created_at TEXT NOT NULL DEFAULT (datetime('now')), responded_at TEXT)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS resale_listings (id TEXT PRIMARY KEY, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, seller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, price INTEGER NOT NULL CHECK(price>0 AND price<=1000000), currency TEXT NOT NULL DEFAULT 'P$' CHECK(currency='P$'), status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','SOLD','CANCELLED')), buyer_id TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), sold_at TEXT)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_resale_active_created ON resale_listings(status,created_at DESC)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_resale_item_active ON resale_listings(item_id,status)"),
+        env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_resale_active_item_seller ON resale_listings(item_id,seller_id) WHERE status='ACTIVE'"),
+        env.DB.prepare("CREATE TRIGGER IF NOT EXISTS trg_resale_no_trade_lock BEFORE INSERT ON resale_listings WHEN EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=NEW.seller_id AND item_id=NEW.item_id) BEGIN SELECT RAISE(ABORT,'Item is reserved in a pending trade.'); END"),
+        env.DB.prepare("CREATE TRIGGER IF NOT EXISTS trg_trade_lock_no_resale BEFORE INSERT ON trade_locks WHEN EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=NEW.owner_id AND item_id=NEW.item_id AND status='ACTIVE') BEGIN SELECT RAISE(ABORT,'Item is already listed for sale.'); END"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS trade_locks (owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE CASCADE, PRIMARY KEY(owner_id,item_id))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_trades_sender ON trades(sender_id,status,created_at DESC)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_trades_recipient ON trades(recipient_id,status,created_at DESC)"),
@@ -779,46 +785,12 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,r.id AS active_listing_id,r.price AS active_listing_price,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id LEFT JOIN resale_listings r ON r.item_id=i.id AND r.seller_id=v.user_id AND r.status='ACTIVE' WHERE v.user_id=? ORDER BY v.purchased_at DESC").bind(user.id).all();
     return json({ items:rows.results || [] });
   }
 
   if (request.method === "POST" && path === "/api/inventory/sell") {
-    const user = await requireUser(request,env);
-    if (!user) return fail("Please sign in.",401);
-    const data = await body(request);
-    const itemId = String(data?.itemId || "");
-    if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId)) return fail("Choose a valid inventory item.");
-
-    const item = await env.DB.prepare(
-      "SELECT i.id,i.name,i.price,i.currency FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.item_id=?"
-    ).bind(user.id,itemId).first();
-    if (!item) return fail("This item is not in your inventory.",404);
-
-    const price = Number(item.price);
-    const currencyCode = item.currency === "Tix" ? "Tix" : "P$";
-    const walletColumn = currencyCode === "Tix" ? "tix_balance" : "balance";
-    if (!Number.isSafeInteger(price) || price < 0) return fail("This item has an invalid sale price.",409);
-
-    try {
-      const results = await env.DB.batch([
-        env.DB.prepare("DELETE FROM inventory WHERE id=(SELECT id FROM inventory WHERE user_id=? AND item_id=? ORDER BY purchased_at DESC LIMIT 1) AND EXISTS (SELECT 1 FROM items WHERE id=? AND price=? AND COALESCE(currency,'P$')=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)").bind(user.id,itemId,itemId,price,currencyCode,user.id,itemId),
-        env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}+? WHERE id=? AND changes()=1`).bind(price,user.id),
-      ]);
-
-      if (!results?.[0]?.meta?.changes) {
-        const locked = await env.DB.prepare("SELECT 1 AS locked FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId).first();
-        if (locked) return fail("This item is reserved in a pending trade. Cancel the trade before selling it.",409);
-        return fail("The item or its price changed. Refresh your Inventory and try again.",409);
-      }
-      if (!results?.[1]?.meta?.changes) return fail("The sale could not be completed. Please refresh and try again.",409);
-    } catch (error) {
-      console.error("[Sakura inventory] Item sale failed:",error);
-      return fail("The sale could not be completed. Please try again.",500);
-    }
-
-    const updated = await env.DB.prepare("SELECT balance,tix_balance FROM users WHERE id=?").bind(user.id).first();
-    return json({ok:true,item:{id:item.id,name:item.name,price,currency:currencyCode},balance:Number(updated?.balance||0),tixBalance:Number(updated?.tix_balance||0)});
+    return fail("Direct inventory selling is disabled. Create a player resale listing instead.",410);
   }
 
   const profileIdInventoryMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})\/inventory$/);
@@ -1576,7 +1548,7 @@ async function route(request, env) {
     const checkOwned=async(ownerId,ids)=>{
       if(!ids.length)return true;
       const marks=ids.map(()=>"?").join(",");
-      const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND (i.is_limited=1 OR i.is_offsale=1) AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
+      const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND (i.is_limited=1 OR i.is_offsale=1) AND NOT EXISTS (SELECT 1 FROM resale_listings rl WHERE rl.item_id=v.item_id AND rl.seller_id=v.user_id AND rl.status='ACTIVE') AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
       return (rows.results||[]).length===ids.length;
     };
     if(!(await checkOwned(user.id,offered)))return fail("You can only offer Limited or Off Sale items that are in your inventory.",409);
@@ -1584,8 +1556,8 @@ async function route(request, env) {
     // Duplicate Limited/Off Sale items are allowed in trades so users can send gifts.
     const tradeId=id();
     const statements=[env.DB.prepare("INSERT INTO trades (id,sender_id,recipient_id,offered_items,requested_items) VALUES (?,?,?,?,?)").bind(tradeId,user.id,recipient.id,JSON.stringify(offered),JSON.stringify(requested))];
-    for(const itemId of offered) statements.push(env.DB.prepare("INSERT INTO trade_locks (owner_id,item_id,trade_id) VALUES (?,?,?)").bind(user.id,itemId,tradeId));
-    for(const itemId of requested) statements.push(env.DB.prepare("INSERT INTO trade_locks (owner_id,item_id,trade_id) VALUES (?,?,?)").bind(recipient.id,itemId,tradeId));
+    for(const itemId of offered) statements.push(env.DB.prepare("INSERT INTO trade_locks (owner_id,item_id,trade_id) SELECT ?,?,? WHERE NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE')").bind(user.id,itemId,tradeId,user.id,itemId));
+    for(const itemId of requested) statements.push(env.DB.prepare("INSERT INTO trade_locks (owner_id,item_id,trade_id) SELECT ?,?,? WHERE NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE')").bind(recipient.id,itemId,tradeId,recipient.id,itemId));
     try { await env.DB.batch(statements); }
     catch { return fail("One of these items is already reserved in another pending trade.",409); }
     return json({ok:true,id:tradeId},201);
@@ -1607,7 +1579,7 @@ async function route(request, env) {
       const owned=async(ownerId,ids)=>{
         if(!ids.length)return true;
         const marks=ids.map(()=>"?").join(",");
-        const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND (i.is_limited=1 OR i.is_offsale=1) AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
+        const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND (i.is_limited=1 OR i.is_offsale=1) AND NOT EXISTS (SELECT 1 FROM resale_listings rl WHERE rl.item_id=v.item_id AND rl.seller_id=v.user_id AND rl.status='ACTIVE') AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
         return (rows.results||[]).length===ids.length;
       };
       if(!(await owned(trade.sender_id,offered))||!(await owned(trade.recipient_id,requested)))return fail("Only Limited or Off Sale items can be traded. This offer is no longer valid; cancel it and create a new trade.",409);
