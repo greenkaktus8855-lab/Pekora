@@ -1587,22 +1587,6 @@
 }
 #app .currency-inline.currency-large .currency-p-coin{flex-basis:21px;width:21px;height:21px;font-size:8px!important}
 #app .currency-inline.wallet-chip .currency-p-coin{flex-basis:16px;width:16px;height:16px;font-size:6px!important}
-#app .side-icon.icon-nav-sakura-currency{
- display:inline-flex;
- align-items:center;
- justify-content:center;
- width:18px;
- height:18px;
- border:1px solid rgba(255,255,255,.16);
- border-radius:50%;
- background:#168e56;
- color:#fff;
- font:900 7px/1 Arial,sans-serif;
- letter-spacing:-.3px;
-}
-#app .side-icon.icon-nav-sakura-currency:before{content:"P$"}
-
-
 /* Final Sakura dark-surface audit: cover legacy status labels and 3D previews */
 :root{color-scheme:dark}
 #app .ban-admin-summary{
@@ -1672,7 +1656,7 @@
 }
 
 
-/* OpenPekora sidebar icons and neutral Create navigation */
+/* OpenPekora sidebar layout and neutral Create top-navigation link */
 .op-navigation a[href="#create"]{
  background:transparent!important;border:0!important;border-radius:0!important;
  padding:0!important;margin:0!important;color:inherit!important;font-weight:inherit!important;
@@ -1684,34 +1668,6 @@
  display:inline-flex;align-items:center;justify-content:center;
  flex:0 0 28px;width:28px;height:28px;box-sizing:border-box;
  vertical-align:middle;position:relative;
-}
-#sidebar .side-icon.icon-nav-create{
- background-image:none!important;border:1px solid #66507f;border-radius:4px;
- background:#211b2d;color:#d8baff;
-}
-#sidebar .side-icon.icon-nav-create:before{
- content:"+";display:block;font:700 21px/1 Arial,sans-serif;color:currentColor;
-}
-#sidebar .side-nav a.active .side-icon.icon-nav-create{
- border-color:#a64dff;background:#30203f;color:#e2caff;
-}
-#sidebar .side-icon.icon-nav-sakura-currency{
- background-image:none!important;display:inline-flex;align-items:center;justify-content:center;
- width:21px;height:21px;flex-basis:21px;border:1px solid rgba(255,255,255,.18);
- border-radius:50%;background:#168e56;color:#fff;font:900 8px/1 Arial,sans-serif;letter-spacing:-.3px;
-}
-#sidebar .side-icon.icon-nav-sakura-currency:before{content:"P$"}
-#sidebar .side-icon.icon-nav-membership{
- background-image:none!important;display:inline-flex;align-items:center;justify-content:center;
- width:21px;height:21px;flex-basis:21px;border:1px solid #72518e;
- border-radius:50%;background:#30203f;color:#e3c9ff;font:700 15px/1 Georgia,serif;
-}
-#sidebar .side-icon.icon-nav-membership:before{content:"★"}
-#sidebar .side-icon.icon-nav-create,
-#sidebar .side-icon.icon-nav-sakura-currency,
-#sidebar .side-icon.icon-nav-membership{
- filter:none!important;
- opacity:1!important;
 }
 
 #app .creator-create-page{max-width:900px;margin:0 auto}
