@@ -6,7 +6,8 @@ const files = [
   "public/index.html",
   "public/style.css",
   "public/openpekora-globals.css",
-  "public/openpekora-icons.css"
+  "public/openpekora-icons.css",
+  "public/bc.svg"
 ];
 const missing = [];
 
@@ -29,6 +30,7 @@ const css = fs.readFileSync(path.join(root, "public/style.css"), "utf8");
 const globals = fs.readFileSync(path.join(root, "public/openpekora-globals.css"), "utf8");
 const components = fs.readFileSync(path.join(root, "public/openpekora-components.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
+const icons = fs.readFileSync(path.join(root, "public/openpekora-icons.css"), "utf8");
 const wrangler = fs.readFileSync(path.join(root, "wrangler.toml"), "utf8");
 const rccLauncher = fs.readFileSync(path.join(root, "scripts/start-rcc-2020.ps1"), "utf8");
 const secureRendererLauncher = fs.readFileSync(path.join(root, "scripts/start-renderer-secure.ps1"), "utf8");
@@ -73,7 +75,7 @@ const checks = [
   ["trade picker only displays Limited or Off Sale items", app.includes("items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1)") && app.includes("ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target)")],
   ["Sakura Home panels use dark surfaces", components.includes("#app .sakura-home-card{") && components.includes("background:#15151c!important") && components.includes("background:#202027!important")],
   ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
-  ["Sakura app and stylesheet cache versions are refreshed", index.includes("app.js?v=20261104-clothing-creator-2") && index.includes("style.css?v=20261104-player-resale-1") && index.includes("openpekora-components.css?v=20261104-sidebar-icons-3")],
+  ["Sakura app and stylesheet cache versions are refreshed", index.includes("app.js?v=20261104-openpekora-sidebar-4") && index.includes("style.css?v=20261104-player-resale-1") && index.includes("openpekora-components.css?v=20261104-openpekora-sidebar-4")],
   ["Group avatars are uploaded as validated image files and stored in D1", worker.includes("CREATE TABLE IF NOT EXISTS group_image_files") && worker.includes("request.arrayBuffer()") && worker.includes("The selected file does not match its image format.") && worker.includes("/api/group-images/")],
   ["Group image BLOBs are converted to browser-readable bytes", worker.includes("Array.isArray(storedImage)") && worker.includes("Uint8Array.from(storedImage)") && worker.includes("new Response(imageBytes")],
   ["Group avatar upload is restricted to the group owner", worker.includes("Only the group owner can change its image.") && worker.includes('groupAvatarUploadMatch && request.method === "PUT"')],
@@ -93,11 +95,11 @@ const checks = [
   ["Membership API uses Sakura reward terminology rather than Robux terminology", worker.includes("dailyReward:Number(") && !worker.includes("dailyRobux")],
   ["Group creation payment errors do not reveal the Admin payout account", !worker.includes("The Admin account could not be found")],
   ["Player-facing group fee copy does not disclose the Admin payout destination", !app.includes("fee is transferred to the Sakura Admin account")],
-  ["Resale marketplace styles and asset cache versions are refreshed", css.includes(".resale-market-card{") && css.includes(".resale-create-form") && index.includes("app.js?v=20261104-clothing-creator-2") && index.includes("style.css?v=20261104-player-resale-1")],
+  ["Resale marketplace styles and asset cache versions are refreshed", css.includes(".resale-market-card{") && css.includes(".resale-create-form") && index.includes("app.js?v=20261104-openpekora-sidebar-4") && index.includes("style.css?v=20261104-player-resale-1")],
   ["Legacy ban and inventory status panels use dark Sakura colors", components.includes("#app .ban-admin-summary{") && components.includes("background:#281820!important") && components.includes("#app .inventory-listing-status,") && components.includes("background:#21192c!important") && components.includes("#app .group-owner-tag")],
   ["3D item previews use dark placeholders", components.includes("#app model-viewer.pekora-model") && components.includes("--poster-color:#202027") && components.includes("#app .pekora-model-missing") && components.includes("background:#202027!important")],
   ["Sakura controls use the browser dark color scheme", components.includes(":root{color-scheme:dark}")],
-  ["OpenPekora Create entry is available in navigation", index.includes('href="#create" data-page="create">Create</a>') && app.includes('["create","icon-nav-create","Create"]')],
+  ["Create stays in top navigation and is omitted from the sidebar", index.includes('href="#create" data-page="create">Create</a>') && !app.includes('["create","icon-nav-create","Create"]')],
   ["Create form only accepts Shirts and Pants", app.includes('const CREATABLE_CATEGORIES=["Shirts","Pants"]') && app.includes('CREATABLE_CATEGORIES.map(category=>')],
   ["Creator submissions remain pending outside the public catalog", worker.includes("CREATE TABLE IF NOT EXISTS creator_submissions") && worker.includes('status TEXT NOT NULL DEFAULT \'PENDING\'') && worker.includes('path === "/api/creator/submissions" && request.method === "POST"')],
   ["Only the Owner can review clothing submissions", worker.includes('path.startsWith("/api/owner/creator-submissions")') && worker.includes('actor.role !== "OWNER"') && worker.includes('action==="reject"')],
@@ -105,9 +107,9 @@ const checks = [
   ["Approved clothing retains its player creator identity", worker.includes("CREATE TABLE IF NOT EXISTS item_creators") && worker.includes("ic.creator_name") && app.includes("function itemCreatorMarkup(item)") && app.includes("Created by ")],
   ["Owner Panel shows the applicant and lets Owner preview an image URL", app.includes("ownerCreatorSubmissions") && app.includes("Submitted by") && app.includes("creator-review-image-preview") && app.includes("Approve and publish")],
   ["Player Create page shows submission status and waits for approval", app.includes("My submissions") && app.includes("Not visible in Catalog until approval.") && app.includes('api("/api/creator/submissions")')],
-  ["Clothing Create assets use fresh cache versions", index.includes("app.js?v=20261104-clothing-creator-2") && index.includes("openpekora-components.css?v=20261104-sidebar-icons-3")],
+  ["Clothing Create assets use fresh cache versions", index.includes("app.js?v=20261104-openpekora-sidebar-4") && index.includes("openpekora-components.css?v=20261104-openpekora-sidebar-4")],
   ["Create navigation has no highlighted button style", components.includes('.op-navigation a[href="#create"]{\n background:transparent!important') && components.includes("user-select:none")],
-  ["Sidebar custom icons render without the legacy invert filter", components.includes("#sidebar .side-icon.icon-nav-create:before") && components.includes("#sidebar .side-icon.icon-nav-sakura-currency:before") && components.includes("#sidebar .side-icon.icon-nav-membership:before") && components.includes("filter:none!important") && app.includes('["membership","icon-nav-membership","Membership"]')],
+  ["Sidebar uses original OpenPekora currency and membership icons", app.includes('["currency","icon-nav-robux","Currency"]') && app.includes('["membership","icon-bc","Membership"]') && icons.includes(".icon-nav-robux") && icons.includes("background-image:url(\'/bc.svg\')") && !app.includes("icon-nav-create")],
   ["Creator submission accepts Roblox catalog URLs and numeric IDs", app.includes("function parseRobloxClothingReference(value)") && app.includes("pathParts[0]") && worker.includes("pathParts[0]") && worker.includes("marketplace")],
   ["Sakura theme primary accents are violet", globals.includes("rgb(166, 77, 255)") && globals.includes("rgba(106,27,177,1)") && !globals.includes("rgb(0, 162, 255)") && !globals.includes("rgba(8,79,192,1)")],
   ["promo codes can grant currency and multiple catalog items", worker.includes("CREATE TABLE IF NOT EXISTS promo_code_items") && worker.includes("reward_currency") && app.includes("ownerPromoItems")],
