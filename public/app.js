@@ -1124,6 +1124,7 @@ async function createPage(){
    '<label>Item name<input name="name" maxlength="80" required placeholder="Name your clothing"></label>'+
    '<label>Type<select name="category">'+CREATABLE_CATEGORIES.map(category=>'<option value="'+category+'">'+(category==="Shirts"?"Shirt":"Pants")+'</option>').join("")+'</select></label>'+
    '<label>Description <span class="muted">(optional)</span><textarea name="description" maxlength="500" rows="3" placeholder="Tell players a little about this item"></textarea></label>'+
+   '<label>Your price in P$<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label>'+
    '<label>Roblox item link or ID<input name="roblox_url" type="text" inputmode="url" autocomplete="off" maxlength="500" required placeholder="roblox.com/catalog/123456789 or 123456789"></label>'+
 
    '<div class="creator-create-actions"><button class="primary" type="submit">Submit for review</button><span id="creatorSubmissionMessage" class="muted" role="status"></span></div>'+
@@ -1143,7 +1144,7 @@ async function createPage(){
     const itemLink=status==="APPROVED"&&submission.created_item_id
      ? '<a href="/item/'+encodeURIComponent(submission.created_item_id)+'" data-item-view="'+esc(submission.created_item_id)+'">View in Catalog</a>'
      : '<span class="muted">'+(status==="REJECTED"?"This request was declined.":"Not visible in Catalog until approval.")+'</span>';
-    return '<article class="creator-submission-status"><div><strong>'+esc(submission.name)+'</strong><span class="creator-submission-type">'+(submission.category==="Pants"?"Pants":"Shirt")+'</span></div><span class="creator-submission-state '+status.toLowerCase()+'">'+label+'</span><p class="muted">'+new Date(submission.created_at+"Z").toLocaleString()+'</p>'+itemLink+'</article>';
+    return '<article class="creator-submission-status"><div><strong>'+esc(submission.name)+'</strong><span class="creator-submission-type">'+(submission.category==="Pants"?"Pants":"Shirt")+'</span></div><span class="creator-submission-state '+status.toLowerCase()+'">'+label+'</span><p class="muted">'+Number(submission.price||0).toLocaleString()+' P$ · '+new Date(submission.created_at+"Z").toLocaleString()+'</p>'+itemLink+'</article>';
    }).join(""):'<div class="creator-submissions-empty">You have not submitted any clothing yet.</div>';
   }catch(error){
    if(isActiveView(view)&&host.isConnected)host.textContent=error.message;
@@ -1170,7 +1171,13 @@ async function createPage(){
    return;
   }
   delete message.dataset.validationError;
-  const payload={name:String(data.get("name")||"").trim(),category:String(data.get("category")||""),description:String(data.get("description")||"").trim(),roblox_url:robloxReference.url};
+  const price=Number(data.get("price"));
+  if(!Number.isSafeInteger(price)||price<0||price>1000000){
+   message.dataset.validationError="true";
+   message.textContent="Price must be a whole number from 0 to 1,000,000 P$.";
+   return;
+  }
+  const payload={name:String(data.get("name")||"").trim(),category:String(data.get("category")||""),description:String(data.get("description")||"").trim(),price,roblox_url:robloxReference.url};
   submit.disabled=true;message.textContent="Sending request...";
   try{
    await api("/api/creator/submissions",{method:"POST",body:JSON.stringify(payload)});
@@ -1243,7 +1250,7 @@ async function owner(){
      '<form class="creator-review-form" data-creator-review="'+esc(submission.id)+'">'+
       '<label>Catalog image URL<input name="image_url" type="url" maxlength="500" required placeholder="https://..."></label>'+
       '<img class="creator-review-image-preview" alt="Catalog image preview" hidden>'+
-      '<label>Price in P$<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label>'+
+      '<label>Price in P$<input name="price" type="number" min="0" max="1000000" step="1" value="'+Number(submission.price??50)+'" required></label>'+
       '<div class="creator-review-actions"><button class="primary" type="submit">Approve and publish</button><button class="button secondary" type="button" data-creator-reject="'+esc(submission.id)+'">Reject</button></div>'+
      '</form></article>'
    ).join(""):'<div class="creator-submissions-empty">No clothing requests are waiting for review.</div>';
@@ -1502,7 +1509,7 @@ async function owner(){
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
     '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><select name="currency"><option value="P$" '+((x.currency||"P$")==="P$"?'selected':'')+'>P$</option><option value="Tix" '+(x.currency==="Tix"?'selected':'')+'>Tix</option></select><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><label class="owner-inline-check"><input name="is_limited" type="checkbox" '+(Number(x.is_limited)===1?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" step="1" value="'+Number(x.stock_limit||0)+'" placeholder="Total stock (0 = unlimited)"><label class="owner-inline-check"><input name="is_offsale" type="checkbox" '+(Number(x.is_offsale)===1?'checked':'')+'> Off Sale</label></div>'+
     '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?(Number(x.is_offsale)===1?'Off Sale':'For sale'):'Removed from catalog')+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+'</span></div>'+
-    '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'</div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
+    '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'<button class="button danger-button" type="button" data-delete-item="'+esc(x.id)+'">Delete permanently</button></div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
@@ -1531,6 +1538,18 @@ async function owner(){
      ownerItems=ownerItems.map(item=>item.id===id?{...item,is_for_sale:0}:item);
      drawOwnerItems();updateOwnerItemCount();toast("Item removed from catalog");
     }catch(e){toast(e.message)}
+   }));
+   document.querySelectorAll("[data-delete-item]").forEach(button=>button.addEventListener("click",async()=>{
+    const id=button.dataset.deleteItem;
+    const item=ownerItems.find(entry=>entry.id===id);
+    if(!confirm("Permanently delete "+(item?.name||"this item")+"? It will be removed from all player inventories, resale listings, active trades, promo rewards and purchase history. This cannot be undone and no refunds will be issued."))return;
+    button.disabled=true;
+    try{
+     await api("/api/owner/items/"+encodeURIComponent(id)+"?permanent=1",{method:"DELETE"});
+     if(!isActiveView(view))return;
+     ownerItems=ownerItems.filter(entry=>entry.id!==id);
+     drawOwnerItems();updateOwnerItemCount();toast("Item permanently deleted");
+    }catch(e){toast(e.message);button.disabled=false}
    }));
   }
   drawOwnerItems();
