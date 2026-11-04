@@ -219,33 +219,6 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')"),
         env.DB.prepare("DELETE FROM banned_session_notices WHERE expires_at <= datetime('now')")
       ]);
-      // Keep the catalog's displayed price in sync with the latest active player listing.
-      // This also backfills listings that existed before global resale pricing was introduced.
-      await env.DB.prepare(`
-        UPDATE items
-        SET price=(
-          SELECT r.price
-          FROM resale_listings r
-          JOIN users seller ON seller.id=r.seller_id
-          WHERE r.item_id=items.id
-            AND r.status='ACTIVE'
-            AND seller.is_banned=0
-            AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
-            AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
-          ORDER BY r.created_at DESC,r.rowid DESC
-          LIMIT 1
-        ),currency='P$'
-        WHERE EXISTS (
-          SELECT 1
-          FROM resale_listings r
-          JOIN users seller ON seller.id=r.seller_id
-          WHERE r.item_id=items.id
-            AND r.status='ACTIVE'
-            AND seller.is_banned=0
-            AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
-            AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
-        )
-      `).run();
       const creatorSubmissionColumns = await env.DB.prepare("PRAGMA table_info(creator_submissions)").all();
       if (!(creatorSubmissionColumns.results || []).some(column => column.name === "price")) {
         await env.DB.prepare("ALTER TABLE creator_submissions ADD COLUMN price INTEGER NOT NULL DEFAULT 50 CHECK(price>=0 AND price<=1000000)").run();
@@ -314,6 +287,53 @@ async function ensureSiteSettings(env) {
       if (!(purchaseColumns.results || []).some(column => column.name === "currency")) {
         await env.DB.prepare("ALTER TABLE purchases ADD COLUMN currency TEXT NOT NULL DEFAULT 'P$'").run();
       }
+      if (!(itemColumns.results || []).some(column => column.name === "base_price")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN base_price INTEGER NOT NULL DEFAULT 0").run();
+      }
+      if (!(itemColumns.results || []).some(column => column.name === "base_currency")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN base_currency TEXT NOT NULL DEFAULT 'P$'").run();
+      }
+      // Restore catalog prices changed by the old resale implementation and keep resale asks separate.
+      const resaleBasePriceMigration = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='resale_base_price_migration_2026_11_04'").first();
+      if (!resaleBasePriceMigration) {
+        await env.DB.batch([
+          env.DB.prepare(`UPDATE items SET
+            base_price=CASE
+              WHEN EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=items.id)
+              THEN COALESCE(
+                (SELECT p.price FROM purchases p WHERE p.item_id=items.id ORDER BY p.rowid ASC LIMIT 1),
+                (SELECT s.price FROM creator_submissions s JOIN item_creators ic ON ic.submission_id=s.id WHERE ic.item_id=items.id LIMIT 1),
+                items.price
+              )
+              ELSE items.price
+            END,
+            base_currency=CASE
+              WHEN EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=items.id)
+              THEN COALESCE(
+                (SELECT p.currency FROM purchases p WHERE p.item_id=items.id ORDER BY p.rowid ASC LIMIT 1),
+                (SELECT 'P$' FROM creator_submissions s JOIN item_creators ic ON ic.submission_id=s.id WHERE ic.item_id=items.id LIMIT 1),
+                items.currency,
+                'P$'
+              )
+              ELSE COALESCE(items.currency,'P$')
+            END`),
+          env.DB.prepare("UPDATE items SET price=base_price,currency=base_currency WHERE EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=items.id)"),
+          env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('resale_base_price_migration_2026_11_04','done')")
+        ]);
+      }
+      await env.DB.batch([
+        env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_items_base_price_after_insert
+          AFTER INSERT ON items
+          BEGIN
+            UPDATE items SET base_price=NEW.price,base_currency=COALESCE(NEW.currency,'P$') WHERE id=NEW.id;
+          END`),
+        env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_items_base_price_after_price_update
+          AFTER UPDATE OF price,currency ON items
+          WHEN NEW.price IS NOT OLD.price OR COALESCE(NEW.currency,'P$') IS NOT COALESCE(OLD.currency,'P$')
+          BEGIN
+            UPDATE items SET base_price=NEW.price,base_currency=COALESCE(NEW.currency,'P$') WHERE id=NEW.id;
+          END`)
+      ]);
       // Backfill historical purchases once so they count toward finite stock.
       const stockBackfill = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='stock_sold_backfill_2026_11'").first();
       if (!stockBackfill) {
@@ -874,24 +894,19 @@ async function route(request, env) {
     if (locked) return fail("This item is reserved in a pending trade. Cancel that trade before listing it.",409);
     const listingId=id();
     try {
-      const results = await env.DB.batch([
-        env.DB.prepare(`INSERT INTO resale_listings (id,item_id,seller_id,price,currency)
-          SELECT ?,?,?,?,'P$'
-          WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)
-            AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)
-            AND NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE')
-            AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1))`)
-          .bind(listingId,itemId,user.id,price,user.id,itemId,user.id,itemId,user.id,itemId,itemId),
-        // The item row is the canonical catalog price, so every API/UI that reads items.price sees this amount.
-        env.DB.prepare("UPDATE items SET price=?,currency='P$' WHERE id=? AND changes()=1").bind(price,itemId)
-      ]);
-      if (!results?.[0]?.meta?.changes) return fail("This item is already listed, reserved in a trade, or no longer eligible.",409);
-      if (!results?.[1]?.meta?.changes) throw new Error("The listing price could not be synchronized with the catalog item.");
+      const result = await env.DB.prepare(`INSERT INTO resale_listings (id,item_id,seller_id,price,currency)
+        SELECT ?,?,?,?,'P$'
+        WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)
+          AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)
+          AND NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE')
+          AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1))`)
+        .bind(listingId,itemId,user.id,price,user.id,itemId,user.id,itemId,user.id,itemId,itemId).run();
+      if (!result?.meta?.changes) return fail("This item is already listed, reserved in a trade, or no longer eligible.",409);
     } catch (error) {
       console.error("[Sakura resale] Listing creation failed:",error);
       return fail("Could not create this listing. Refresh your inventory and try again.",409);
     }
-    return json({ok:true,listingId,price,itemPrice:price,currency:"P$"});
+    return json({ok:true,listingId,price,currency:"P$"});
   }
 
   const resaleListingMatch = path.match(/^\/api\/resale\/listings\/([A-Za-z0-9-]+)$/);
@@ -1018,7 +1033,7 @@ async function route(request, env) {
 
   const profileIdMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})$/);
   if (request.method === "GET" && profileIdMatch) {
-    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1 AND COALESCE(rap_item.currency,'P$')='P$') AS total_rap
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.base_price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1 AND COALESCE(rap_item.base_currency,rap_item.currency,'P$')='P$') AS total_rap
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.public_id=? AND u.is_banned=0`).bind(Number(profileIdMatch[1])).first();
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
@@ -1187,7 +1202,7 @@ async function route(request, env) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
     catch { return fail("Invalid username.",400); }
-    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1 AND COALESCE(rap_item.currency,'P$')='P$') AS total_rap
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.base_price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1 AND COALESCE(rap_item.base_currency,rap_item.currency,'P$')='P$') AS total_rap
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM inventory WHERE user_id=?").bind(profile.id).first();
