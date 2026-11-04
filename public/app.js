@@ -5,6 +5,7 @@ const sidebar=document.getElementById("sidebar");
 let me=null,items=[],catalogSort="relevance",ownedItemIds=new Set(),ownershipLoaded=true,ownershipUserId=null,pendingPurchases=new Set(),detectedBannedAccount=null;
 let activeView=0;
 const ITEM_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
+const CREATABLE_CATEGORIES=["Shirts","Pants"];
 const MEMBERSHIP_PLANS=[
  {type:"None",name:"None",short:"None",daily:0,description:"No membership or daily reward"},
  {type:"BuildersClub",name:"Builders Club",short:"BC",daily:15,description:"Basic membership and daily reward"},
@@ -127,6 +128,7 @@ function renderSidebar(active="home"){
  sidebar.classList.add("visible");
  const links=[
   ["home","icon-nav-home","Home"],
+  ["create","icon-nav-create","Create"],
   ["profile","icon-nav-profile","Profile"],
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-trade","Trades"],
@@ -271,7 +273,15 @@ function itemStockText(x){
  const stock=itemStockState(x);
  return stock.finite?stock.sold+"/"+stock.total+" sold":stock.sold+" sold · unlimited stock";
 }
-function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+itemBadgeMarkup(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div><div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(Number(x.stock_limit)>0?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'</article>'}
+function itemCreatorMarkup(item){
+ if(!item?.creator_name)return "";
+ const creator=esc(item.creator_name);
+ const link=item.creator_public_id
+  ? '<a href="#profile?id='+encodeURIComponent(item.creator_public_id)+'" data-profile="'+creator+'">'+creator+'</a>'
+  : '<span>'+creator+'</span>';
+ return '<div class="item-creator muted">Created by '+link+'</div>';
+}
+function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+itemBadgeMarkup(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+itemCreatorMarkup(x)+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(Number(x.stock_limit)>0?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'</article>'}
 async function showItem(itemId,updateHistory=true){
  const view=beginView();
  const requestedUserId=me?.id||null;
@@ -324,7 +334,7 @@ async function showItem(itemId,updateHistory=true){
  const resalePanel=resaleEligible?'<section class="resale-section"><div class="resale-section-heading"><div><h2>Player Marketplace</h2><p class="muted">Limited and Off Sale items can be resold by players.</p></div><a href="#resale" data-page="resale">Open market</a></div>'+ownListingMarkup+'<div class="resale-offer-list">'+listingRows+'</div></section>':"";
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+currencyMarkup(item.price,item.currency||"P$")+'</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+itemCreatorMarkup(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+currencyMarkup(item.price,item.currency||"P$")+'</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
   '</div></div>'+resalePanel;
  if(!isOwned&&!isOffsale&&!stock.soldOut&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
  document.getElementById("copyItemLink")?.addEventListener("click",async()=>{const shareUrl=new URL("/item/"+encodeURIComponent(item.id),location.origin).href;try{await navigator.clipboard.writeText(shareUrl);toast("Item link copied")}catch{toast("Could not copy link. Copy it from the address bar.")}});
@@ -1081,6 +1091,69 @@ function users(){
   if(input.value.length>=1)runSearch();
  }
 }
+
+async function createPage(){
+ const view=beginView();
+ renderSidebar("create");
+ if(!me){
+  app.innerHTML='<div class="creator-create-page"><h1 class="page-title">Create</h1><section class="creator-create-card"><h2>Sign in to create clothing</h2><p class="muted">Sign in to submit a Shirt or Pants item for review.</p><a class="primary" href="#login" data-page="login">Log in</a></section></div>';
+  return;
+ }
+ app.innerHTML='<div class="creator-create-page">'+
+  '<div class="creator-create-heading"><div><h1 class="page-title">Create</h1><p class="page-subtitle">Submit classic clothing to the Sakura catalog</p></div></div>'+
+  '<section class="creator-create-card"><h2>New clothing</h2><p class="muted">Only Shirts and Pants are available. Your item stays private until the Owner reviews and approves it.</p>'+
+  '<form id="creatorSubmissionForm" class="creator-create-form">'+
+   '<label>Item name<input name="name" maxlength="80" required placeholder="Name your clothing"></label>'+
+   '<label>Type<select name="category"><option value="Shirts">Shirt</option><option value="Pants">Pants</option></select></label>'+
+   '<label>Description <span class="muted">(optional)</span><textarea name="description" maxlength="500" rows="3" placeholder="Tell players a little about this item"></textarea></label>'+
+   '<label>Original Roblox item link<input name="roblox_url" type="url" maxlength="500" required placeholder="https://www.roblox.com/catalog/123456789/Item"></label>'+
+   '<p class="creator-create-note">Use the original Roblox catalog page for the Shirt or Pants. The Owner will add the Sakura catalog image before publishing.</p>'+
+   '<div class="creator-create-actions"><button class="primary" type="submit">Submit for review</button><span id="creatorSubmissionMessage" class="muted" role="status"></span></div>'+
+  '</form></section>'+
+  '<section class="creator-submissions-section"><div class="creator-submissions-heading"><h2>My submissions</h2><span class="muted">Review status</span></div><div id="myCreatorSubmissions" class="creator-submissions-list">Loading submissions...</div></section>'+
+ '</div>';
+ const host=document.getElementById("myCreatorSubmissions");
+ async function loadMySubmissions(){
+  if(!host)return;
+  try{
+   const data=await api("/api/creator/submissions");
+   if(!isActiveView(view)||!host.isConnected)return;
+   const submissions=data.submissions||[];
+   host.innerHTML=submissions.length?submissions.map(submission=>{
+    const status=String(submission.status||"PENDING");
+    const label=status==="APPROVED"?"Approved":status==="REJECTED"?"Declined":"Waiting for review";
+    const itemLink=status==="APPROVED"&&submission.created_item_id
+     ? '<a href="/item/'+encodeURIComponent(submission.created_item_id)+'" data-item-view="'+esc(submission.created_item_id)+'">View in Catalog</a>'
+     : '<span class="muted">'+(status==="REJECTED"?"This request was declined.":"Not visible in Catalog until approval.")+'</span>';
+    return '<article class="creator-submission-status"><div><strong>'+esc(submission.name)+'</strong><span class="creator-submission-type">'+(submission.category==="Pants"?"Pants":"Shirt")+'</span></div><span class="creator-submission-state '+status.toLowerCase()+'">'+label+'</span><p class="muted">'+new Date(submission.created_at+"Z").toLocaleString()+'</p>'+itemLink+'</article>';
+   }).join(""):'<div class="creator-submissions-empty">You have not submitted any clothing yet.</div>';
+  }catch(error){
+   if(isActiveView(view)&&host.isConnected)host.textContent=error.message;
+  }
+ }
+ await loadMySubmissions();
+ const form=document.getElementById("creatorSubmissionForm");
+ form?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const submit=form.querySelector('button[type="submit"]');
+  const message=document.getElementById("creatorSubmissionMessage");
+  const data=new FormData(form);
+  const payload={name:String(data.get("name")||"").trim(),category:String(data.get("category")||""),description:String(data.get("description")||"").trim(),roblox_url:String(data.get("roblox_url")||"").trim()};
+  submit.disabled=true;message.textContent="Sending request...";
+  try{
+   await api("/api/creator/submissions",{method:"POST",body:JSON.stringify(payload)});
+   if(!isActiveView(view))return;
+   form.reset();message.textContent="Your request was sent to the Owner for review.";
+   toast("Clothing submitted for review");
+   await loadMySubmissions();
+  }catch(error){
+   message.textContent=error.message;
+  }finally{
+   submit.disabled=false;
+  }
+ });
+}
+
 async function owner(){
  const view=beginView();
  renderSidebar("owner");
@@ -1104,6 +1177,7 @@ async function owner(){
  '<label class="owner-description">Description<textarea name="description" maxlength="500" rows="2"></textarea></label>'+
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>'+
+ '<section class="owner-section owner-creator-submissions"><h2>Clothing submissions</h2><p class="muted">Review player Shirts and Pants. Add the catalog image URL and price before approving; rejected requests never enter the catalog.</p><div id="ownerCreatorSubmissions" class="owner-creator-submissions-list">Loading submissions...</div></section>'+
  '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section owner-group-verification"><h2>Group Verification</h2><p class="muted">Give or remove the verified badge for Sakura groups. Only the site owner can change this.</p><div id="ownerGroups" class="owner-group-list">Loading groups...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Sakura currency, issue warnings, or ban and unban users. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="1" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
  app.insertAdjacentHTML("beforeend",
   '<section class="owner-section owner-promocode-section"><h2>Promo Code Management</h2><p class="muted">Create codes that grant Sakura currency and one or more items from the catalog. Set a total claim limit and optional expiry date.</p>'+
@@ -1118,6 +1192,71 @@ async function owner(){
   '<button class="primary" type="submit">Create promo code</button><span id="ownerPromoMessage" class="muted" role="status"></span>'+
   '</form><div id="ownerPromoList" class="owner-promocode-list">Loading promo codes...</div></section>'
  );
+
+ const ownerCreatorSubmissionsHost=document.getElementById("ownerCreatorSubmissions");
+ async function loadOwnerCreatorSubmissions(){
+  if(!ownerCreatorSubmissionsHost)return;
+  ownerCreatorSubmissionsHost.textContent="Loading submissions...";
+  try{
+   const data=await api("/api/owner/creator-submissions");
+   if(!isActiveView(view)||!ownerCreatorSubmissionsHost.isConnected)return;
+   const submissions=data.submissions||[];
+   ownerCreatorSubmissionsHost.innerHTML=submissions.length?submissions.map(submission=>
+    '<article class="creator-review-row" data-creator-request="'+esc(submission.id)+'">'+
+     '<div class="creator-review-details"><div class="creator-review-title"><h3>'+esc(submission.name)+'</h3><span class="creator-review-type">'+(submission.category==="Pants"?"Pants":"Shirt")+'</span></div>'+
+     '<p class="muted">Submitted by <a href="#profile?id='+encodeURIComponent(submission.creator_public_id||"")+'" data-profile="'+esc(submission.username)+'">'+esc(submission.username)+'</a></p>'+
+     (submission.description?'<p class="creator-review-description">'+esc(submission.description)+'</p>':'')+
+     '<a class="creator-original-link" href="'+esc(submission.roblox_url)+'" target="_blank" rel="noopener noreferrer">Open original Roblox item</a>'+
+     '<p class="muted creator-review-date">Submitted '+new Date(submission.created_at+"Z").toLocaleString()+'</p></div>'+
+     '<form class="creator-review-form" data-creator-review="'+esc(submission.id)+'">'+
+      '<label>Catalog image URL<input name="image_url" type="url" maxlength="500" required placeholder="https://..."></label>'+
+      '<img class="creator-review-image-preview" alt="Catalog image preview" hidden>'+
+      '<label>Price in P$<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label>'+
+      '<div class="creator-review-actions"><button class="primary" type="submit">Approve and publish</button><button class="button secondary" type="button" data-creator-reject="'+esc(submission.id)+'">Reject</button></div>'+
+     '</form></article>'
+   ).join(""):'<div class="creator-submissions-empty">No clothing requests are waiting for review.</div>';
+   document.querySelectorAll("[data-creator-review]").forEach(form=>{
+    const imageInput=form.querySelector('input[name="image_url"]');
+    const preview=form.querySelector(".creator-review-image-preview");
+    imageInput?.addEventListener("input",()=>{
+     const value=imageInput.value.trim();
+     try{
+      const imageUrl=new URL(value);
+      if(imageUrl.protocol!=="https:")throw new Error();
+      preview.src=imageUrl.href;preview.hidden=false;
+     }catch{preview.removeAttribute("src");preview.hidden=true;}
+    });
+    preview?.addEventListener("error",()=>{preview.hidden=true;});
+    form.addEventListener("submit",async event=>{
+     event.preventDefault();
+     const button=form.querySelector('button[type="submit"]');
+     const values=new FormData(form);
+     const image_url=String(values.get("image_url")||"").trim();
+     const price=Number(values.get("price"));
+     button.disabled=true;button.textContent="Publishing...";
+     try{
+      const result=await api("/api/owner/creator-submissions/"+encodeURIComponent(form.dataset.creatorReview),{method:"PATCH",body:JSON.stringify({action:"approve",image_url,price})});
+      if(!isActiveView(view))return;
+      toast("Item published in the catalog");
+      await loadOwnerCreatorSubmissions();
+     }catch(error){toast(error.message);button.disabled=false;button.textContent="Approve and publish";}
+    });
+   });
+   document.querySelectorAll("[data-creator-reject]").forEach(button=>button.addEventListener("click",async()=>{
+    if(!confirm("Reject this clothing submission?"))return;
+    button.disabled=true;button.textContent="Rejecting...";
+    try{
+     await api("/api/owner/creator-submissions/"+encodeURIComponent(button.dataset.creatorReject),{method:"PATCH",body:JSON.stringify({action:"reject"})});
+     if(!isActiveView(view))return;
+     toast("Submission rejected");
+     await loadOwnerCreatorSubmissions();
+    }catch(error){toast(error.message);button.disabled=false;button.textContent="Reject";}
+   }));
+  }catch(error){
+   if(isActiveView(view)&&ownerCreatorSubmissionsHost.isConnected)ownerCreatorSubmissionsHost.textContent=error.message;
+  }
+ }
+ loadOwnerCreatorSubmissions();
  const promoForm=document.getElementById("ownerPromoForm");
  const promoItemSelect=document.getElementById("ownerPromoItems");
  const promoList=document.getElementById("ownerPromoList");
@@ -1492,6 +1631,7 @@ async function render(name){
  else if(name==="login"||name==="register")auth(name);
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
+ else if(name==="create")await createPage();
  else if(name==="resale")await resaleMarketPage();
  else if(name==="avatar")await avatarPage();
  else if(name==="groups")await groupsPage();
