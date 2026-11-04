@@ -88,7 +88,7 @@ const checks = [
   ["Active resale listings cannot be traded", worker.includes("trg_trade_lock_no_resale") && worker.includes("trg_resale_no_trade_lock") && worker.includes("rl.status='ACTIVE'")],
   ["Inventory quick-sell UI is removed", !app.includes("inventorySellPanel") && !app.includes("inventory-confirm-sell") && !app.includes("/api/inventory/sell") && app.includes("function inventoryItemCard(item)")],
   ["Resale market, seller identity and listing controls are connected", app.includes("async function resaleMarketPage()") && app.includes("data-resale-buy") && app.includes("createResaleListing") && app.includes("cancelResaleListing") && app.includes("seller_name")],
-  ["Ordinary catalog purchases credit the Admin owner account", worker.includes("username='Admin' COLLATE NOCASE") && worker.includes("adminAccount.id") && worker.includes("walletColumn}+")],
+  ["Ordinary catalog purchases credit the Admin owner account", worker.includes("username='Admin' COLLATE NOCASE") && worker.includes("adminAccount.id") && worker.includes("walletColumn}=${walletColumn}+?")],
   ["Resale marketplace styles and asset cache versions are refreshed", css.includes(".resale-market-card{") && css.includes(".resale-create-form") && index.includes("app.js?v=20261104-player-resale-1") && index.includes("style.css?v=20261104-player-resale-1")],
   ["Sakura theme primary accents are violet", globals.includes("rgb(166, 77, 255)") && globals.includes("rgba(106,27,177,1)") && !globals.includes("rgb(0, 162, 255)") && !globals.includes("rgba(8,79,192,1)")],
   ["promo codes can grant currency and multiple catalog items", worker.includes("CREATE TABLE IF NOT EXISTS promo_code_items") && worker.includes("reward_currency") && app.includes("ownerPromoItems")],
