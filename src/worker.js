@@ -666,7 +666,7 @@ async function route(request, env) {
     const canUseAdvancedMemberships = Number.isFinite(createdAtMs) && Date.now() - createdAtMs > 3 * 24 * 60 * 60 * 1000;
     return json({
       membershipType,
-      dailyRobux:Number(MEMBERSHIP_REWARDS[membershipType] || 0),
+      dailyReward:Number(MEMBERSHIP_REWARDS[membershipType] || 0),
       updatedAt:membership?.updated_at || null,
       lastRewardDate:lastReward?.reward_date || null,
       lastRewardAmount:Number(lastReward?.amount || 0),
@@ -692,7 +692,7 @@ async function route(request, env) {
       }
     }
     await env.DB.prepare("INSERT INTO user_memberships (user_id,membership_type,updated_at) VALUES (?,?,datetime('now')) ON CONFLICT(user_id) DO UPDATE SET membership_type=excluded.membership_type,updated_at=excluded.updated_at").bind(user.id,membershipType).run();
-    return json({ok:true,membershipType,dailyRobux:Number(MEMBERSHIP_REWARDS[membershipType] || 0)});
+    return json({ok:true,membershipType,dailyReward:Number(MEMBERSHIP_REWARDS[membershipType] || 0)});
   }
 
   if (request.method === "POST" && path === "/api/bootstrap-owner") {
@@ -1544,7 +1544,7 @@ async function route(request, env) {
     if (!/^[a-z0-9а-яёіїєґ _.-]{3,32}$/i.test(name)) return fail("New group names must be 3–32 characters and use letters, numbers, spaces, dots, underscores or hyphens.");
     if (description.length>300) return fail("Group description must be 300 characters or less.");
     const admin = await env.DB.prepare("SELECT id FROM users WHERE username='Admin' COLLATE NOCASE AND is_banned=0").first();
-    if (!admin) return fail("The Admin account could not be found. Group creation is temporarily unavailable.",503);
+    if (!admin) return fail("Group creation is temporarily unavailable. Please try again later.",503);
     const duplicate = await env.DB.prepare("SELECT id FROM sakura_groups WHERE name=? COLLATE NOCASE").bind(name).first();
     if (duplicate) return fail("A group with this name already exists.",409);
     if (Number(user.balance)<100) return fail("Creating a group costs 100 P$.",400);
