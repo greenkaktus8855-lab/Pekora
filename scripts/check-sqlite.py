@@ -105,6 +105,173 @@ assert db.execute("SELECT stock_sold FROM items WHERE id='limited-hat'").fetchon
 assert db.execute("SELECT COUNT(*) FROM inventory WHERE item_id='limited-hat'").fetchone()[0] == 2
 assert db.execute("SELECT balance FROM users WHERE id='test-third'").fetchone()[0] == 100
 print("PASS Limited stock cap and sold-out protection")
+# Player resale: only Limited or Off Sale items can be listed.
+db.execute("INSERT INTO users (id,username,password_hash,password_salt,role,balance,public_id) VALUES (?,?,?,?,?,?,?)",
+           ("admin-account","Admin","hash","salt","OWNER",0,4))
+db.execute("ALTER TABLE items ADD COLUMN is_offsale INTEGER NOT NULL DEFAULT 0")
+db.execute("""CREATE TABLE trade_locks (
+ owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+ trade_id TEXT NOT NULL,
+ PRIMARY KEY(owner_id,item_id)
+)""")
+db.execute("""CREATE TABLE resale_listings (
+ id TEXT PRIMARY KEY,
+ item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+ seller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ price INTEGER NOT NULL CHECK(price>0 AND price<=1000000),
+ currency TEXT NOT NULL DEFAULT 'P
+
+# Custom public User IDs are unique and changing an ID does not change the internal account key.
+db.execute("UPDATE users SET public_id=rowid WHERE public_id IS NULL")
+db.execute("UPDATE users SET public_id=501 WHERE id='test-user'")
+db.execute("UPDATE users SET public_id=502 WHERE id='test-friend'")
+db.execute("""UPDATE users SET public_id=502
+ WHERE id='test-user' AND NOT EXISTS (SELECT 1 FROM users WHERE public_id=502 AND id<>'test-user')""")
+assert db.execute("SELECT changes()").fetchone()[0] == 0
+assert db.execute("SELECT id FROM users WHERE public_id=501").fetchone()[0] == "test-user"
+assert db.execute("SELECT COUNT(*) FROM users WHERE public_id=502").fetchone()[0] == 1
+print("PASS unique public User ID changes")
+ CHECK(currency='P
+
+# Custom public User IDs are unique and changing an ID does not change the internal account key.
+db.execute("UPDATE users SET public_id=rowid WHERE public_id IS NULL")
+db.execute("UPDATE users SET public_id=501 WHERE id='test-user'")
+db.execute("UPDATE users SET public_id=502 WHERE id='test-friend'")
+db.execute("""UPDATE users SET public_id=502
+ WHERE id='test-user' AND NOT EXISTS (SELECT 1 FROM users WHERE public_id=502 AND id<>'test-user')""")
+assert db.execute("SELECT changes()").fetchone()[0] == 0
+assert db.execute("SELECT id FROM users WHERE public_id=501").fetchone()[0] == "test-user"
+assert db.execute("SELECT COUNT(*) FROM users WHERE public_id=502").fetchone()[0] == 1
+print("PASS unique public User ID changes")
+),
+ status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','SOLD','CANCELLED')),
+ buyer_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+ created_at TEXT NOT NULL DEFAULT (datetime('now')),
+ sold_at TEXT
+)""")
+db.execute("""CREATE TRIGGER trg_resale_no_trade_lock BEFORE INSERT ON resale_listings
+ WHEN EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=NEW.seller_id AND item_id=NEW.item_id)
+ BEGIN SELECT RAISE(ABORT,'Item is reserved in a pending trade.'); END""")
+db.execute("""CREATE TRIGGER trg_trade_lock_no_resale BEFORE INSERT ON trade_locks
+ WHEN EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=NEW.owner_id AND item_id=NEW.item_id AND status='ACTIVE')
+ BEGIN SELECT RAISE(ABORT,'Item is already listed for sale.'); END""")
+
+# A regular item cannot be listed by a player.
+db.execute("""INSERT INTO resale_listings (id,item_id,seller_id,price,currency)
+ SELECT 'invalid-listing','test-hat','test-user',1,'P
+
+# Custom public User IDs are unique and changing an ID does not change the internal account key.
+db.execute("UPDATE users SET public_id=rowid WHERE public_id IS NULL")
+db.execute("UPDATE users SET public_id=501 WHERE id='test-user'")
+db.execute("UPDATE users SET public_id=502 WHERE id='test-friend'")
+db.execute("""UPDATE users SET public_id=502
+ WHERE id='test-user' AND NOT EXISTS (SELECT 1 FROM users WHERE public_id=502 AND id<>'test-user')""")
+assert db.execute("SELECT changes()").fetchone()[0] == 0
+assert db.execute("SELECT id FROM users WHERE public_id=501").fetchone()[0] == "test-user"
+assert db.execute("SELECT COUNT(*) FROM users WHERE public_id=502").fetchone()[0] == 1
+print("PASS unique public User ID changes")
+
+ WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id='test-user' AND item_id='test-hat')
+ AND EXISTS (SELECT 1 FROM items WHERE id='test-hat' AND (is_limited=1 OR is_offsale=1))""")
+assert db.execute("SELECT changes()").fetchone()[0] == 0
+
+# An item marked Limited can be listed; trade locks cannot reserve it afterward.
+db.execute("""INSERT INTO resale_listings (id,item_id,seller_id,price,currency)
+ SELECT 'limited-resale','limited-hat','test-user',30,'P
+
+# Custom public User IDs are unique and changing an ID does not change the internal account key.
+db.execute("UPDATE users SET public_id=rowid WHERE public_id IS NULL")
+db.execute("UPDATE users SET public_id=501 WHERE id='test-user'")
+db.execute("UPDATE users SET public_id=502 WHERE id='test-friend'")
+db.execute("""UPDATE users SET public_id=502
+ WHERE id='test-user' AND NOT EXISTS (SELECT 1 FROM users WHERE public_id=502 AND id<>'test-user')""")
+assert db.execute("SELECT changes()").fetchone()[0] == 0
+assert db.execute("SELECT id FROM users WHERE public_id=501").fetchone()[0] == "test-user"
+assert db.execute("SELECT COUNT(*) FROM users WHERE public_id=502").fetchone()[0] == 1
+print("PASS unique public User ID changes")
+
+ WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id='test-user' AND item_id='limited-hat')
+ AND EXISTS (SELECT 1 FROM items WHERE id='limited-hat' AND (is_limited=1 OR is_offsale=1))""")
+assert db.execute("SELECT changes()").fetchone()[0] == 1
+try:
+    db.execute("INSERT INTO trade_locks (owner_id,item_id,trade_id) VALUES (?,?,?)",
+               ("test-user","limited-hat","trade-after-listing"))
+    raise AssertionError("A listed item must not be trade-locked")
+except sqlite3.IntegrityError:
+    pass
+
+# Buying the listing moves the item and transfers P$ directly to the seller.
+db.execute("BEGIN IMMEDIATE")
+db.execute("""UPDATE resale_listings SET status='SOLD',buyer_id=?,sold_at=datetime('now')
+ WHERE id=? AND status='ACTIVE' AND seller_id<>?
+ AND EXISTS (SELECT 1 FROM inventory WHERE user_id=resale_listings.seller_id AND item_id=resale_listings.item_id)
+ AND EXISTS (SELECT 1 FROM users WHERE id=? AND balance>=resale_listings.price)
+ AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=resale_listings.item_id)
+ AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=resale_listings.seller_id AND item_id=resale_listings.item_id)""",
+           ("test-third","limited-resale","test-third","test-third","test-third"))
+db.execute("UPDATE users SET balance=balance-30 WHERE id='test-third' AND balance>=30 AND changes()=1")
+db.execute("UPDATE users SET balance=balance+30 WHERE id='test-user' AND changes()=1")
+db.execute("DELETE FROM inventory WHERE user_id='test-user' AND item_id='limited-hat' AND changes()=1")
+db.execute("INSERT INTO inventory (id,user_id,item_id) SELECT 'resale-buyer-inv','test-third','limited-hat' WHERE changes()=1")
+db.commit()
+assert db.execute("SELECT balance FROM users WHERE id='test-user'").fetchone()[0] == 95
+assert db.execute("SELECT balance FROM users WHERE id='test-third'").fetchone()[0] == 70
+assert db.execute("SELECT COUNT(*) FROM inventory WHERE user_id='test-user' AND item_id='limited-hat'").fetchone()[0] == 0
+assert db.execute("SELECT COUNT(*) FROM inventory WHERE user_id='test-third' AND item_id='limited-hat'").fetchone()[0] == 1
+assert db.execute("SELECT status,buyer_id FROM resale_listings WHERE id='limited-resale'").fetchone() == ("SOLD","test-third")
+print("PASS player resale moves Limited ownership and pays seller")
+
+# No second purchase or self-purchase can claim a sold listing.
+db.execute("""UPDATE resale_listings SET status='SOLD',buyer_id='test-third'
+ WHERE id='limited-resale' AND status='ACTIVE' AND seller_id<>'test-third'""")
+assert db.execute("SELECT changes()").fetchone()[0] == 0
+assert db.execute("SELECT balance FROM users WHERE id='test-third'").fetchone()[0] == 70
+print("PASS resale self-purchase and duplicate-purchase protection")
+
+# Off Sale inventory is also eligible, even though it is absent from the normal catalog.
+db.execute("INSERT INTO items (id,name,category,price,image_url,is_for_sale,is_limited,is_offsale) VALUES (?,?,?,?,?,?,?,?)",
+           ("off-sale-hat","Off Sale Hat","Hats",10,"",0,0,1))
+db.execute("INSERT INTO inventory (id,user_id,item_id) VALUES (?,?,?)",
+           ("off-sale-inv","test-user","off-sale-hat"))
+db.execute("""INSERT INTO resale_listings (id,item_id,seller_id,price,currency)
+ SELECT 'off-sale-listing','off-sale-hat','test-user',1,'P
+
+# Custom public User IDs are unique and changing an ID does not change the internal account key.
+db.execute("UPDATE users SET public_id=rowid WHERE public_id IS NULL")
+db.execute("UPDATE users SET public_id=501 WHERE id='test-user'")
+db.execute("UPDATE users SET public_id=502 WHERE id='test-friend'")
+db.execute("""UPDATE users SET public_id=502
+ WHERE id='test-user' AND NOT EXISTS (SELECT 1 FROM users WHERE public_id=502 AND id<>'test-user')""")
+assert db.execute("SELECT changes()").fetchone()[0] == 0
+assert db.execute("SELECT id FROM users WHERE public_id=501").fetchone()[0] == "test-user"
+assert db.execute("SELECT COUNT(*) FROM users WHERE public_id=502").fetchone()[0] == 1
+print("PASS unique public User ID changes")
+
+ WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id='test-user' AND item_id='off-sale-hat')
+ AND EXISTS (SELECT 1 FROM items WHERE id='off-sale-hat' AND (is_limited=1 OR is_offsale=1))""")
+assert db.execute("SELECT changes()").fetchone()[0] == 1
+print("PASS Off Sale items can be listed by players")
+
+# Regular Catalog purchases credit the Admin account, not an unassigned balance.
+db.execute("INSERT INTO items (id,name,category,price,image_url,is_for_sale,is_limited,is_offsale,stock_limit,stock_sold) VALUES (?,?,?,?,?,?,?,?,?,?)",
+           ("admin-store-item","Admin Store Item","Hats",5,"",1,0,0,0,0))
+db.execute("BEGIN IMMEDIATE")
+db.execute("""UPDATE items SET stock_sold=stock_sold+1
+ WHERE id='admin-store-item' AND is_for_sale=1 AND is_offsale=0
+ AND EXISTS (SELECT 1 FROM users WHERE id='test-friend' AND balance>=5)
+ AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id='test-friend' AND item_id='admin-store-item')
+ AND EXISTS (SELECT 1 FROM users WHERE id='admin-account')""")
+db.execute("UPDATE users SET balance=balance-5 WHERE id='test-friend' AND balance>=5 AND changes()=1")
+db.execute("UPDATE users SET balance=balance+5 WHERE id='admin-account' AND changes()=1")
+db.execute("INSERT INTO inventory (id,user_id,item_id) SELECT 'admin-purchase-inv','test-friend','admin-store-item' WHERE changes()=1")
+db.execute("INSERT INTO purchases (id,user_id,item_id,price) SELECT 'admin-purchase','test-friend','admin-store-item',5 WHERE changes()=1")
+db.commit()
+assert db.execute("SELECT balance FROM users WHERE id='admin-account'").fetchone()[0] == 5
+assert db.execute("SELECT balance FROM users WHERE id='test-friend'").fetchone()[0] == 85
+assert db.execute("SELECT COUNT(*) FROM inventory WHERE user_id='test-friend' AND item_id='admin-store-item'").fetchone()[0] == 1
+print("PASS regular Catalog purchase credits Admin")
+
 
 # Custom public User IDs are unique and changing an ID does not change the internal account key.
 db.execute("UPDATE users SET public_id=rowid WHERE public_id IS NULL")
