@@ -257,24 +257,23 @@ async function ensureSiteSettings(env) {
             env.DB.prepare("CREATE TRIGGER IF NOT EXISTS trg_trade_lock_no_resale BEFORE INSERT ON trade_locks WHEN EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=NEW.owner_id AND item_id=NEW.item_id AND status='ACTIVE') BEGIN SELECT RAISE(ABORT,'Item is already listed for sale.'); END")
           ]);
         } else if (hasOldResalePriceCap) {
-          // Only rebuild when sqlite_master confirms that the live table still
-          // has the old 1,000,000 price constraint.
-          await env.DB.batch([
-            env.DB.prepare("DROP TRIGGER IF EXISTS trg_trade_lock_no_resale"),
-            env.DB.prepare("DROP TRIGGER IF EXISTS trg_resale_no_trade_lock"),
-            env.DB.prepare("DROP INDEX IF EXISTS idx_resale_active_created"),
-            env.DB.prepare("DROP INDEX IF EXISTS idx_resale_item_active"),
-            env.DB.prepare("DROP INDEX IF EXISTS idx_resale_active_item_seller"),
-            env.DB.prepare("ALTER TABLE resale_listings RENAME TO resale_listings_legacy_price_cap"),
-            env.DB.prepare("CREATE TABLE resale_listings (id TEXT PRIMARY KEY, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, seller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, price INTEGER NOT NULL CHECK(price>0 AND price<=9007199254740991), currency TEXT NOT NULL DEFAULT 'P$' CHECK(currency='P$'), status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','SOLD','CANCELLED')), buyer_id TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), sold_at TEXT)"),
-            env.DB.prepare("INSERT INTO resale_listings (id,item_id,seller_id,price,currency,status,buyer_id,created_at,sold_at) SELECT id,item_id,seller_id,price,currency,status,buyer_id,created_at,sold_at FROM resale_listings_legacy_price_cap"),
-            env.DB.prepare("DROP TABLE resale_listings_legacy_price_cap"),
-            env.DB.prepare("CREATE INDEX idx_resale_active_created ON resale_listings(status,created_at DESC)"),
-            env.DB.prepare("CREATE INDEX idx_resale_item_active ON resale_listings(item_id,status)"),
-            env.DB.prepare("CREATE UNIQUE INDEX idx_resale_active_item_seller ON resale_listings(item_id,seller_id) WHERE status='ACTIVE'"),
-            env.DB.prepare("CREATE TRIGGER trg_resale_no_trade_lock BEFORE INSERT ON resale_listings WHEN EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=NEW.seller_id AND item_id=NEW.item_id) BEGIN SELECT RAISE(ABORT,'Item is reserved in a pending trade.'); END"),
-            env.DB.prepare("CREATE TRIGGER trg_trade_lock_no_resale BEFORE INSERT ON trade_locks WHEN EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=NEW.owner_id AND item_id=NEW.item_id AND status='ACTIVE') BEGIN SELECT RAISE(ABORT,'Item is already listed for sale.'); END")
-          ]);
+          // D1 prepares statements before executing a batch. The legacy table
+          // does not exist until the RENAME runs, so statements that reference
+          // it must be prepared only after that rename has completed.
+          await env.DB.prepare("DROP TRIGGER IF EXISTS trg_trade_lock_no_resale").run();
+          await env.DB.prepare("DROP TRIGGER IF EXISTS trg_resale_no_trade_lock").run();
+          await env.DB.prepare("DROP INDEX IF EXISTS idx_resale_active_created").run();
+          await env.DB.prepare("DROP INDEX IF EXISTS idx_resale_item_active").run();
+          await env.DB.prepare("DROP INDEX IF EXISTS idx_resale_active_item_seller").run();
+          await env.DB.prepare("ALTER TABLE resale_listings RENAME TO resale_listings_legacy_price_cap").run();
+          await env.DB.prepare("CREATE TABLE resale_listings (id TEXT PRIMARY KEY, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, seller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, price INTEGER NOT NULL CHECK(price>0 AND price<=9007199254740991), currency TEXT NOT NULL DEFAULT 'P$' CHECK(currency='P$'), status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','SOLD','CANCELLED')), buyer_id TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), sold_at TEXT)").run();
+          await env.DB.prepare("INSERT INTO resale_listings (id,item_id,seller_id,price,currency,status,buyer_id,created_at,sold_at) SELECT id,item_id,seller_id,price,currency,status,buyer_id,created_at,sold_at FROM resale_listings_legacy_price_cap").run();
+          await env.DB.prepare("DROP TABLE resale_listings_legacy_price_cap").run();
+          await env.DB.prepare("CREATE INDEX idx_resale_active_created ON resale_listings(status,created_at DESC)").run();
+          await env.DB.prepare("CREATE INDEX idx_resale_item_active ON resale_listings(item_id,status)").run();
+          await env.DB.prepare("CREATE UNIQUE INDEX idx_resale_active_item_seller ON resale_listings(item_id,seller_id) WHERE status='ACTIVE'").run();
+          await env.DB.prepare("CREATE TRIGGER trg_resale_no_trade_lock BEFORE INSERT ON resale_listings WHEN EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=NEW.seller_id AND item_id=NEW.item_id) BEGIN SELECT RAISE(ABORT,'Item is reserved in a pending trade.'); END").run();
+          await env.DB.prepare("CREATE TRIGGER trg_trade_lock_no_resale BEFORE INSERT ON trade_locks WHEN EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=NEW.owner_id AND item_id=NEW.item_id AND status='ACTIVE') BEGIN SELECT RAISE(ABORT,'Item is already listed for sale.'); END").run();
         }
 
         // Mark complete after either detecting the new schema or successfully
