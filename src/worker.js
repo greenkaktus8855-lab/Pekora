@@ -2188,6 +2188,38 @@ async function route(request, env) {
     return json({ok:true,status:"APPROVED",itemId});
   }
 
+  if (path === "/api/owner/resale-listings" || path.startsWith("/api/owner/resale-listings/")) {
+    const actor = await requireUser(request,env);
+    if (!actor) return fail("Please sign in.",401);
+    if (actor.role !== "OWNER") return fail("Owner access required.",403);
+
+    if (path === "/api/owner/resale-listings" && request.method === "GET") {
+      const rows = await env.DB.prepare(`
+        SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,r.created_at,
+          i.name AS item_name,u.username AS seller_name,u.public_id AS seller_public_id
+        FROM resale_listings r
+        JOIN items i ON i.id=r.item_id
+        LEFT JOIN users u ON u.id=r.seller_id
+        WHERE r.status='ACTIVE'
+        ORDER BY r.created_at DESC
+        LIMIT 500
+      `).all();
+      return json({listings:rows.results||[]});
+    }
+
+    const listingId = path.slice("/api/owner/resale-listings/".length);
+    if (path.startsWith("/api/owner/resale-listings/") && /^[A-Za-z0-9-]{1,80}$/.test(listingId) && request.method === "DELETE") {
+      const listing = await env.DB.prepare("SELECT item_id FROM resale_listings WHERE id=? AND status='ACTIVE'").bind(listingId).first();
+      if (!listing) return fail("Active resale listing not found.",404);
+      const result = await env.DB.prepare("UPDATE resale_listings SET status='CANCELLED' WHERE id=? AND status='ACTIVE'").bind(listingId).run();
+      if (!result?.meta?.changes) return fail("Active resale listing not found.",404);
+      await syncItemMarketPrice(env,listing.item_id);
+      return json({ok:true});
+    }
+
+    return fail("Unsupported resale moderation action.",405);
+  }
+
   if (path.startsWith("/api/owner/items")) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
