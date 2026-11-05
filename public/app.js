@@ -262,10 +262,10 @@ function itemPriceHistoryMarkup(item,history){
  const soldOut=Number(item.stock_limit)>0&&Number(item.stock_sold)>=Number(item.stock_limit);
  const eligible=Number(item.is_limited)===1||Number(item.is_offsale)===1||soldOut;
  if(!eligible)return "";
- const currentPrice=Number(item.price||0);
- const currentCurrency=String(item.currency||"P$");
- const currentPriceStat=currentPrice>0
-  ?'<div class="item-price-history-stat item-price-history-stat-current"><span>Current catalog price</span><b>'+currentPrice.toLocaleString()+' '+esc(currentCurrency)+'</b></div>'
+ const currentRap=Number(item.rap_value||0);
+ const currentRapCurrency=String(item.rap_currency||"P$");
+ const currentRapStat=currentRap>0&&currentRapCurrency==="P$"
+  ?'<div class="item-price-history-stat item-price-history-stat-current"><span>Current RAP</span><b>'+currentRap.toLocaleString()+' P$</b></div>'
   :'';
  const records=(Array.isArray(history)?history:[])
   .filter(entry=>Number(entry.price)>0&&Number.isFinite(Number(entry.price))&&entry.sold_at)
@@ -278,7 +278,7 @@ function itemPriceHistoryMarkup(item,history){
   .sort((a,b)=>a.date-b.date);
  if(records.length<2){
   const count=records.length;
-  return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Completed sales · P$ only. Current catalog price is shown separately.</p></div></div><div class="item-price-history-empty">'+(count?'Only one completed sale is recorded. The line chart appears after another sale.':'No completed sales are recorded yet. The line chart will appear as soon as this item has at least two completed sales.')+'</div>'+(currentPriceStat?'<div class="item-price-history-stats">'+currentPriceStat+'</div>':'')+'</section>';
+  return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Completed sales · P$ only. Current RAP is shown separately.</p></div></div><div class="item-price-history-empty">'+(count?'Only one completed sale is recorded. The line chart appears after another sale.':'No completed sales are recorded yet. The line chart will appear as soon as this item has at least two completed sales.')+'</div>'+(currentRapStat?'<div class="item-price-history-stats">'+currentRapStat+'</div>':'')+'</section>';
  }
  const width=760,height=280,left=66,right=22,top=20,bottom=48;
  const values=records.map(entry=>entry.price);
@@ -303,9 +303,9 @@ function itemPriceHistoryMarkup(item,history){
   '<div class="item-price-history-stat"><span>Lowest completed sale</span><b>'+minValue.toLocaleString()+' P$</b></div>'+
   '<div class="item-price-history-stat"><span>Highest completed sale</span><b>'+maxValue.toLocaleString()+' P$</b></div>'+
   '<div class="item-price-history-stat"><span>Latest completed sale</span><b>'+records[records.length-1].price.toLocaleString()+' P$</b></div>'+
-  currentPriceStat+
+  currentRapStat+
   '</div>';
- return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Completed sale prices only · P$. Current catalog price is separate.</p></div><strong>'+records.length.toLocaleString()+' sales</strong></div><div class="item-price-chart-wrap"><svg class="item-price-chart" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Completed sale price history chart for '+esc(item.name)+'">'+grid+'<path d="'+area+'" class="price-chart-area"/><path d="'+path+'" class="price-chart-line"/>'+dots+'<text x="'+left+'" y="'+(height-14)+'" class="price-chart-date">'+startDate+'</text><text x="'+(width-right)+'" y="'+(height-14)+'" text-anchor="end" class="price-chart-date">'+endDate+'</text></svg></div>'+stats+'</section>';
+ return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Completed sale prices only · P$. Current RAP is separate.</p></div><strong>'+records.length.toLocaleString()+' sales</strong></div><div class="item-price-chart-wrap"><svg class="item-price-chart" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Completed sale price history chart for '+esc(item.name)+'">'+grid+'<path d="'+area+'" class="price-chart-area"/><path d="'+path+'" class="price-chart-line"/>'+dots+'<text x="'+left+'" y="'+(height-14)+'" class="price-chart-date">'+startDate+'</text><text x="'+(width-right)+'" y="'+(height-14)+'" text-anchor="end" class="price-chart-date">'+endDate+'</text></svg></div>'+stats+'</section>';
 }
 
 async function showItem(itemId,updateHistory=true){
