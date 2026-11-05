@@ -1080,7 +1080,7 @@ async function friends(){
 function users(){
  const view=beginView();
  renderSidebar("users");
- app.innerHTML='<h1 class="page-title">People</h1><p class="page-subtitle">Search the Sakura community by username or User ID and open user profiles.</p><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type a username or numeric User ID to find a player.</div><div id="userResults" class="people-results"></div>';
+ app.innerHTML='<div class="rap-people-heading"><div><h1 class="page-title">People</h1><p class="page-subtitle">Search the Sakura community by username or User ID and open user profiles.</p></div><a class="button secondary" href="#rap" data-page="rap">Top 10 RAP</a></div><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type a username or numeric User ID to find a player.</div><div id="userResults" class="people-results"></div>';
  const form=document.getElementById("peopleSearchForm");
  const input=document.getElementById("userSearch");
  const results=document.getElementById("userResults");
@@ -1120,6 +1120,26 @@ function users(){
  }
 }
 
+
+async function rapLeaderboardPage(){
+ const view=beginView();
+ renderSidebar("users");
+ app.innerHTML='<div class="rap-leaderboard-page"><div class="rap-leaderboard-heading"><div><h1 class="page-title">Top 10 RAP</h1><p class="page-subtitle">Players ranked by the current P$ value of every item in their inventory.</p></div><a class="button secondary" href="#users" data-page="users">People</a></div><div id="rapLeaderboardState" class="notice">Loading leaderboard...</div></div>';
+ const host=document.getElementById("rapLeaderboardState");
+ try{
+  const data=await api("/api/rap-leaderboard");
+  if(!isActiveView(view)||!host?.isConnected)return;
+  const users=Array.isArray(data.users)?data.users:[];
+  host.className=users.length?"rap-leaderboard-table-wrap":"notice";
+  host.innerHTML=users.length
+   ?'<table class="rap-leaderboard-table"><thead><tr><th>#</th><th>Player</th><th>User ID</th><th>Items</th><th>Total RAP</th></tr></thead><tbody>'+users.map((u,index)=>'<tr><td class="rap-rank-cell">#'+(index+1)+'</td><td><a class="rap-player-link" href="/#profile?id='+encodeURIComponent(u.public_id||"")+'" data-profile="'+esc(u.username)+'">'+esc(u.username)+(Number(u.is_verified)===1?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</a></td><td>'+esc(u.public_id)+'</td><td>'+Number(u.item_count||0).toLocaleString()+'</td><td>'+currencyMarkup(u.total_rap,"P$")+'</td></tr>').join("")+'</tbody></table>'
+   :'<div class="empty">No inventory with P$ value has been found yet.</div>';
+ }catch(error){
+  if(!isActiveView(view)||!host?.isConnected)return;
+  host.className="notice";
+  host.textContent="Could not load the RAP leaderboard: "+error.message;
+ }
+}
 
 function parseRobloxClothingReference(value){
  const raw=String(value||"").trim();
@@ -1791,6 +1811,7 @@ async function render(name){
  else if(name==="profile")await (query.get("id")?profile(query.get("id"),true):profile(query.get("username")||me?.username));
  else if(name==="item")await showItem(query.get("id"),false);
  else if(name==="users"||name==="community")users();
+ else if(name==="rap")await rapLeaderboardPage();
  else if(name==="friends")await friends();
  else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
  else if(name==="currency")await currencyPage();
