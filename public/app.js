@@ -644,6 +644,7 @@ async function profile(identifier=me?.username,byId=false){
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
+    '<a class="button secondary op-profile-rap-link" href="#rap" data-page="rap">View Top 10 RAP</a>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
    '</div></div>'+
    '<section class="op-profile-section"><h2>Inventory</h2>'+
