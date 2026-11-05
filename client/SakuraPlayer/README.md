@@ -1,28 +1,33 @@
 # Sakura Player
 
-Sakura Player is a Windows desktop shell for the Sakura website. It displays the actual Sakura/OpenPekora-derived website interface inside a native window instead of a separate hand-built launcher screen.
+Sakura Player is a Windows desktop shell that opens the real Sakura website and receives game-launch requests from the website through the per-user Windows protocol handler `sakura-player://`.
 
-## Current connection
+## Website-to-player flow
 
-The default address is:
+1. The user installs and runs SakuraPlayer.exe once.
+2. On startup, the app registers `sakura-player://` for the current Windows user (no administrator rights required).
+3. The user opens Games on Sakura and presses Play.
+4. The browser asks permission to open Sakura Player, then launches a link like `sakura-player://play?gameId=GAME_ID`.
+5. Sakura Player reads the game ID and starts the configured runtime process.
+6. The launcher hides while the game process is running and closes after that process exits.
 
-    https://sakura.green-kaktus8855.workers.dev/
+## Current limitation: no 3D runtime or game servers yet
 
-The old custom-domain address is kept in the source as an allowed host for later use, but is not used as the startup address.
+The protocol and process handoff are implemented, but the repository does not currently contain a compatible 3D game client. The games table stores only an ID, title, description and thumbnail. There is no place file, join-ticket API, game arbiter or hosted game server. Thus pressing Play can open Sakura Player, but it cannot yet render a playable game until those pieces are provided.
 
-## Current features
+OpenPekora's public source does not include a ready-to-run Windows Player, and its Notes document says the game-arbiter component is not included. Do not package proprietary Roblox client binaries into Sakura Player.
 
-- Opens the real Sakura website interface in a desktop window.
-- Uses the website's own sign-in, pages, catalog and game cards.
-- Keeps the website session in the WebView2 profile under the current Windows user.
-- Includes back, forward, refresh and home controls.
-- Opens external HTTPS links in the default browser.
+## Configure a compatible game runtime
 
-## Important: gameplay is not connected yet
+The app creates this file on first launch:
 
-This app is a desktop wrapper for the website, not a 3D game runtime. The current Sakura backend stores game cards only; it does not yet provide place files, a join-ticket endpoint, a game-arbiter service, or a compatible game client. The OpenPekora source also does not include a ready-to-run Windows Player. Therefore, a website game card cannot become playable just by changing the launcher UI.
+    %LOCALAPPDATA%\SakuraPlayer\player.json
 
-Do not distribute proprietary Roblox binaries as part of Sakura Player. A playable Sakura platform needs a compatible client runtime that can legally be used and distributed, server-side game hosting, a join/handshake service, asset delivery and a creator workflow.
+Set `RuntimeExecutable` to the full path of a compatible game runtime executable. The runtime must accept these arguments:
+
+    --game-id <id> --platform-url https://sakura.green-kaktus8855.workers.dev
+
+The current Worker URL is used because the custom domain is disabled. Once a compatible runtime exists, the game client also needs a matching join-ticket and server protocol. Merely changing RuntimeExecutable will not make an unrelated program understand Sakura games.
 
 ## WebView2 requirement
 
@@ -32,14 +37,10 @@ Microsoft Edge WebView2 Runtime must be installed on Windows. If it is missing, 
 
 ## Build locally
 
-With the .NET 8 SDK installed on Windows:
+With .NET 8 SDK installed:
 
     dotnet publish client/SakuraPlayer/SakuraPlayer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/SakuraPlayer
 
-The executable will be in:
+The executable is published to:
 
     publish/SakuraPlayer/SakuraPlayer.exe
-
-## Automated build
-
-GitHub Actions builds the self-contained Windows x64 application and uploads an artifact named SakuraPlayer-win-x64.
