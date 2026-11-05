@@ -629,10 +629,44 @@ async function buildSiteAuditEvent(request,env,actor,response) {
   const details=[];
   const resaleCreate=path==="/api/resale/listings"&&method==="POST";
   const resalePath=path.match(/^\/api\/resale\/listings\/([A-Za-z0-9-]+)(?:\/(price|buy))?$/);
+  const groupPath=path.match(/^\/api\/groups\/([A-Za-z0-9-]+)(?:\/(join|leave|avatar))?$/);
+
   if(path==="/api/register"&&method==="POST")action="Account registered";
   else if(path==="/api/login"&&method==="POST")action="User signed in";
   else if(path==="/api/logout"&&method==="POST")action="User signed out";
-  else if(resaleCreate) {
+  else if(path==="/api/groups"&&method==="POST") {
+    action="Created a group";
+    const createdGroup=result.group||null;
+    if(createdGroup?.name)details.push("Group: "+String(createdGroup.name).slice(0,80));
+    if(createdGroup?.id)details.push("Group ID: "+String(createdGroup.id).slice(0,80));
+    details.push("Creation fee: 100 P$");
+  } else if(groupPath) {
+    const groupId=groupPath[1],groupOperation=groupPath[2]||"settings";
+    const group=await env.DB.prepare("SELECT id,name FROM sakura_groups WHERE id=?").bind(groupId).first();
+    const groupName=String(group?.name||result.groupName||"Unknown group").slice(0,80);
+    details.push("Group: "+groupName);
+    details.push("Group ID: "+groupId);
+    if(groupOperation==="join"&&method==="POST") {
+      action=result.joined===true?"Joined a group":"Already a member of a group";
+      details.push(result.joined===true?"Membership: added":"Membership: unchanged (already joined)");
+    } else if(groupOperation==="leave"&&method==="DELETE") {
+      action="Left a group";
+      details.push("Membership: removed");
+    } else if(groupOperation==="avatar"&&method==="PUT") {
+      action="Changed group picture";
+      details.push("Picture: uploaded");
+    } else if(groupOperation==="avatar"&&method==="DELETE") {
+      action="Removed group picture";
+      details.push("Picture: removed");
+    } else if(groupOperation==="settings"&&method==="PATCH") {
+      action="Updated group settings";
+      if(input.name!==undefined)details.push("Group name changed to: "+String(input.name).slice(0,80));
+      if(input.description!==undefined)details.push("Group description updated");
+    } else if(groupOperation==="settings"&&method==="DELETE") {
+      action="Deleted a group";
+      details.push("Group: "+String(result.groupName||groupName).slice(0,80));
+    }
+  } else if(resaleCreate) {
     action="Player Marketplace listing created";
     const item=await env.DB.prepare("SELECT name,category FROM items WHERE id=?").bind(String(input.itemId||"")).first();
     if(item)details.push("Item: "+item.name+" ("+item.category+")");
@@ -1899,12 +1933,12 @@ async function route(request, env) {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
     const groupId = groupDetailMatch[1];
+    const existing = await env.DB.prepare("SELECT id,name,owner_id FROM sakura_groups WHERE id=?").bind(groupId).first();
+    if (!existing) return fail("Group not found.",404);
+    if (existing.owner_id !== user.id) return fail("Only the group owner can delete this group.",403);
     const result = await env.DB.prepare("DELETE FROM sakura_groups WHERE id=? AND owner_id=?").bind(groupId,user.id).run();
-    if (!result?.meta?.changes) {
-      const exists = await env.DB.prepare("SELECT id FROM sakura_groups WHERE id=?").bind(groupId).first();
-      return exists ? fail("Only the group owner can delete this group.",403) : fail("Group not found.",404);
-    }
-    return json({ok:true});
+    if (!result?.meta?.changes) return fail("Group could not be deleted. Please try again.",409);
+    return json({ok:true,groupName:existing.name});
   }
 
   if (path === "/api/groups" && request.method === "GET") {
