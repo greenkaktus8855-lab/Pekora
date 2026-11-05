@@ -1256,7 +1256,15 @@ async function route(request, env) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
     catch { return fail("Invalid username.",400); }
-    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1 AND COALESCE(rap_item.is_offsale,0)=0 AND COALESCE(rap_item.base_currency,rap_item.currency,'P$')='P$') AS total_rap
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(CASE
+          WHEN rap_item.is_limited=1 AND COALESCE(rap_item.is_offsale,0)=0 AND rap_item.rap_currency='P$' AND rap_item.rap_value>0
+          THEN MIN(rap_item.rap_value*2,COALESCE(
+            (SELECT CAST(ROUND(AVG(recent_sales.price)) AS INTEGER)
+             FROM (SELECT r.price FROM resale_listings r WHERE r.item_id=rap_item.id AND r.status='SOLD' ORDER BY r.sold_at DESC LIMIT 10) recent_sales),
+            rap_item.rap_value))
+          ELSE 0 END),0)
+        FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id
+        WHERE rap_inventory.user_id=u.id) AS total_rap
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
     const [count,badgeRows] = await Promise.all([
