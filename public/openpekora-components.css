@@ -1662,7 +1662,7 @@
  padding:0!important;margin:0!important;color:inherit!important;font-weight:inherit!important;
  box-shadow:none!important;user-select:none;-webkit-user-select:none;
 }
-.op-navigation a[href="#create"]:hover{background:rgba(255,255,255,.14)!important;color:#fff!important}
+.op-navigation a[href="#create"]:hover{background:rgba(166,77,255,.18)!important;color:#fff!important}
 #sidebar .side-nav a{display:flex;align-items:center;gap:9px;min-height:32px}
 #sidebar .side-icon{
  display:inline-flex;align-items:center;justify-content:center;
