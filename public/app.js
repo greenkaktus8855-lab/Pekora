@@ -349,7 +349,7 @@ async function showItem(itemId,updateHistory=true){
  const otherListings=resaleListings.filter(listing=>!me||listing.seller_id!==me.id);
  const sellerMarkup=listing=>'<a href="#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'+(Number(listing.seller_verified)===1?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified seller">':'');
  const listingRows=otherListings.length?otherListings.map(listing=>'<article class="resale-offer-row"><div class="resale-offer-seller"><strong>'+sellerMarkup(listing)+'</strong><span class="muted">Seller</span></div><strong class="resale-offer-price">'+currencyMarkup(listing.price,"P$")+'</strong><button class="primary resale-buy-button" type="button" data-resale-buy="'+esc(listing.id)+'" data-item-id="'+esc(item.id)+'" '+(isAtLimit?'disabled':'')+'>'+(!me?'Log in to buy':isAtLimit?'Limit reached':isOwned?'Buy ('+ownedCount+'/10)':'Buy')+'</button></article>').join(""):'<p class="muted">No player listings for this item yet.</p>';
- const ownListingMarkup=myListing?'<div class="resale-own-listing"><div><strong>Your listing is active</strong><p class="muted">Asking price: '+currencyMarkup(myListing.price,"P$")+'</p></div><button class="button secondary" type="button" id="cancelResaleListing" data-listing-id="'+esc(myListing.id)+'">Remove listing</button></div>':(me&&isOwned&&resaleEligible?'<form id="createResaleListing" class="resale-create-form"><h3>Sell your copy</h3><p class="muted">Set your own price. Your item stays in your inventory until another player buys it.</p><label>Price in P$ <input type="number" name="price" min="1" max="1000000" step="1" value="1" required></label><button class="primary" type="submit">List for sale</button><span id="resaleCreateMessage" class="muted" role="status"></span></form>':"");
+ const ownListingMarkup=myListing?'<div class="resale-own-listing"><div><strong>Your listing is active</strong><p class="muted">Current price: '+currencyMarkup(myListing.price,"P$")+'</p></div><form id="updateResaleListing" class="resale-create-form"><label>Change price in P$ <input type="number" name="price" min="1" step="1" value="'+esc(myListing.price)+'" required></label><button class="primary" type="submit">Update price</button><span id="resaleUpdateMessage" class="muted" role="status"></span></form><button class="button secondary" type="button" id="cancelResaleListing" data-listing-id="'+esc(myListing.id)+'">Remove listing</button></div>':(me&&isOwned&&resaleEligible?'<form id="createResaleListing" class="resale-create-form"><h3>Sell your copy</h3><p class="muted">Set any whole-number price. Your item stays in your inventory until another player buys it.</p><label>Price in P$ <input type="number" name="price" min="1" step="1" value="1" required></label><button class="primary" type="submit">List for sale</button><span id="resaleCreateMessage" class="muted" role="status"></span></form>':"");
  const resalePanel=resaleEligible?'<section class="resale-section"><div class="resale-section-heading"><div><h2>Player Marketplace</h2><p class="muted">Limited, Off Sale, and sold-out items can be resold by players.</p></div><a href="#resale" data-page="resale">Open market</a></div>'+ownListingMarkup+'<div class="resale-offer-list">'+listingRows+'</div></section>':"";
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
@@ -370,6 +370,17 @@ async function showItem(itemId,updateHistory=true){
    
    
    toast("Item listed for sale");
+   await showItem(item.id,false);
+  }catch(error){message.textContent=error.message;button.disabled=false}
+ });
+ document.getElementById("updateResaleListing")?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const form=event.currentTarget,button=form.querySelector('button[type="submit"]'),message=document.getElementById("resaleUpdateMessage");
+  const price=Number(new FormData(form).get("price"));
+  button.disabled=true;message.textContent="Updating price...";
+  try{
+   await api("/api/resale/listings/"+encodeURIComponent(myListing.id)+"/price",{method:"PATCH",body:JSON.stringify({price})});
+   toast("Listing price updated");
    await showItem(item.id,false);
   }catch(error){message.textContent=error.message;button.disabled=false}
  });
