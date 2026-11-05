@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text.Json;
+using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -8,11 +10,13 @@ internal sealed class MainForm : Form
 {
     private const string WorkerUrl = "https://sakura.green-kaktus8855.workers.dev/";
     private const string CustomDomainUrl = "https://sakura.mopcblox.online/";
+    private const string ProtocolScheme = "sakura-player";
     private static readonly HashSet<string> AllowedHosts = new(StringComparer.OrdinalIgnoreCase)
     {
         "sakura.green-kaktus8855.workers.dev",
         "sakura.mopcblox.online"
     };
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     private readonly WebView2 _browser = new() { Dock = DockStyle.Fill };
     private readonly Button _back = new() { Text = "‹", Width = 42 };
@@ -20,10 +24,19 @@ internal sealed class MainForm : Form
     private readonly Button _refresh = new() { Text = "↻", Width = 42 };
     private readonly Button _home = new() { Text = "HOME", Width = 72 };
     private readonly Label _connection = new() { AutoSize = true, Text = "CONNECTING TO SAKURA" };
+    private readonly string? _initialLaunchUri;
     private bool _browserReady;
+    private bool _launchInProgress;
 
-    public MainForm()
+    private static string ConfigDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "SakuraPlayer");
+
+    private static string ConfigPath => Path.Combine(ConfigDirectory, "player.json");
+
+    public MainForm(string? initialLaunchUri)
     {
+        _initialLaunchUri = initialLaunchUri;
         Text = "Sakura Player";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(900, 620);
@@ -31,6 +44,8 @@ internal sealed class MainForm : Form
         BackColor = Color.White;
         Font = new Font("Segoe UI", 9F);
         Icon = SystemIcons.Application;
+
+        RegisterProtocolHandler();
 
         var header = new Panel
         {
@@ -105,15 +120,42 @@ internal sealed class MainForm : Form
         button.Cursor = Cursors.Hand;
     }
 
+    private static void RegisterProtocolHandler()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        try
+        {
+            var executable = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(executable))
+                return;
+
+            using var protocol = Registry.CurrentUser.CreateSubKey(
+                @"Software\Classes\sakura-player", writable: true);
+            protocol.SetValue("", "URL:Sakura Player Protocol");
+            protocol.SetValue("URL Protocol", "");
+
+            using var defaultIcon = protocol.CreateSubKey("DefaultIcon", writable: true);
+            defaultIcon.SetValue("", $"\"{executable}\",0");
+
+            using var command = protocol.CreateSubKey(@"shell\open\command", writable: true);
+            command.SetValue("", $"\"{executable}\" \"%1\"");
+        }
+        catch
+        {
+            // Registration is per-user and does not require administrator rights.
+        }
+    }
+
     private async Task InitializeBrowserAsync()
     {
         try
         {
-            var userData = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SakuraPlayer",
-                "WebView2");
+            Directory.CreateDirectory(ConfigDirectory);
+            EnsureStarterConfig();
 
+            var userData = Path.Combine(ConfigDirectory, "WebView2");
             var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userData);
             await _browser.EnsureCoreWebView2Async(environment);
 
@@ -122,10 +164,22 @@ internal sealed class MainForm : Form
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.AreDefaultContextMenusEnabled = true;
 
-            core.NavigationStarting += (_, args) =>
+            core.NavigationStarting += async (_, args) =>
             {
-                if (!Uri.TryCreate(args.Uri, UriKind.Absolute, out var target) ||
-                    target.Scheme != Uri.UriSchemeHttps)
+                if (!Uri.TryCreate(args.Uri, UriKind.Absolute, out var target))
+                {
+                    args.Cancel = true;
+                    return;
+                }
+
+                if (target.Scheme.Equals(ProtocolScheme, StringComparison.OrdinalIgnoreCase))
+                {
+                    args.Cancel = true;
+                    await LaunchGameAsync(target);
+                    return;
+                }
+
+                if (target.Scheme != Uri.UriSchemeHttps)
                 {
                     args.Cancel = true;
                     return;
@@ -159,6 +213,12 @@ internal sealed class MainForm : Form
             _connection.Text = "SAKURA WORKER";
             UpdateNavigationButtons();
             core.Navigate(WorkerUrl + "#home");
+
+            if (!string.IsNullOrWhiteSpace(_initialLaunchUri) &&
+                Uri.TryCreate(_initialLaunchUri, UriKind.Absolute, out var launchUri))
+            {
+                await LaunchGameAsync(launchUri);
+            }
         }
         catch (Exception ex)
         {
@@ -180,6 +240,121 @@ internal sealed class MainForm : Form
         }
     }
 
+    private static void EnsureStarterConfig()
+    {
+        if (File.Exists(ConfigPath))
+            return;
+
+        var starter = new PlayerConfig
+        {
+            RuntimeExecutable = "",
+            Notes = "Set RuntimeExecutable to a compatible Sakura game client. The client must support --game-id and --platform-url."
+        };
+        File.WriteAllText(ConfigPath, JsonSerializer.Serialize(starter, JsonOptions));
+    }
+
+    private async Task LaunchGameAsync(Uri uri)
+    {
+        if (_launchInProgress)
+            return;
+
+        if (!uri.Scheme.Equals(ProtocolScheme, StringComparison.OrdinalIgnoreCase) ||
+            !uri.Host.Equals("play", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(this, "This Sakura Player link is not supported.", "Cannot open game",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var query = ParseQuery(uri.Query);
+        if (!query.TryGetValue("gameId", out var gameId) ||
+            string.IsNullOrWhiteSpace(gameId) ||
+            gameId.Length > 80 ||
+            gameId.Any(ch => !(char.IsAsciiLetterOrDigit(ch) || ch == '-')))
+        {
+            MessageBox.Show(this, "The game link is missing a valid game ID.", "Cannot open game",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        PlayerConfig? config;
+        try
+        {
+            config = JsonSerializer.Deserialize<PlayerConfig>(await File.ReadAllTextAsync(ConfigPath));
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Could not read Sakura Player settings: " + ex.Message,
+                "Player settings", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        var runtimePath = Environment.ExpandEnvironmentVariables(config?.RuntimeExecutable?.Trim() ?? "");
+        if (string.IsNullOrWhiteSpace(runtimePath) || !File.Exists(runtimePath))
+        {
+            MessageBox.Show(this,
+                "Sakura Player received the Play request for game " + gameId + ", but a compatible 3D game client is not configured yet.\n\n" +
+                "The current Sakura website can list games, but the platform still needs a game runtime, game-server service and join-ticket API.\n\n" +
+                "Player settings: " + ConfigPath,
+                "Game client not configured",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            if (_browserReady)
+                _browser.CoreWebView2.Navigate(WorkerUrl + "#games");
+            return;
+        }
+
+        _launchInProgress = true;
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = runtimePath,
+                WorkingDirectory = Path.GetDirectoryName(runtimePath) ?? AppContext.BaseDirectory,
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add("--game-id");
+            startInfo.ArgumentList.Add(gameId);
+            startInfo.ArgumentList.Add("--platform-url");
+            startInfo.ArgumentList.Add(WorkerUrl.TrimEnd('/'));
+
+            var gameProcess = Process.Start(startInfo);
+            if (gameProcess is null)
+                throw new InvalidOperationException("The game client did not start.");
+
+            Hide();
+            await gameProcess.WaitForExitAsync();
+            Close();
+        }
+        catch (Exception ex)
+        {
+            _launchInProgress = false;
+            Show();
+            WindowState = FormWindowState.Normal;
+            MessageBox.Show(this,
+                "Could not start the configured game client.\n\n" + ex.Message,
+                "Game launch failed",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private static Dictionary<string, string> ParseQuery(string query)
+    {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var part in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var pair = part.Split('=', 2);
+            var key = Uri.UnescapeDataString(pair[0].Replace("+", " "));
+            var value = pair.Length > 1
+                ? Uri.UnescapeDataString(pair[1].Replace("+", " "))
+                : "";
+            values[key] = value;
+        }
+        return values;
+    }
+
     private void UpdateNavigationButtons()
     {
         if (!_browserReady)
@@ -199,5 +374,11 @@ internal sealed class MainForm : Form
         {
             // A blocked external browser launch must not crash the player shell.
         }
+    }
+
+    private sealed class PlayerConfig
+    {
+        public string RuntimeExecutable { get; set; } = "";
+        public string Notes { get; set; } = "";
     }
 }
