@@ -828,7 +828,7 @@ async function promocodesPage(){
 async function gamesPage(){
  const view=beginView();
  renderSidebar("games");
- app.innerHTML='<div class="games-page"><h1 class="page-title">Games</h1><p class="muted">Games created by the Sakura team.</p><div id="gamesGrid" class="games-grid">Loading games...</div></div>';
+ app.innerHTML='<div class="games-page"><h1 class="page-title">Games</h1><p class="muted">Choose an experience and press Play to open Sakura Player.</p><div id="gamesGrid" class="games-grid">Loading games...</div></div>';
  try{
   const data=await api("/api/games");
   if(!isActiveView(view))return;
@@ -837,7 +837,14 @@ async function gamesPage(){
   host.innerHTML=games.length?games.map(game=>'<article class="game-card">'+
    '<div class="game-thumbnail">'+(game.thumbnail_url?'<img src="'+esc(game.thumbnail_url)+'" alt="'+esc(game.title)+'" loading="lazy">':'<div class="game-thumbnail-empty">SAKURA</div>')+'</div>'+
    '<div class="game-card-body"><h2>'+esc(game.title)+'</h2><p>'+esc(game.description||"No description.")+'</p>'+
-   '<button class="game-locked-button" type="button" disabled aria-label="Game is locked"><span class="game-lock-icon" aria-hidden="true"></span> Locked</button></div></article>').join(""):'<div class="empty">No games have been added yet.</div>';
+   '<button class="game-play-button" type="button" data-play-game="'+esc(game.id)+'">Play</button></div></article>').join(""):'<div class="empty">No games have been added yet.</div>';
+  host.addEventListener("click",event=>{
+   const button=event.target.closest("[data-play-game]");
+   if(!button||!host.contains(button))return;
+   const gameId=String(button.dataset.playGame||"");
+   if(!/^[A-Za-z0-9-]{1,80}$/.test(gameId)){toast("Invalid game link");return}
+   window.location.href="sakura-player://play?gameId="+encodeURIComponent(gameId);
+  });
  }catch(e){const host=document.getElementById("gamesGrid");if(host)host.textContent=e.message}
 }
 async function tradesPage(){
