@@ -228,33 +228,7 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("DELETE FROM banned_session_notices WHERE expires_at <= datetime('now')")
       ]);
       await env.DB.prepare("INSERT OR IGNORE INTO user_badges (user_id,badge_key) SELECT id,'ADMINISTRATOR' FROM users WHERE username COLLATE NOCASE IN ('Admin','Sakura')").run();
-      // Keep the catalog price synchronized with the latest valid active player listing.
-      // When a listing is removed, the last displayed price remains until another active listing changes it.
-      await env.DB.prepare(`
-        UPDATE items
-        SET price=(
-          SELECT r.price
-          FROM resale_listings r
-          JOIN users seller ON seller.id=r.seller_id
-          WHERE r.item_id=items.id
-            AND r.status='ACTIVE'
-            AND seller.is_banned=0
-            AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
-            AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
-          ORDER BY r.created_at DESC,r.rowid DESC
-          LIMIT 1
-        ),currency='P$'
-        WHERE EXISTS (
-          SELECT 1
-          FROM resale_listings r
-          JOIN users seller ON seller.id=r.seller_id
-          WHERE r.item_id=items.id
-            AND r.status='ACTIVE'
-            AND seller.is_banned=0
-            AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
-            AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
-        )
-      `).run();
+      // Resale asking prices no longer overwrite the shared catalog price.
       const creatorSubmissionColumns = await env.DB.prepare("PRAGMA table_info(creator_submissions)").all();
       if (!(creatorSubmissionColumns.results || []).some(column => column.name === "price")) {
         await env.DB.prepare("ALTER TABLE creator_submissions ADD COLUMN price INTEGER NOT NULL DEFAULT 50 CHECK(price>=0 AND price<=1000000)").run();
@@ -323,6 +297,52 @@ async function ensureSiteSettings(env) {
       if (!(purchaseColumns.results || []).some(column => column.name === "currency")) {
         await env.DB.prepare("ALTER TABLE purchases ADD COLUMN currency TEXT NOT NULL DEFAULT 'P$'").run();
       }
+      const rapColumns = await env.DB.prepare("PRAGMA table_info(items)").all();
+      if (!(rapColumns.results || []).some(column => column.name === "rap_value")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN rap_value INTEGER NOT NULL DEFAULT 0 CHECK(rap_value>=0)").run();
+      }
+      if (!(rapColumns.results || []).some(column => column.name === "rap_currency")) {
+        await env.DB.prepare("ALTER TABLE items ADD COLUMN rap_currency TEXT NOT NULL DEFAULT 'P$'").run();
+      }
+      const rapBaseline = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='rap_baseline_2026_11_05'").first();
+      if (!rapBaseline) {
+        await env.DB.batch([
+          env.DB.prepare(`UPDATE items SET rap_value=CASE
+            WHEN EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=items.id AND p.currency='P$')
+              THEN COALESCE((SELECT CAST(ROUND(AVG(p.price)) AS INTEGER) FROM purchases p WHERE p.item_id=items.id AND p.currency='P$'),0)
+            WHEN EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=items.id) THEN 0
+            WHEN EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=items.id)
+              THEN COALESCE((SELECT p.price FROM purchases p WHERE p.item_id=items.id ORDER BY p.purchased_at ASC LIMIT 1),0)
+            ELSE price END`),
+          env.DB.prepare(`UPDATE items SET rap_currency=CASE
+            WHEN EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=items.id AND p.currency='P$') THEN 'P$'
+            WHEN EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=items.id)
+              THEN COALESCE((SELECT p.currency FROM purchases p WHERE p.item_id=items.id ORDER BY p.purchased_at ASC LIMIT 1),'P$')
+            WHEN EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=items.id) THEN 'UNKNOWN'
+            ELSE COALESCE(currency,'P$') END`),
+          env.DB.prepare(`UPDATE items SET
+            price=COALESCE((SELECT p.price FROM purchases p WHERE p.item_id=items.id ORDER BY p.purchased_at ASC LIMIT 1),0),
+            currency=COALESCE((SELECT p.currency FROM purchases p WHERE p.item_id=items.id ORDER BY p.purchased_at ASC LIMIT 1),'P$')
+            WHERE EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=items.id)`),
+          env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('rap_baseline_2026_11_05','done')")
+        ]);
+      }
+      await env.DB.batch([
+        env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_items_rap_baseline_insert
+          AFTER INSERT ON items
+          WHEN NEW.rap_value=0 AND NEW.price>0
+          BEGIN
+            UPDATE items SET rap_value=NEW.price,rap_currency=COALESCE(NEW.currency,'P$') WHERE id=NEW.id;
+          END`),
+        env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_items_rap_baseline_update
+          AFTER UPDATE OF price,currency ON items
+          WHEN OLD.rap_value=0 AND NEW.price>0
+            AND NOT EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=NEW.id)
+            AND NOT EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=NEW.id)
+          BEGIN
+            UPDATE items SET rap_value=NEW.price,rap_currency=COALESCE(NEW.currency,'P$') WHERE id=NEW.id;
+          END`)
+      ]);
       // Backfill historical purchases once so they count toward finite stock.
       const stockBackfill = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='stock_sold_backfill_2026_11'").first();
       if (!stockBackfill) {
