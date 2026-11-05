@@ -114,7 +114,6 @@ function renderSidebar(active="home"){
   ["groups","icon-nav-group","Groups"],
   ["currency","icon-nav-robux","Currency"],
   ["membership","icon-bc","Membership"],
-  ["avatar","icon-nav-profile","Avatar"],
   ["settings","icon-nav-settings","Settings"]
  ];
  sidebar.innerHTML='<div class="sidebar-card">'+
