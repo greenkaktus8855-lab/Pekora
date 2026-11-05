@@ -96,48 +96,6 @@ async function copyToClipboard(value,successMessage="Copied"){
   return false;
  }
 }
-function removeAvatarWhiteBackground(image){
- if(!image||image.dataset.avatarBgProcessed==="1"||!image.naturalWidth||!image.naturalHeight)return;
- image.dataset.avatarBgProcessed="1";
- try{
-  const width=image.naturalWidth,height=image.naturalHeight,total=width*height;
-  if(total>3000000)return;
-  const canvas=document.createElement("canvas");
-  canvas.width=width;canvas.height=height;
-  const context=canvas.getContext("2d",{willReadFrequently:true});
-  if(!context)return;
-  context.drawImage(image,0,0,width,height);
-  const frame=context.getImageData(0,0,width,height);
-  const pixels=frame.data;
-  const visited=new Uint8Array(total);
-  const queue=new Int32Array(total);
-  const isBackground=index=>{
-   const offset=index*4,r=pixels[offset],g=pixels[offset+1],b=pixels[offset+2];
-   return pixels[offset+3]>0&&r>=238&&g>=238&&b>=238&&Math.max(r,g,b)-Math.min(r,g,b)<=20;
-  };
-  let head=0,tail=0;
-  const add=index=>{
-   if(index>=0&&index<total&&!visited[index]&&isBackground(index)){
-    visited[index]=1;queue[tail++]=index;
-   }
-  };
-  for(let x=0;x<width;x++){add(x);add((height-1)*width+x);}
-  for(let y=0;y<height;y++){add(y*width);add(y*width+width-1);}
-  while(head<tail){
-   const index=queue[head++],x=index%width,y=(index/width)|0;
-   if(x>0)add(index-1);
-   if(x+1<width)add(index+1);
-   if(y>0)add(index-width);
-   if(y+1<height)add(index+width);
-  }
-  if(!tail)return;
-  for(let i=0;i<tail;i++)pixels[queue[i]*4+3]=0;
-  context.putImageData(frame,0,0);
-  image.src=canvas.toDataURL("image/png");
- }catch(error){
-  console.warn("[Sakura avatar] Could not make the render background transparent:",error);
- }
-}
 function avatar(username=me?.username){
  const label=String(username||"?").trim()||"?";
  const initials=label.split(/[ _-]+/).filter(Boolean).slice(0,2).map(part=>part[0]).join("").toUpperCase()||"?";
@@ -157,7 +115,6 @@ function renderSidebar(active="home"){
   ["currency","icon-nav-robux","Currency"],
   ["membership","icon-bc","Membership"],
   ["avatar","icon-nav-profile","Avatar"],
-  ["games","icon-nav-forum","Games"],
   ["settings","icon-nav-settings","Settings"]
  ];
  sidebar.innerHTML='<div class="sidebar-card">'+
@@ -243,7 +200,6 @@ function home(){
    '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile">'+avatar(me.username)+'</a><div class="sakura-welcome-copy"><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><div class="home-balances">'+currencyMarkup(me.balance,"P$","balance-chip")+currencyMarkup(me.tixBalance,"Tix","balance-chip")+'</div></div></div>'+
    '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
    '<div class="sakura-home-columns">'+
-    '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Recently Played</h3><a href="#games" data-page="games">See All</a></div><div id="homeRecentGames" class="sakura-empty-panel">Your recently played games will appear here.</div></section>'+
     '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Favorites</h3><a href="#catalog" data-page="catalog">See All</a></div><div id="homeFavorites" class="sakura-empty-panel">Your favorite items will appear here.</div></section>'+
    '</div>'+
    '<div class="sakura-home-columns sakura-home-bottom">'+
@@ -837,28 +793,6 @@ async function promocodesPage(){
  await loadClaims();
 }
 
-async function gamesPage(){
- const view=beginView();
- renderSidebar("games");
- app.innerHTML='<div class="games-page"><h1 class="page-title">Games</h1><p class="muted">Choose an experience and press Play to open Sakura Player. Actual gameplay requires a compatible game runtime, which is not connected yet.</p><div id="gamesGrid" class="games-grid">Loading games...</div></div>';
- try{
-  const data=await api("/api/games");
-  if(!isActiveView(view))return;
-  const host=document.getElementById("gamesGrid");
-  const games=data.games||[];
-  host.innerHTML=games.length?games.map(game=>'<article class="game-card">'+
-   '<div class="game-thumbnail">'+(game.thumbnail_url?'<img src="'+esc(game.thumbnail_url)+'" alt="'+esc(game.title)+'" loading="lazy">':'<div class="game-thumbnail-empty">SAKURA</div>')+'</div>'+
-   '<div class="game-card-body"><h2>'+esc(game.title)+'</h2><p>'+esc(game.description||"No description.")+'</p>'+
-   '<button class="game-play-button" type="button" data-play-game="'+esc(game.id)+'">Play</button></div></article>').join(""):'<div class="empty">No games have been added yet.</div>';
-  host.addEventListener("click",event=>{
-   const button=event.target.closest("[data-play-game]");
-   if(!button||!host.contains(button))return;
-   const gameId=String(button.dataset.playGame||"");
-   if(!/^[A-Za-z0-9-]{1,80}$/.test(gameId)){toast("Invalid game link");return}
-   window.location.href="sakura-player://play?gameId="+encodeURIComponent(gameId);
-  });
- }catch(e){const host=document.getElementById("gamesGrid");if(host)host.textContent=e.message}
-}
 async function tradesPage(){
  const view=beginView();
  renderSidebar("trades");
@@ -1822,7 +1756,6 @@ async function avatarPage(){
  const view=beginView();
  renderSidebar("avatar");
  if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to edit your avatar.</div>';return}
- const publicId=Number(me.publicId||0);
  const colorParts=[
   ["headColorId","Head"],["torsoColorId","Torso"],["leftArmColorId","Left arm"],
   ["rightArmColorId","Right arm"],["leftLegColorId","Left leg"],["rightLegColorId","Right leg"]
@@ -1839,13 +1772,10 @@ async function avatarPage(){
   ["proportion","Proportion",0,1,0.01],["bodyType","Body type",0,1,0.01]
  ];
  app.innerHTML='<div class="avatar-editor">'+
-  '<div class="avatar-editor-heading"><div><h1 class="page-title">Avatar</h1><p class="muted">Customize your character and preview it with the OpenPekora renderer.</p></div></div>'+
+  '<div class="avatar-editor-heading"><div><h1 class="page-title">Avatar</h1><p class="muted">Customize your character. The 3D preview is temporarily unavailable because of technical issues.</p></div></div>'+
   '<div class="avatar-editor-layout">'+
    '<section class="avatar-preview-panel"><h2>3D Preview</h2>'+
-    '<div class="avatar-render-frame"><img id="sakuraAvatarImage" class="avatar-render" alt="Your rendered 3D avatar" src="/api/avatar/thumbnail/'+publicId+'?refresh='+Date.now()+'"></div>'+
-    '<p id="sakuraAvatarStatus" class="muted" role="status" aria-live="polite">Connecting to the OpenPekora renderer...</p>'+
-    '<button class="button secondary" id="refreshSakuraAvatar" type="button">Refresh render</button>'+
-    '<p class="muted">The preview is a server-generated 3D image. The renderer computer and its secure tunnel must be online.</p>'+
+    '<p class="muted">3D avatar preview is temporarily unavailable because of technical issues. You can still customize and save your avatar settings.</p>'+
    '</section>'+
    '<section class="avatar-wardrobe"><h2>Body</h2>'+
     '<label class="avatar-setting-label">Avatar type<select id="avatarRig"><option value="R6">R6</option><option value="R15">R15</option></select></label>'+
@@ -1854,35 +1784,10 @@ async function avatarPage(){
     '<div class="avatar-editor-actions"><button class="button primary" id="saveAvatarBody" type="button">Save body settings</button></div>'+
    '</section>'+
   '</div>'+
-  '<section class="avatar-wardrobe avatar-clothing-section"><div class="avatar-wardrobe-heading"><h2>My items</h2><span class="muted">Only items with a valid Roblox asset ID can be equipped on the 3D character.</span></div>'+
+  '<section class="avatar-wardrobe avatar-clothing-section"><div class="avatar-wardrobe-heading"><h2>My items</h2><span class="muted">Only items with a valid Roblox asset ID can be equipped.</span></div>'+
    '<div id="avatarItemsStatus" class="muted">Loading your inventory...</div><div id="avatarWardrobeGrid" class="avatar-wardrobe-grid"></div>'+
   '</section></div>';
- const image=document.getElementById("sakuraAvatarImage");
- const status=document.getElementById("sakuraAvatarStatus");
- let avatarState=null,inventoryItems=[],equippedIds=new Set(),renderObjectUrl=null;
- const setStatus=(message,isError=false)=>{if(status){status.textContent=message;status.classList.toggle("error",Boolean(isError));}};
- const refreshRender=async()=>{
-  if(!image?.isConnected)return;
-  if(!publicId){setStatus("Your account does not have a public avatar ID yet.",true);return}
-  setStatus("Rendering your avatar with OpenPekora RCC...");
-  const refreshButton=document.getElementById("refreshSakuraAvatar");
-  if(refreshButton)refreshButton.disabled=true;
-  try{
-   const response=await fetch("/api/avatar/thumbnail/"+publicId+"?refresh="+Date.now(),{credentials:"same-origin",cache:"no-store"});
-   if(!response.ok){
-    const detail=(await response.text()).slice(0,240);
-    throw new Error(detail||("Renderer returned HTTP "+response.status));
-   }
-   const blob=await response.blob();
-   if(!blob.type.includes("image/")||blob.size<8)throw new Error("Renderer did not return a valid image.");
-   const nextUrl=URL.createObjectURL(blob);
-   if(renderObjectUrl)URL.revokeObjectURL(renderObjectUrl);
-   renderObjectUrl=nextUrl;
-   image.src=nextUrl;
-   setStatus("3D avatar render updated.");
-  }catch(error){setStatus(error.message||"Avatar render failed. Check the renderer and tunnel.",true)}
-  finally{if(refreshButton?.isConnected)refreshButton.disabled=false}
- };
+ let inventoryItems=[],equippedIds=new Set();
  const renderWardrobe=()=>{
   const host=document.getElementById("avatarWardrobeGrid");
   const info=document.getElementById("avatarItemsStatus");
@@ -1894,12 +1799,12 @@ async function avatarPage(){
    const itemId=String(item.id||"");
    const assetId=Number(item.asset_id||0);
    const isEquipped=equippedIds.has(itemId);
-   const canRender=Number.isSafeInteger(assetId)&&assetId>0;
+   const canEquip=Number.isSafeInteger(assetId)&&assetId>0;
    return '<article class="avatar-wardrobe-item">'+
     '<div class="avatar-wardrobe-image">'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'" loading="lazy">':'<span>No preview</span>')+'</div>'+
-    '<div class="avatar-wardrobe-name">'+esc(item.name)+'</div><div class="muted">'+esc(item.category)+(canRender?' · Asset '+assetId:' · No asset ID')+'</div>'+
-    '<button class="button '+(isEquipped?'secondary':'primary')+'" type="button" data-avatar-item="'+esc(itemId)+'" data-avatar-action="'+(isEquipped?'remove':'wear')+'" '+(!canRender&&!isEquipped?'disabled':'')+'>'+(isEquipped?'Remove':'Wear')+'</button>'+
-    (!canRender?'<small class="muted">This Sakura-only item cannot be rendered as a Roblox asset.</small>':'')+
+    '<div class="avatar-wardrobe-name">'+esc(item.name)+'</div><div class="muted">'+esc(item.category)+(canEquip?' · Asset '+assetId:' · No asset ID')+'</div>'+
+    '<button class="button '+(isEquipped?'secondary':'primary')+'" type="button" data-avatar-item="'+esc(itemId)+'" data-avatar-action="'+(isEquipped?'remove':'wear')+'" '+(!canEquip&&!isEquipped?'disabled':'')+'>'+(isEquipped?'Remove':'Wear')+'</button>'+
+    (!canEquip?'<small class="muted">This Sakura-only item has no Roblox asset ID and cannot be equipped.</small>':'')+
    '</article>';
   }).join("");
  };
@@ -1915,12 +1820,10 @@ async function avatarPage(){
    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"rig",rigType:document.getElementById("avatarRig").value})});
    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"scales",scales})});
    toast("Avatar settings saved");
-   await refreshRender();
   }catch(error){toast(error.message)}
   finally{if(button?.isConnected)button.disabled=false}
  };
  document.getElementById("saveAvatarBody").addEventListener("click",saveBody);
- document.getElementById("refreshSakuraAvatar").addEventListener("click",refreshRender);
  document.querySelectorAll("[data-avatar-scale]").forEach(input=>{
   const output=document.getElementById("avatarScaleValue_"+input.dataset.avatarScale);
   const update=()=>{if(output)output.value=Number(input.value).toFixed(2)};
@@ -1936,13 +1839,11 @@ async function avatarPage(){
    if(action==="wear")equippedIds.add(itemId);else equippedIds.delete(itemId);
    renderWardrobe();
    toast(action==="wear"?"Item equipped":"Item removed");
-   await refreshRender();
   }catch(error){toast(error.message);button.disabled=false}
  });
  try{
   const [avatarData,inventoryData]=await Promise.all([api("/api/avatar"),api("/api/inventory")]);
   if(!isActiveView(view))return;
-  avatarState=avatarData;
   inventoryItems=Array.isArray(inventoryData.items)?inventoryData.items:[];
   equippedIds=new Set((avatarData.equipped||[]).map(item=>String(item.id)));
   document.getElementById("avatarRig").value=avatarData.rigType==="R15"?"R15":"R6";
@@ -1956,11 +1857,9 @@ async function avatarPage(){
    input.dispatchEvent(new Event("input"));
   });
   renderWardrobe();
-  await refreshRender();
  }catch(error){
   const info=document.getElementById("avatarItemsStatus");
   if(info)info.textContent="Could not load avatar settings or inventory: "+error.message;
-  setStatus("Avatar setup could not be loaded. "+error.message,true);
  }
 }
 async function render(name){
@@ -1987,7 +1886,6 @@ async function render(name){
  else if(name==="currency")await currencyPage();
  else if(name==="membership")await membershipPage();
  else if(name==="promocodes")await promocodesPage();
- else if(name==="games")await gamesPage();
  else if(name==="trades")await tradesPage();
  else if(name==="settings")await settings();
  else if(name==="asset-panel")await assetModeratorPage();
