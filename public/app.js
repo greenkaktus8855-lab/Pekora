@@ -122,7 +122,7 @@ function renderSidebar(active="home"){
   '<div class="side-separator"></div>'+
   '<a href="/#promocodes" data-page="promocodes" class="side-promo-button '+(active==="promocodes"?"active":"")+'">Promo Codes</a>'+
   '<a class="side-discord-button" href="https://discord.gg/PxVWav9R2R" target="_blank" rel="noopener noreferrer">Discord Server</a>'+
-  (me.role==="OWNER"?'<a href="/#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':(me.isAssetModerator?'<a href="/#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Asset Panel</span></a>':''))+
+  (me.role==="OWNER"?'<a href="/#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':(me.isAssetModerator?'<a href="/#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Admin Panel</span></a>':''))+
   '</nav></div>';
 }
 
@@ -1372,20 +1372,46 @@ async function createPage(){
 async function assetModeratorPage(){
  const view=beginView();
  renderSidebar("asset-panel");
- if(!me){app.innerHTML='<div class="empty">Please log in first.</div>';return}
- if(me.role!=="OWNER"&&!me.isAssetModerator){app.innerHTML='<div class="empty">Asset Moderator access required.</div>';return}
- app.innerHTML='<div class="asset-panel-page"><div class="asset-panel-heading"><div><h1 class="page-title">Asset Panel</h1><p class="page-subtitle">Review clothing and 3D model submissions from the Sakura community.</p></div><button type="button" class="button secondary" id="assetQueueRefresh">Refresh queue</button></div><div id="assetQueueList" class="asset-queue-list"><div class="op-profile-empty">Loading pending submissions...</div></div>'+
-  '<section class="asset-tutorial"><h2>Как сохранить картинку одежды или аватара</h2><p class="asset-tutorial-intro">Делайте по порядку — каждый шаг очень простой.</p>'+
-  '<article><h3>Шаг 1. Откройте оригинальную вещь</h3><p>В нужной заявке найдите ссылку <strong>«Открыть оригинал в Roblox»</strong> и нажмите на неё. Откроется страница этой футболки или штанов на сайте Roblox.</p></article>'+
-  '<article><h3>Шаг 2. Найдите нужный рендер</h3><p>На странице найдите большое изображение вещи. Это может быть картинка самой одежды или изображение аватара Roblox, на котором она показана. Нажмите прямо на эту картинку, чтобы открыть её крупнее.</p></article>'+
-  '<article><h3>Шаг 3. Сохраните изображение</h3><p>Когда картинка откроется, наведите на неё мышку и нажмите <strong>правой кнопкой</strong>. В меню выберите <strong>«Сохранить изображение как…»</strong>.</p></article>'+
-  '<article><h3>Шаг 4. Выберите место</h3><p>Выберите папку на компьютере, например «Загрузки», и нажмите <strong>«Сохранить»</strong>. Всё — картинка сохранена.</p></article>'+
-  '<article><h3>Не получается?</h3><p>Вернитесь в Sakura и нажмите <strong>«Открыть картинку предпросмотра»</strong> в заявке. Когда картинка откроется отдельно, нажмите по ней правой кнопкой мыши и выберите «Сохранить изображение как…».</p></article>'+
-  '<article><h3>А если это 3D-модель?</h3><p>3D-модель — это не обычная картинка. Её не нужно сохранять через правую кнопку мыши: посмотрите её в окне предпросмотра, покрутите мышкой и проверьте, что она правильно отображается.</p></article></section></div>';
+ if(!me){app.innerHTML='<div class="empty">Сначала войдите в аккаунт</div>';return}
+ if(me.role!=="OWNER"&&!me.isAssetModerator){app.innerHTML='<div class="empty">Для доступа к панели нужен бейдж Administrator или Asset Moderator</div>';return}
+ app.innerHTML=
+  '<div class="asset-panel-page">'+
+   '<div class="asset-panel-heading"><div><h1 class="page-title">Admin Panel</h1><p class="page-subtitle">Создание вещей и проверка заявок сообщества Sakura</p></div><button type="button" class="button secondary" id="assetQueueRefresh">Обновить заявки</button></div>'+
+   '<section class="asset-quick-create"><div class="asset-quick-create-heading"><h2>Создать одежду из Roblox</h2><p>Откройте вещь в Roblox, скопируйте ссылку на неё и заполните форму. После отправки заявка появится в очереди на проверку.</p></div>'+
+    '<form id="assetQuickClothingForm" class="asset-quick-create-form">'+
+     '<label>Название вещи<input name="name" maxlength="80" required placeholder="Например, Sakura Hoodie"></label>'+
+     '<label>Тип вещи<select name="category"><option value="Shirts">Футболка</option><option value="Pants">Штаны</option></select></label>'+
+     '<label>Описание <span>(необязательно)</span><textarea name="description" maxlength="500" rows="3" placeholder="Краткое описание вещи"></textarea></label>'+
+     '<label>Цена в P$<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label>'+
+     '<label class="asset-quick-create-wide">Ссылка на вещь Roblox или её ID<input name="roblox_url" type="text" inputmode="url" maxlength="500" required placeholder="https://www.roblox.com/catalog/123456789"></label>'+
+     '<div class="asset-quick-create-actions"><button class="primary" type="submit">Отправить вещь на проверку</button><span id="assetQuickClothingMessage" role="status"></span></div>'+
+    '</form></section>'+
+   '<section class="asset-quick-create"><div class="asset-quick-create-heading"><h2>Создать 3D-аксессуар</h2><p>Для аксессуаров нужен прямой HTTPS-адрес файла формата GLB или GLTF. Перед публикацией модель можно будет проверить в 3D-просмотре.</p></div>'+
+    '<form id="assetQuickModelForm" class="asset-quick-create-form">'+
+     '<label>Название модели<input name="name" maxlength="80" required placeholder="Название аксессуара"></label>'+
+     '<label>Цена в P$<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label>'+
+     '<label class="asset-quick-create-wide">Описание <span>(необязательно)</span><textarea name="description" maxlength="500" rows="3" placeholder="Краткое описание модели"></textarea></label>'+
+     '<label class="asset-quick-create-wide">Прямая ссылка на файл .glb или .gltf<input name="model_url" type="url" maxlength="1000" required placeholder="https://example.com/accessory.glb"></label>'+
+     '<label class="asset-quick-create-wide">Ссылка на картинку предпросмотра <span>(необязательно)</span><input name="image_url" type="url" maxlength="500" placeholder="https://example.com/preview.png"></label>'+
+     '<div class="asset-quick-create-actions"><button class="primary" type="submit">Отправить 3D-модель на проверку</button><span id="assetQuickModelMessage" role="status"></span></div>'+
+    '</form></section>'+
+   '<section class="asset-review-section"><div class="asset-review-heading"><div><h2>Заявки на проверку</h2><p>Проверьте вещь и её изображение перед публикацией</p></div><span class="asset-review-count">Очередь Sakura</span></div>'+
+    '<div id="assetQueueList" class="asset-queue-list"><div class="op-profile-empty">Загружаем заявки...</div></div></section>'+
+   '<section class="asset-tutorial"><h2>Полная инструкция по созданию вещей</h2>'+
+    '<p class="asset-tutorial-intro">Здесь всё по шагам — от поиска вещи в Roblox до её появления в каталоге Sakura. Для обычной одежды картинку отдельно создавать или загружать не нужно.</p>'+
+    '<article><h3>1. Найдите вещь в Roblox</h3><p>Откройте каталог Roblox и выберите классическую футболку или штаны. Перейдите именно на страницу нужной вещи, а не на страницу профиля пользователя. Скопируйте адрес страницы из верхней строки браузера. Обычно ссылка выглядит как <code>https://www.roblox.com/catalog/123456789</code>.</p></article>'+
+    '<article><h3>2. Заполните форму создания одежды</h3><p>Вернитесь в Admin Panel и найдите блок «Создать одежду из Roblox». Введите название, выберите тип вещи, укажите описание и цену в P$, а затем вставьте скопированную ссылку. Вместо ссылки можно вставить числовой ID вещи.</p></article>'+
+    '<article><h3>3. Отправьте вещь на проверку</h3><p>Нажмите «Отправить вещь на проверку». Она появится в очереди ниже. Sakura автоматически подготовит изображение предпросмотра по ID вещи Roblox — искать картинку отдельно и загружать её вручную не требуется.</p></article>'+
+    '<article><h3>4. Проверьте изображение и саму вещь</h3><p>В очереди нажмите «Открыть оригинал в Roblox», чтобы ещё раз проверить исходную вещь. «Открыть картинку предпросмотра» показывает изображение, которое будет использоваться в каталоге Sakura. Проверьте название, тип, описание и цену.</p></article>'+
+    '<article><h3>5. Одобрите или отклоните заявку</h3><p>Если всё правильно, нажмите «Одобрить». Вещь появится в каталоге Sakura, а автор получит одну копию в инвентарь. Если ссылка ведёт не на ту вещь, изображение не подходит или данные заполнены неправильно, нажмите «Отклонить».</p></article>'+
+    '<article><h3>6. Как отправить 3D-аксессуар</h3><p>В форме «Создать 3D-аксессуар» укажите название, цену и прямую HTTPS-ссылку на файл .glb или .gltf. При желании добавьте ссылку на картинку предпросмотра. После отправки модель появится в очереди, где её можно покрутить мышью и проверить перед публикацией.</p></article>'+
+    '<article><h3>Что важно помнить</h3><p>Для одежды подходят ссылки на классические футболки и штаны из каталога Roblox. Ссылки на профили, группы, фотографии и страницы Sakura не подойдут. Не одобряйте вещь, пока не проверили оригинал и предпросмотр. Если картинка не загрузилась, обновите очередь и откройте исходную страницу ещё раз.</p></article>'+
+   '</section></div>';
+
  const host=document.getElementById("assetQueueList");
  async function loadQueue(){
   if(!host)return;
-  host.innerHTML='<div class="op-profile-empty">Loading pending submissions...</div>';
+  host.innerHTML='<div class="op-profile-empty">Загружаем заявки...</div>';
   try{
    const [clothingData,modelData]=await Promise.all([api("/api/owner/creator-submissions"),api("/api/asset-moderation/models")]);
    if(!isActiveView(view)||!host.isConnected)return;
@@ -1394,16 +1420,16 @@ async function assetModeratorPage(){
     const assetId=Number(item.asset_id||0);
     const preview=assetId>0?"https://www.roblox.com/asset-thumbnail/image?assetId="+assetId+"&width=420&height=420&format=png":"";
     const original=String(item.roblox_url||"");
-    cards.push('<article class="asset-submission-card"><div class="asset-submission-kind">Clothing · '+(item.category==="Pants"?"Pants":"Shirt")+'</div><div class="asset-submission-layout"><div class="asset-submission-preview">'+(preview?'<img src="'+esc(preview)+'" alt="Clothing preview" loading="lazy">':'<div class="asset-preview-missing">No preview available</div>')+'</div><div class="asset-submission-details"><h3>'+esc(item.name)+'</h3><p class="muted">Submitted by <a href="/#profile?username='+encodeURIComponent(item.username)+'" data-profile="'+esc(item.username)+'">'+esc(item.username)+'</a></p><p>'+esc(item.description||"No description provided.")+'</p><p class="asset-submission-meta">'+Number(item.price||0).toLocaleString()+' P$ · '+esc(new Date(item.created_at+"Z").toLocaleString())+'</p>'+(original?'<a class="asset-external-link" href="'+esc(original)+'" target="_blank" rel="noopener noreferrer">Открыть оригинал в Roblox</a>':'')+(preview?'<a class="asset-external-link" href="'+esc(preview)+'" target="_blank" rel="noopener noreferrer">Открыть картинку предпросмотра</a>':'')+'<div class="asset-review-actions"><button class="primary" type="button" data-asset-review="clothing" data-asset-id="'+esc(item.id)+'" data-asset-action="approve">Одобрить</button><button class="button danger-button" type="button" data-asset-review="clothing" data-asset-id="'+esc(item.id)+'" data-asset-action="reject">Отклонить</button></div></div></div></article>');
+    cards.push('<article class="asset-submission-card"><div class="asset-submission-kind">Одежда · '+(item.category==="Pants"?"Штаны":"Футболка")+'</div><div class="asset-submission-layout"><div class="asset-submission-preview">'+(preview?'<img src="'+esc(preview)+'" alt="Предпросмотр одежды" loading="lazy">':'<div class="asset-preview-missing">Предпросмотр недоступен</div>')+'</div><div class="asset-submission-details"><h3>'+esc(item.name)+'</h3><p class="muted">Отправил(а): <a href="/#profile?username='+encodeURIComponent(item.username)+'" data-profile="'+esc(item.username)+'">'+esc(item.username)+'</a></p><p>'+esc(item.description||"Описание не добавлено.")+'</p><p class="asset-submission-meta">Цена: '+Number(item.price||0).toLocaleString()+' P$ · '+esc(new Date(item.created_at+"Z").toLocaleString())+'</p>'+(original?'<a class="asset-external-link" href="'+esc(original)+'" target="_blank" rel="noopener noreferrer">Открыть оригинал в Roblox</a>':'')+(preview?'<a class="asset-external-link" href="'+esc(preview)+'" target="_blank" rel="noopener noreferrer">Открыть картинку предпросмотра</a>':'')+'<div class="asset-review-actions"><button class="primary" type="button" data-asset-review="clothing" data-asset-id="'+esc(item.id)+'" data-asset-action="approve">Одобрить</button><button class="button danger-button" type="button" data-asset-review="clothing" data-asset-id="'+esc(item.id)+'" data-asset-action="reject">Отклонить</button></div></div></div></article>');
    }
    for(const item of models){
     const preview=String(item.image_url||"");
-    cards.push('<article class="asset-submission-card"><div class="asset-submission-kind">3D Model · Accessory</div><div class="asset-submission-layout"><div class="asset-submission-preview asset-model-preview">'+(preview?'<img src="'+esc(preview)+'" alt="Model preview" loading="lazy">':'')+'<model-viewer src="'+esc(item.model_url)+'" alt="'+esc(item.name)+'" camera-controls auto-rotate rotation-per-second="20deg" shadow-intensity="1" exposure="1" loading="lazy" reveal="auto"></model-viewer></div><div class="asset-submission-details"><h3>'+esc(item.name)+'</h3><p class="muted">Submitted by <a href="/#profile?username='+encodeURIComponent(item.username)+'" data-profile="'+esc(item.username)+'">'+esc(item.username)+'</a></p><p>'+esc(item.description||"No description provided.")+'</p><p class="asset-submission-meta">'+Number(item.price||0).toLocaleString()+' P$ · '+esc(new Date(item.created_at+"Z").toLocaleString())+'</p><a class="asset-external-link" href="'+esc(item.model_url)+'" target="_blank" rel="noopener noreferrer">Открыть файл 3D-модели</a>'+(preview?'<a class="asset-external-link" href="'+esc(preview)+'" target="_blank" rel="noopener noreferrer">Открыть картинку предпросмотра</a>':'')+'<div class="asset-review-actions"><button class="primary" type="button" data-asset-review="model" data-asset-id="'+esc(item.id)+'" data-asset-action="approve">Одобрить</button><button class="button danger-button" type="button" data-asset-review="model" data-asset-id="'+esc(item.id)+'" data-asset-action="reject">Отклонить</button></div></div></div></article>');
+    cards.push('<article class="asset-submission-card"><div class="asset-submission-kind">3D-модель · Аксессуар</div><div class="asset-submission-layout"><div class="asset-submission-preview asset-model-preview">'+(preview?'<img src="'+esc(preview)+'" alt="Предпросмотр модели" loading="lazy">':'')+'<model-viewer src="'+esc(item.model_url)+'" alt="'+esc(item.name)+'" camera-controls auto-rotate rotation-per-second="20deg" shadow-intensity="1" exposure="1" loading="lazy" reveal="auto"></model-viewer></div><div class="asset-submission-details"><h3>'+esc(item.name)+'</h3><p class="muted">Отправил(а): <a href="/#profile?username='+encodeURIComponent(item.username)+'" data-profile="'+esc(item.username)+'">'+esc(item.username)+'</a></p><p>'+esc(item.description||"Описание не добавлено.")+'</p><p class="asset-submission-meta">Цена: '+Number(item.price||0).toLocaleString()+' P$ · '+esc(new Date(item.created_at+"Z").toLocaleString())+'</p><a class="asset-external-link" href="'+esc(item.model_url)+'" target="_blank" rel="noopener noreferrer">Открыть файл 3D-модели</a>'+(preview?'<a class="asset-external-link" href="'+esc(preview)+'" target="_blank" rel="noopener noreferrer">Открыть картинку предпросмотра</a>':'')+'<div class="asset-review-actions"><button class="primary" type="button" data-asset-review="model" data-asset-id="'+esc(item.id)+'" data-asset-action="approve">Одобрить</button><button class="button danger-button" type="button" data-asset-review="model" data-asset-id="'+esc(item.id)+'" data-asset-action="reject">Отклонить</button></div></div></div></article>');
    }
-   host.innerHTML=cards.length?cards.join(""):'<div class="op-profile-empty">There are no pending asset submissions.</div>';
+   host.innerHTML=cards.length?cards.join(""):'<div class="op-profile-empty">Новых заявок пока нет</div>';
    host.querySelectorAll("[data-asset-review]").forEach(button=>button.addEventListener("click",async()=>{
     const kind=button.dataset.assetReview,submissionId=button.dataset.assetId,action=button.dataset.assetAction,card=button.closest(".asset-submission-card");
-    if(action==="reject"&&!confirm("Reject this submission?"))return;
+    if(action==="reject"&&!confirm("Отклонить эту заявку?"))return;
     card?.querySelectorAll("button").forEach(b=>b.disabled=true);
     try{
      if(kind==="clothing"){
@@ -1414,12 +1440,69 @@ async function assetModeratorPage(){
      }else{
       await api("/api/asset-moderation/models/"+encodeURIComponent(submissionId),{method:"PATCH",body:JSON.stringify({action})});
      }
-     toast(action==="approve"?"Submission approved":"Submission rejected");
+     toast(action==="approve"?"Заявка одобрена":"Заявка отклонена");
      if(isActiveView(view))await loadQueue();
     }catch(error){toast(error.message);card?.querySelectorAll("button").forEach(b=>b.disabled=false)}
    }));
-  }catch(error){if(isActiveView(view)&&host.isConnected)host.innerHTML='<div class="op-profile-empty">Could not load submissions: '+esc(error.message)+'</div>'}
+  }catch(error){if(isActiveView(view)&&host.isConnected)host.innerHTML='<div class="op-profile-empty">Не удалось загрузить заявки: '+esc(error.message)+'</div>'}
  }
+
+ const clothingForm=document.getElementById("assetQuickClothingForm");
+ clothingForm?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const form=new FormData(clothingForm);
+  const name=String(form.get("name")||"").trim();
+  const category=String(form.get("category")||"Shirts");
+  const description=String(form.get("description")||"").trim();
+  const price=Number(form.get("price"));
+  const reference=parseRobloxClothingReference(form.get("roblox_url"));
+  const message=document.getElementById("assetQuickClothingMessage");
+  const submit=clothingForm.querySelector('button[type="submit"]');
+  if(!name||name.length>80){message.textContent="Укажите название не длиннее 80 символов";return}
+  if(!["Shirts","Pants"].includes(category)){message.textContent="Выберите футболку или штаны";return}
+  if(!Number.isSafeInteger(price)||price<0||price>1000000){message.textContent="Цена должна быть целым числом от 0 до 1 000 000 P$";return}
+  if(!reference){message.textContent="Вставьте ссылку на вещь из каталога Roblox или её числовой ID";return}
+  submit.disabled=true;message.textContent="Отправляем заявку...";
+  try{
+   await api("/api/creator/submissions",{method:"POST",body:JSON.stringify({name,category,description,price,roblox_url:reference.url})});
+   if(!isActiveView(view))return;
+   clothingForm.reset();
+   message.textContent="Готово — вещь добавлена в очередь на проверку";
+   toast("Заявка на одежду отправлена");
+   await loadQueue();
+  }catch(error){message.textContent=error.message}
+  finally{submit.disabled=false}
+ });
+
+ const modelForm=document.getElementById("assetQuickModelForm");
+ modelForm?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const form=new FormData(modelForm);
+  const name=String(form.get("name")||"").trim();
+  const description=String(form.get("description")||"").trim();
+  const price=Number(form.get("price"));
+  const modelUrl=String(form.get("model_url")||"").trim();
+  const imageUrl=String(form.get("image_url")||"").trim();
+  const message=document.getElementById("assetQuickModelMessage");
+  const submit=modelForm.querySelector('button[type="submit"]');
+  let validModel=false;
+  try{const parsed=new URL(modelUrl);validModel=parsed.protocol==="https:"&&(/\.(glb|gltf)$/i).test(parsed.pathname)}catch{}
+  if(!name||name.length>80){message.textContent="Укажите название не длиннее 80 символов";return}
+  if(!Number.isSafeInteger(price)||price<0||price>1000000){message.textContent="Цена должна быть целым числом от 0 до 1 000 000 P$";return}
+  if(!validModel){message.textContent="Нужна прямая HTTPS-ссылка на файл .glb или .gltf";return}
+  if(imageUrl){try{if(new URL(imageUrl).protocol!=="https:")throw new Error()}catch{message.textContent="Ссылка на картинку должна начинаться с HTTPS";return}}
+  submit.disabled=true;message.textContent="Отправляем 3D-модель...";
+  try{
+   await api("/api/creator/model-submissions",{method:"POST",body:JSON.stringify({name,description,price,model_url:modelUrl,image_url:imageUrl})});
+   if(!isActiveView(view))return;
+   modelForm.reset();
+   message.textContent="Готово — модель добавлена в очередь на проверку";
+   toast("Заявка на 3D-модель отправлена");
+   await loadQueue();
+  }catch(error){message.textContent=error.message}
+  finally{submit.disabled=false}
+ });
+
  document.getElementById("assetQueueRefresh")?.addEventListener("click",loadQueue);
  await loadQueue();
 }
@@ -1930,6 +2013,9 @@ window.setInterval(async()=>{
    setUser(null);
    history.replaceState({page:"banned",username:state.bannedAccount.username},"","/#banned?username="+encodeURIComponent(state.bannedAccount.username));
    await render("banned?username="+encodeURIComponent(state.bannedAccount.username));
+  }else if(state.user&&(state.user.role!==me.role||state.user.isAssetModerator!==me.isAssetModerator)){
+   setUser(state.user);
+   if(currentRoute().split("?")[0]==="asset-panel"&&state.user.role!=="OWNER"&&!state.user.isAssetModerator)await render("home");
   }
  }catch{}
 },15000);
