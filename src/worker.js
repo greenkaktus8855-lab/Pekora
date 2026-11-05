@@ -2536,12 +2536,14 @@ export default {
             '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="'+escapeHtml(title)+'">' +
             '<meta name="twitter:description" content="'+escapeHtml(description)+'"><meta name="twitter:image" content="'+escapeHtml(image)+'">';
           let html = await pageResponse.text();
+          // Keep fragment navigation at the site root on /item/<id> pages.
+          html = html.replace(/href="#/g, 'href="/#');
           html = html.replace(/<title>[\s\S]*?<\/title>/i,'<title>'+escapeHtml(title)+' | Sakura</title>');
           html = html.replace(/<meta\s+name=["']description["'][^>]*>/i,"");
           html = html.replace("</head>",metadata+"</head>");
           const headers = new Headers(pageResponse.headers);
           headers.set("content-type","text/html; charset=utf-8");
-          headers.set("cache-control","public, max-age=60, s-maxage=300");
+          headers.set("cache-control","no-store");
           headers.set("X-Content-Type-Options","nosniff");
           headers.set("X-Frame-Options","DENY");
           headers.set("Referrer-Policy","strict-origin-when-cross-origin");
