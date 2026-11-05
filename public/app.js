@@ -1751,116 +1751,7 @@ function infoPage(type){
  const pageData=pages[type]||pages.about;
  app.innerHTML='<article class="info-page"><h1 class="page-title">'+pageData.title+'</h1>'+pageData.body+'<a class="button" href="#home" data-page="home">Back to Home</a></article>';
 }
-async function avatarPage(){
- const view=beginView();
- renderSidebar("avatar");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to edit your avatar.</div>';return}
- const colorParts=[
-  ["headColorId","Head"],["torsoColorId","Torso"],["leftArmColorId","Left arm"],
-  ["rightArmColorId","Right arm"],["leftLegColorId","Left leg"],["rightLegColorId","Right leg"]
- ];
- const palette=[
-  [1,"White","#F2F3F3"],[26,"Black","#1B2A35"],[21,"Bright red","#C4281C"],
-  [23,"Bright blue","#0D69AC"],[24,"Bright yellow","#F5CD30"],[28,"Dark green","#287F47"],
-  [102,"Light blue","#B4D2E4"],[105,"Brick yellow","#D7C59A"],[106,"White stone","#E5E4DF"],
-  [1018,"Bright orange","#DA8541"],[1001,"Institutional white","#F8F8F8"],[1003,"Dusty Rose","#CC8E8C"]
- ];
- const scaleFields=[
-  ["height","Height",0.9,1.05,0.01],["width","Width",0.7,1,0.01],
-  ["head","Head",0.95,1,0.01],["depth","Depth",0.7,1,0.01],
-  ["proportion","Proportion",0,1,0.01],["bodyType","Body type",0,1,0.01]
- ];
- app.innerHTML='<div class="avatar-editor">'+
-  '<div class="avatar-editor-heading"><div><h1 class="page-title">Avatar</h1><p class="muted">Customize your character. The 3D preview is temporarily unavailable because of technical issues.</p></div></div>'+
-  '<div class="avatar-editor-layout">'+
-   '<section class="avatar-preview-panel"><h2>3D Preview</h2>'+
-    '<p class="muted">3D avatar preview is temporarily unavailable because of technical issues. You can still customize and save your avatar settings.</p>'+
-   '</section>'+
-   '<section class="avatar-wardrobe"><h2>Body</h2>'+
-    '<label class="avatar-setting-label">Avatar type<select id="avatarRig"><option value="R6">R6</option><option value="R15">R15</option></select></label>'+
-    '<div class="avatar-color-grid">'+colorParts.map(part=>'<label class="avatar-setting-label">'+part[1]+'<select data-avatar-color="'+part[0]+'">'+palette.map(color=>'<option value="'+color[0]+'">'+color[1]+'</option>').join("")+'</select></label>').join("")+'</div>'+
-    '<h2 class="avatar-subheading">Body proportions</h2><div class="avatar-scale-grid">'+scaleFields.map(field=>'<label class="avatar-scale-control"><span>'+field[1]+' <output id="avatarScaleValue_'+field[0]+'">1.00</output></span><input type="range" data-avatar-scale="'+field[0]+'" min="'+field[2]+'" max="'+field[3]+'" step="'+field[4]+'" value="1"></label>').join("")+'</div>'+
-    '<div class="avatar-editor-actions"><button class="button primary" id="saveAvatarBody" type="button">Save body settings</button></div>'+
-   '</section>'+
-  '</div>'+
-  '<section class="avatar-wardrobe avatar-clothing-section"><div class="avatar-wardrobe-heading"><h2>My items</h2><span class="muted">Only items with a valid Roblox asset ID can be equipped.</span></div>'+
-   '<div id="avatarItemsStatus" class="muted">Loading your inventory...</div><div id="avatarWardrobeGrid" class="avatar-wardrobe-grid"></div>'+
-  '</section></div>';
- let inventoryItems=[],equippedIds=new Set();
- const renderWardrobe=()=>{
-  const host=document.getElementById("avatarWardrobeGrid");
-  const info=document.getElementById("avatarItemsStatus");
-  if(!host||!info)return;
-  const wearable=inventoryItems.filter(item=>["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category));
-  if(!wearable.length){info.textContent="No wearable items in your inventory yet.";host.innerHTML="";return}
-  info.textContent="Choose an item to wear or remove it from your avatar.";
-  host.innerHTML=wearable.map(item=>{
-   const itemId=String(item.id||"");
-   const assetId=Number(item.asset_id||0);
-   const isEquipped=equippedIds.has(itemId);
-   const canEquip=Number.isSafeInteger(assetId)&&assetId>0;
-   return '<article class="avatar-wardrobe-item">'+
-    '<div class="avatar-wardrobe-image">'+(item.image_url?'<img src="'+esc(item.image_url)+'" alt="'+esc(item.name)+'" loading="lazy">':'<span>No preview</span>')+'</div>'+
-    '<div class="avatar-wardrobe-name">'+esc(item.name)+'</div><div class="muted">'+esc(item.category)+(canEquip?' · Asset '+assetId:' · No asset ID')+'</div>'+
-    '<button class="button '+(isEquipped?'secondary':'primary')+'" type="button" data-avatar-item="'+esc(itemId)+'" data-avatar-action="'+(isEquipped?'remove':'wear')+'" '+(!canEquip&&!isEquipped?'disabled':'')+'>'+(isEquipped?'Remove':'Wear')+'</button>'+
-    (!canEquip?'<small class="muted">This Sakura-only item has no Roblox asset ID and cannot be equipped.</small>':'')+
-   '</article>';
-  }).join("");
- };
- const saveBody=async()=>{
-  const button=document.getElementById("saveAvatarBody");
-  button.disabled=true;
-  try{
-   const bodyColors={};
-   document.querySelectorAll("[data-avatar-color]").forEach(select=>bodyColors[select.dataset.avatarColor]=Number(select.value));
-   const scales={};
-   document.querySelectorAll("[data-avatar-scale]").forEach(input=>scales[input.dataset.avatarScale]=Number(input.value));
-   await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"colors",bodyColors})});
-   await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"rig",rigType:document.getElementById("avatarRig").value})});
-   await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"scales",scales})});
-   toast("Avatar settings saved");
-  }catch(error){toast(error.message)}
-  finally{if(button?.isConnected)button.disabled=false}
- };
- document.getElementById("saveAvatarBody").addEventListener("click",saveBody);
- document.querySelectorAll("[data-avatar-scale]").forEach(input=>{
-  const output=document.getElementById("avatarScaleValue_"+input.dataset.avatarScale);
-  const update=()=>{if(output)output.value=Number(input.value).toFixed(2)};
-  input.addEventListener("input",update);update();
- });
- document.getElementById("avatarWardrobeGrid").addEventListener("click",async event=>{
-  const button=event.target.closest("[data-avatar-item]");
-  if(!button||button.disabled)return;
-  const itemId=button.dataset.avatarItem,action=button.dataset.avatarAction;
-  button.disabled=true;
-  try{
-   await api("/api/avatar",{method:"PUT",body:JSON.stringify({action,itemId})});
-   if(action==="wear")equippedIds.add(itemId);else equippedIds.delete(itemId);
-   renderWardrobe();
-   toast(action==="wear"?"Item equipped":"Item removed");
-  }catch(error){toast(error.message);button.disabled=false}
- });
- try{
-  const [avatarData,inventoryData]=await Promise.all([api("/api/avatar"),api("/api/inventory")]);
-  if(!isActiveView(view))return;
-  inventoryItems=Array.isArray(inventoryData.items)?inventoryData.items:[];
-  equippedIds=new Set((avatarData.equipped||[]).map(item=>String(item.id)));
-  document.getElementById("avatarRig").value=avatarData.rigType==="R15"?"R15":"R6";
-  document.querySelectorAll("[data-avatar-color]").forEach(select=>{
-   const value=Number(avatarData.bodyColors?.[select.dataset.avatarColor]||125);
-   if([...select.options].some(option=>Number(option.value)===value))select.value=String(value);
-  });
-  document.querySelectorAll("[data-avatar-scale]").forEach(input=>{
-   const value=Number(avatarData.scales?.[input.dataset.avatarScale]??1);
-   input.value=String(Math.max(Number(input.min),Math.min(Number(input.max),value)));
-   input.dispatchEvent(new Event("input"));
-  });
-  renderWardrobe();
- }catch(error){
-  const info=document.getElementById("avatarItemsStatus");
-  if(info)info.textContent="Could not load avatar settings or inventory: "+error.message;
- }
-}
+
 async function render(name){
  name=name||"home";
  const parts=String(name).split("?",2);
@@ -1873,7 +1764,6 @@ async function render(name){
  else if(name==="inventory")await inventory();
  else if(name==="create")await createPage();
  else if(name==="resale")await resaleMarketPage();
- else if(name==="avatar")await avatarPage();
  else if(name==="groups")await groupsPage();
  else if(name==="group")await groupPage(query.get("id"));
  else if(name==="banned")await bannedAccountPage(query.get("username")||query.get("id"));
