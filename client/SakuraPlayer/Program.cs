@@ -3,9 +3,13 @@ namespace SakuraPlayer;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        var launchUri = args.FirstOrDefault(argument =>
+            Uri.TryCreate(argument, UriKind.Absolute, out var uri) &&
+            uri.Scheme.Equals("sakura-player", StringComparison.OrdinalIgnoreCase));
+
+        Application.Run(new MainForm(launchUri));
     }
 }
