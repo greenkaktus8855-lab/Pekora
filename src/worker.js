@@ -443,6 +443,12 @@ async function ensureSiteSettings(env) {
             UPDATE items SET rap_value=NEW.price,rap_currency=COALESCE(NEW.currency,'P$') WHERE id=NEW.id;
           END`)
       ]);
+      await env.DB.batch([
+        env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_owner_collect_limited_item_insert AFTER INSERT ON items WHEN NEW.is_limited=1 BEGIN INSERT OR IGNORE INTO inventory (id,user_id,item_id,quantity) SELECT lower(hex(randomblob(16))),u.id,NEW.id,1 FROM users u WHERE u.role='OWNER'; END`),
+        env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_owner_collect_limited_item_update AFTER UPDATE OF is_limited ON items WHEN NEW.is_limited=1 AND COALESCE(OLD.is_limited,0)<>1 BEGIN INSERT OR IGNORE INTO inventory (id,user_id,item_id,quantity) SELECT lower(hex(randomblob(16))),u.id,NEW.id,1 FROM users u WHERE u.role='OWNER'; END`),
+        env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_owner_collect_limited_user_insert AFTER INSERT ON users WHEN NEW.role='OWNER' BEGIN INSERT OR IGNORE INTO inventory (id,user_id,item_id,quantity) SELECT lower(hex(randomblob(16))),NEW.id,i.id,1 FROM items i WHERE i.is_limited=1; END`),
+        env.DB.prepare(`CREATE TRIGGER IF NOT EXISTS trg_owner_collect_limited_user_update AFTER UPDATE OF role ON users WHEN NEW.role='OWNER' AND OLD.role<>'OWNER' BEGIN INSERT OR IGNORE INTO inventory (id,user_id,item_id,quantity) SELECT lower(hex(randomblob(16))),NEW.id,i.id,1 FROM items i WHERE i.is_limited=1; END`)
+      ]);
       // Backfill historical purchases once so they count toward finite stock.
       const stockBackfill = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='stock_sold_backfill_2026_11'").first();
       if (!stockBackfill) {
@@ -472,6 +478,22 @@ async function ensureSiteSettings(env) {
             env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) SELECT 'owner_transfer_admin_2026_11_02','done' WHERE EXISTS (SELECT 1 FROM users WHERE id=? AND role='OWNER')").bind(adminAccount.id)
           ]);
         }
+      }
+
+      const limitedCleanup = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='limited_single_copy_cleanup_2026_11_05_v1'").first();
+      if (!limitedCleanup) {
+        const affected = await env.DB.prepare("SELECT DISTINCT i.id FROM items i JOIN inventory v ON v.item_id=i.id JOIN users u ON u.id=v.user_id JOIN resale_listings r ON r.item_id=i.id AND r.seller_id=u.id AND r.status='ACTIVE' WHERE i.is_limited=1 AND v.quantity>=10 AND u.role<>'OWNER'").all();
+        await env.DB.batch([
+          env.DB.prepare("UPDATE resale_listings SET status='CANCELLED' WHERE status='ACTIVE' AND EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id JOIN users u ON u.id=v.user_id WHERE v.user_id=resale_listings.seller_id AND v.item_id=resale_listings.item_id AND i.is_limited=1 AND v.quantity>=10 AND u.role<>'OWNER')"),
+          env.DB.prepare("DELETE FROM trade_locks WHERE EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id JOIN users u ON u.id=v.user_id WHERE v.user_id=trade_locks.owner_id AND v.item_id=trade_locks.item_id AND i.is_limited=1 AND v.quantity>=10 AND u.role<>'OWNER')"),
+          env.DB.prepare("DELETE FROM equipped_items WHERE EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id JOIN users u ON u.id=v.user_id WHERE v.user_id=equipped_items.user_id AND v.item_id=equipped_items.item_id AND i.is_limited=1 AND v.quantity>=10 AND u.role<>'OWNER')"),
+          env.DB.prepare("DELETE FROM inventory WHERE quantity>=10 AND item_id IN (SELECT id FROM items WHERE is_limited=1) AND user_id IN (SELECT id FROM users WHERE role<>'OWNER')"),
+          env.DB.prepare("UPDATE inventory SET quantity=1 WHERE quantity>1 AND quantity<10 AND item_id IN (SELECT id FROM items WHERE is_limited=1) AND user_id IN (SELECT id FROM users WHERE role<>'OWNER')"),
+          env.DB.prepare("UPDATE inventory SET quantity=1 WHERE quantity<>1 AND item_id IN (SELECT id FROM items WHERE is_limited=1) AND user_id IN (SELECT id FROM users WHERE role='OWNER')"),
+          env.DB.prepare("INSERT OR IGNORE INTO inventory (id,user_id,item_id,quantity) SELECT lower(hex(randomblob(16))),u.id,i.id,1 FROM users u CROSS JOIN items i WHERE u.role='OWNER' AND i.is_limited=1"),
+          env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('limited_single_copy_cleanup_2026_11_05_v1','done')")
+        ]);
+        for (const row of affected.results || []) await syncItemMarketPrice(env,row.id);
       }
     })().catch(error => {
       // Do not cache a rejected setup promise forever after a transient D1 failure.
@@ -1188,7 +1210,7 @@ async function route(request, env) {
   if (resaleBuyMatch && request.method === "POST") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const listing = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,i.name,s.username AS seller_name
+    const listing = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,i.name,i.is_limited,s.username AS seller_name
       FROM resale_listings r JOIN items i ON i.id=r.item_id
       JOIN users s ON s.id=r.seller_id
       WHERE r.id=? AND r.status='ACTIVE' AND s.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit))`)
@@ -1197,7 +1219,8 @@ async function route(request, env) {
     if (listing.seller_id===user.id) return fail("You cannot buy your own listing.",403);
     if (Number(user.balance||0)<Number(listing.price)) return fail("Not enough P$.",400);
     const buyerOwned = await env.DB.prepare("SELECT quantity FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,listing.item_id).first();
-    if (Number(buyerOwned?.quantity||0)>=10) return fail("You can own a maximum of 10 copies of this Limited item.",409);
+    if (Number(listing.is_limited)===1 && Number(buyerOwned?.quantity||0)>=1) return fail("You can own only one copy of this Limited item.",409);
+    if (Number(listing.is_limited)!==1 && Number(buyerOwned?.quantity||0)>=10) return fail("You can own a maximum of 10 copies of this item.",409);
     const newInventoryId=id();
     try {
       const results = await env.DB.batch([
@@ -1206,7 +1229,7 @@ async function route(request, env) {
             AND EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=resale_listings.seller_id AND v.item_id=resale_listings.item_id AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit)))
             AND EXISTS (SELECT 1 FROM users b WHERE b.id=? AND b.balance>=resale_listings.price)
             AND EXISTS (SELECT 1 FROM users s WHERE s.id=resale_listings.seller_id AND s.is_banned=0)
-            AND COALESCE((SELECT quantity FROM inventory WHERE user_id=? AND item_id=resale_listings.item_id),0)<10
+            AND COALESCE((SELECT quantity FROM inventory WHERE user_id=? AND item_id=resale_listings.item_id),0)<CASE WHEN EXISTS (SELECT 1 FROM items limited_item WHERE limited_item.id=resale_listings.item_id AND limited_item.is_limited=1) THEN 1 ELSE 10 END
             AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=resale_listings.seller_id AND item_id=resale_listings.item_id)`)
           .bind(user.id,listing.id,user.id,user.id,user.id),
         env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND changes()=1").bind(listing.price,user.id,listing.price),
@@ -1247,14 +1270,14 @@ async function route(request, env) {
     const ownedRow = await env.DB.prepare("SELECT quantity FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first();
     const ownedQuantity = Number(ownedRow?.quantity || 0);
     if (Number(item.is_limited)!==1 && ownedQuantity>0) return fail("You already own this item.",409);
-    if (Number(item.is_limited)===1 && ownedQuantity>=10) return fail("You can own a maximum of 10 copies of this Limited item.",409);
+    if (Number(item.is_limited)===1 && ownedQuantity>=1) return fail("You can own only one copy of this Limited item.",409);
     const creatorAccount = await env.DB.prepare("SELECT u.id FROM item_creators ic JOIN users u ON u.id=ic.creator_id WHERE ic.item_id=? LIMIT 1").bind(item.id).first();
     const payoutAccount = creatorAccount || await env.DB.prepare("SELECT id FROM users WHERE username='Admin' COLLATE NOCASE AND role='OWNER' AND is_banned=0 LIMIT 1").first();
     if (!payoutAccount) return fail("The site payment account is unavailable.",503);
     const purchaseId=id(), inventoryId=id();
     try {
       const results = await env.DB.batch([
-        env.DB.prepare(`UPDATE items SET stock_sold=stock_sold+1 WHERE id=? AND is_for_sale=1 AND is_offsale=0 AND (stock_limit=0 OR stock_sold<stock_limit) AND EXISTS (SELECT 1 FROM users WHERE id=? AND ${walletColumn}>=?) AND COALESCE((SELECT quantity FROM inventory WHERE user_id=? AND item_id=?),0)<CASE WHEN is_limited=1 THEN 10 ELSE 1 END AND EXISTS (SELECT 1 FROM users WHERE id=?)`).bind(item.id,user.id,price,user.id,item.id,payoutAccount.id),
+        env.DB.prepare(`UPDATE items SET stock_sold=stock_sold+1 WHERE id=? AND is_for_sale=1 AND is_offsale=0 AND (stock_limit=0 OR stock_sold<stock_limit) AND EXISTS (SELECT 1 FROM users WHERE id=? AND ${walletColumn}>=?) AND COALESCE((SELECT quantity FROM inventory WHERE user_id=? AND item_id=?),0)<1 AND EXISTS (SELECT 1 FROM users WHERE id=?)`).bind(item.id,user.id,price,user.id,item.id,payoutAccount.id),
         env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}-? WHERE id=? AND ${walletColumn}>=? AND changes()=1`).bind(price,user.id,price),
         // Creator-made Shirts and Pants pay their attributed creator; ordinary catalog items still pay Admin.
         env.DB.prepare(`UPDATE users SET ${walletColumn}=${walletColumn}+? WHERE id=? AND changes()=1`).bind(price,payoutAccount.id),
@@ -1267,7 +1290,7 @@ async function route(request, env) {
         if (Number(latest.is_offsale) === 1) return fail("This item is Off Sale and cannot be purchased.",409);
         if (Number(latest.stock_limit)>0 && Number(latest.stock_sold)>=Number(latest.stock_limit)) return fail("This item is sold out.",409);
         const latestOwned = await env.DB.prepare("SELECT quantity FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,item.id).first();
-        if (Number(item.is_limited)===1 && Number(latestOwned?.quantity||0)>=10) return fail("You can own a maximum of 10 copies of this Limited item.",409);
+        if (Number(item.is_limited)===1 && Number(latestOwned?.quantity||0)>=1) return fail("You can own only one copy of this Limited item.",409);
         if (Number(item.is_limited)!==1 && latestOwned) return fail("You already own this item.",409);
         return fail("Not enough " + currencyCode + ".",409);
       }
@@ -2351,7 +2374,7 @@ async function route(request, env) {
       FROM users u
       JOIN inventory v ON v.user_id=u.id AND v.quantity>0
       JOIN items i ON i.id=v.item_id
-      WHERE u.is_banned=0
+      WHERE u.is_banned=0 AND u.role<>'OWNER'
       GROUP BY u.id
       HAVING total_rap>0
       ORDER BY total_rap DESC,item_count DESC,u.username COLLATE NOCASE ASC
