@@ -1128,17 +1128,11 @@ async function route(request, env) {
         SELECT price,sold_at,source FROM (
           SELECT p.price,p.purchased_at AS sold_at,'Catalog sale' AS source
           FROM purchases p
-          WHERE p.item_id=? AND p.currency='P
-  }
-
-
+          WHERE p.item_id=? AND p.currency='P$'
           UNION ALL
           SELECT r.price,r.sold_at AS sold_at,'Resale sale' AS source
           FROM resale_listings r
-          WHERE r.item_id=? AND r.status='SOLD' AND r.currency='P
-  }
-
- AND r.sold_at IS NOT NULL
+          WHERE r.item_id=? AND r.status='SOLD' AND r.currency='P$' AND r.sold_at IS NOT NULL
         ) all_sales
         ORDER BY sold_at DESC
         LIMIT 80
