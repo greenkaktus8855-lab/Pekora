@@ -258,6 +258,45 @@ function itemCreatorMarkup(item){
  return '<div class="item-creator muted">Created by '+link+'</div>';
 }
 function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+itemBadgeMarkup(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+(Number(x.quantity)>1?'<div class="muted">Quantity: '+Number(x.quantity)+'</div>':"")+itemCreatorMarkup(x)+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(Number(x.stock_limit)>0?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'</article>'}
+function itemPriceHistoryMarkup(item,history){
+ const soldOut=Number(item.stock_limit)>0&&Number(item.stock_sold)>=Number(item.stock_limit);
+ const eligible=Number(item.is_limited)===1||Number(item.is_offsale)===1||soldOut;
+ if(!eligible)return "";
+ const records=(Array.isArray(history)?history:[])
+  .filter(entry=>Number(entry.price)>0&&Number.isFinite(Number(entry.price))&&entry.sold_at)
+  .map(entry=>{
+   const raw=String(entry.sold_at);
+   const date=new Date(raw.includes("T")?raw:raw.replace(" ","T")+"Z");
+   return {price:Number(entry.price),date,source:String(entry.source||"Sale")};
+  })
+  .filter(entry=>!Number.isNaN(entry.date.getTime()))
+  .sort((a,b)=>a.date-b.date);
+ if(records.length<2){
+  const count=records.length;
+  return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Completed P$ sales for this Limited / Off Sale item.</p></div></div><div class="item-price-history-empty">'+(count?'Only one completed sale is recorded. The price graph will appear after another sale.':'No completed P$ sales yet. The graph will appear after this item is sold.')+'</div></section>';
+ }
+ const width=760,height=280,left=66,right=22,top=20,bottom=48;
+ const values=records.map(entry=>entry.price);
+ const minValue=Math.min(...values),maxValue=Math.max(...values);
+ const spread=Math.max(1,maxValue-minValue);
+ const minAxis=Math.max(0,minValue-spread*.15);
+ const maxAxis=maxValue+spread*.15;
+ const timeMin=records[0].date.getTime(),timeMax=records[records.length-1].date.getTime();
+ const xAt=index=>left+(timeMax===timeMin?index/(records.length-1):(records[index].date.getTime()-timeMin)/(timeMax-timeMin))*(width-left-right);
+ const yAt=value=>top+(maxAxis-value)/(maxAxis-minAxis)*(height-top-bottom);
+ const points=records.map((entry,index)=>({x:xAt(index),y:yAt(entry.price),entry}));
+ const path=points.map((point,index)=>(index?'L':'M')+point.x.toFixed(1)+','+point.y.toFixed(1)).join(' ');
+ const area=path+' L '+points[points.length-1].x.toFixed(1)+','+(height-bottom)+' L '+points[0].x.toFixed(1)+','+(height-bottom)+' Z';
+ const grid=Array.from({length:4},(_,index)=>{
+  const value=minAxis+(maxAxis-minAxis)*index/3;
+  const y=yAt(value);
+  return '<line x1="'+left+'" y1="'+y.toFixed(1)+'" x2="'+(width-right)+'" y2="'+y.toFixed(1)+'" class="price-chart-gridline"/><text x="'+(left-10)+'" y="'+(y+4).toFixed(1)+'" text-anchor="end" class="price-chart-axis-label">'+Math.round(value).toLocaleString()+'</text>';
+ }).join('');
+ const dots=points.map(point=>'<circle cx="'+point.x.toFixed(1)+'" cy="'+point.y.toFixed(1)+'" r="4" class="price-chart-point"><title>'+point.entry.price.toLocaleString()+' P$ · '+point.entry.date.toLocaleDateString()+' · '+esc(point.entry.source)+'</title></circle>').join('');
+ const startDate=records[0].date.toLocaleDateString(),endDate=records[records.length-1].date.toLocaleDateString();
+ return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Completed sales · P$</p></div><strong>'+records.length.toLocaleString()+' sales</strong></div><div class="item-price-chart-wrap"><svg class="item-price-chart" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Price history line chart for '+esc(item.name)+'">'+grid+'<path d="'+area+'" class="price-chart-area"/><path d="'+path+'" class="price-chart-line"/>'+dots+'<text x="'+left+'" y="'+(height-14)+'" class="price-chart-date">'+startDate+'</text><text x="'+(width-right)+'" y="'+(height-14)+'" text-anchor="end" class="price-chart-date">'+endDate+'</text></svg></div><div class="item-price-history-foot"><span>Lowest: <b>'+minValue.toLocaleString()+' P$</b></span><span>Highest: <b>'+maxValue.toLocaleString()+' P$</b></span><span>Latest: <b>'+records[records.length-1].price.toLocaleString()+' P$</b></span></div></section>';
+}
+
 async function showItem(itemId,updateHistory=true){
  const view=beginView();
  const requestedUserId=me?.id||null;
@@ -311,7 +350,7 @@ async function showItem(itemId,updateHistory=true){
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
   '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+itemCreatorMarkup(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+currencyMarkup(item.price,item.currency||"P$")+'</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isAtLimit?'<button class="button secondary" id="detailBuy" type="button" disabled>Limit reached (10/10)</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
-  '</div></div>'+resalePanel;
+  '</div></div>'+resalePanel+itemPriceHistoryMarkup(item,resaleSnapshot.history||[]);
  if(canBuyItem(item)&&!isOffsale&&!stock.soldOut&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
  document.getElementById("copyItemLink")?.addEventListener("click",async()=>{const shareUrl=new URL("/item/"+encodeURIComponent(item.id),location.origin).href;try{await navigator.clipboard.writeText(shareUrl);toast("Item link copied")}catch{toast("Could not copy link. Copy it from the address bar.")}});
  document.getElementById("createResaleListing")?.addEventListener("submit",async event=>{
@@ -644,7 +683,7 @@ async function profile(identifier=me?.username,byId=false){
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
-    '<a class="button secondary op-profile-rap-link" href="#rap" data-page="rap">View Top 10 RAP</a>'+
+    '<a class="button secondary op-profile-rap-link" href="#rap" data-page="rap">RAP Leaderboard</a>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
    '</div></div>'+
    '<section class="op-profile-section"><h2>Inventory</h2>'+
@@ -1081,7 +1120,7 @@ async function friends(){
 function users(){
  const view=beginView();
  renderSidebar("users");
- app.innerHTML='<div class="rap-people-heading"><div><h1 class="page-title">People</h1><p class="page-subtitle">Search the Sakura community by username or User ID and open user profiles.</p></div><a class="button secondary" href="#rap" data-page="rap">Top 10 RAP</a></div><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type a username or numeric User ID to find a player.</div><div id="userResults" class="people-results"></div>';
+ app.innerHTML='<div class="rap-people-heading"><div><h1 class="page-title">People</h1><p class="page-subtitle">Search the Sakura community by username or User ID and open user profiles.</p></div><a class="button secondary" href="#rap" data-page="rap">RAP Leaderboard</a></div><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type a username or numeric User ID to find a player.</div><div id="userResults" class="people-results"></div>';
  const form=document.getElementById("peopleSearchForm");
  const input=document.getElementById("userSearch");
  const results=document.getElementById("userResults");
@@ -1812,7 +1851,7 @@ async function render(name){
  else if(name==="profile")await (query.get("id")?profile(query.get("id"),true):profile(query.get("username")||me?.username));
  else if(name==="item")await showItem(query.get("id"),false);
  else if(name==="users"||name==="community")users();
- else if(name==="rap")await rapLeaderboardPage();
+ else if(name==="rap"||name==="rapleaderboard"||name==="leaderboard")await rapLeaderboardPage();
  else if(name==="friends")await friends();
  else if(name==="about"||name==="terms"||name==="privacy")infoPage(name);
  else if(name==="currency")await currencyPage();
