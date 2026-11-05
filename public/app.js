@@ -988,7 +988,7 @@ async function groupPage(groupId){
    if(!leaveButton||leaveButton.disabled)return;
    const modal=document.createElement("div");
    modal.className="sakura-leave-backdrop";
-   modal.innerHTML='<div class="sakura-leave-dialog" role="dialog" aria-modal="true" aria-labelledby="sakuraLeaveTitle"><div class="sakura-leave-face" aria-hidden="true">:((</div><h2 id="sakuraLeaveTitle">Why do you want to leave? :((</h2><p>Sakura will miss you. Are you really sure?</p><div class="sakura-leave-actions"><button class="button secondary" type="button" data-stay>I'll stay</button><button class="button danger-button" type="button" data-leave>Leave anyway</button></div></div>';
+   modal.innerHTML='<div class="sakura-leave-dialog" role="dialog" aria-modal="true" aria-labelledby="sakuraLeaveTitle"><div class="sakura-leave-face" aria-hidden="true">:((</div><h2 id="sakuraLeaveTitle">Why do you want to leave? :((</h2><p>Sakura will miss you. Are you really sure?</p><div class="sakura-leave-actions"><button class="button secondary" type="button" data-stay>I’ll stay</button><button class="button danger-button" type="button" data-leave>Leave anyway</button></div></div>';
    document.body.appendChild(modal);
    const stay=modal.querySelector("[data-stay]");
    const leave=modal.querySelector("[data-leave]");
