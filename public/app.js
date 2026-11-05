@@ -347,7 +347,7 @@ async function showItem(itemId,updateHistory=true){
  const sellerMarkup=listing=>'<a href="#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'+(Number(listing.seller_verified)===1?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified seller">':'');
  const listingRows=otherListings.length?otherListings.map(listing=>'<article class="resale-offer-row"><div class="resale-offer-seller"><strong>'+sellerMarkup(listing)+'</strong><span class="muted">Seller</span></div><strong class="resale-offer-price">'+currencyMarkup(listing.price,"P$")+'</strong><button class="primary resale-buy-button" type="button" data-resale-buy="'+esc(listing.id)+'" data-item-id="'+esc(item.id)+'" '+(isOwned?'disabled':'')+'>'+(!me?'Log in to buy':isOwned?'Owned':'Buy')+'</button></article>').join(""):'<p class="muted">No player listings for this item yet.</p>';
  const ownListingMarkup=myListing?'<div class="resale-own-listing"><div><strong>Your listing is active</strong><p class="muted">Asking price: '+currencyMarkup(myListing.price,"P$")+'</p></div><button class="button secondary" type="button" id="cancelResaleListing" data-listing-id="'+esc(myListing.id)+'">Remove listing</button></div>':(me&&isOwned&&resaleEligible?'<form id="createResaleListing" class="resale-create-form"><h3>Sell your copy</h3><p class="muted">Set your own price. Your item stays in your inventory until another player buys it.</p><label>Price in P$ <input type="number" name="price" min="1" max="1000000" step="1" value="1" required></label><button class="primary" type="submit">List for sale</button><span id="resaleCreateMessage" class="muted" role="status"></span></form>':"");
- const resalePanel=resaleEligible?'<section class="resale-section"><div class="resale-section-heading"><div><h2>Player Marketplace</h2><p class="muted">Limited and Off Sale items can be resold by players.</p></div><a href="#resale" data-page="resale">Open market</a></div>'+ownListingMarkup+'<div class="resale-offer-list">'+listingRows+'</div></section>':"";
+ const resalePanel=resaleEligible?'<section class="resale-section"><div class="resale-section-heading"><div><h2>Player Marketplace</h2><p class="muted">Limited, Off Sale, and sold-out items can be resold by players.</p></div><a href="#resale" data-page="resale">Open market</a></div>'+ownListingMarkup+'<div class="resale-offer-list">'+listingRows+'</div></section>':"";
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
   '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+itemCreatorMarkup(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+currencyMarkup(item.price,item.currency||"P$")+'</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
@@ -360,7 +360,7 @@ async function showItem(itemId,updateHistory=true){
   const price=Number(new FormData(form).get("price"));
   button.disabled=true;message.textContent="Creating listing...";
   try{
-   const listingResult=await api("/api/resale/listings",{method:"POST",body:JSON.stringify({itemId:item.id,price})});
+   await api("/api/resale/listings",{method:"POST",body:JSON.stringify({itemId:item.id,price})});
    
    
    
@@ -548,7 +548,7 @@ async function buyResaleListing(listingId,itemId,button){
 async function resaleMarketPage(){
  const view=beginView();
  renderSidebar("resale");
- app.innerHTML='<div class="resale-market-page"><div class="resale-market-heading"><div><h1 class="page-title">Resale Market</h1><p class="muted">Limited and Off Sale items listed by Sakura players.</p></div><a class="button secondary" href="#inventory" data-page="inventory">My Inventory</a></div><div id="resaleMarketGrid" class="resale-market-list">Loading listings...</div></div>';
+ app.innerHTML='<div class="resale-market-page"><div class="resale-market-heading"><div><h1 class="page-title">Resale Market</h1><p class="muted">Limited, Off Sale, and sold-out items listed by Sakura players.</p></div><a class="button secondary" href="#inventory" data-page="inventory">My Inventory</a></div><div id="resaleMarketGrid" class="resale-market-list">Loading listings...</div></div>';
  const host=document.getElementById("resaleMarketGrid");
  try{
   const data=await api("/api/resale/listings");
