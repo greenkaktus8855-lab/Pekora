@@ -307,10 +307,7 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
 
     Write-Host "RCCService startup and SOAP test completed successfully." -ForegroundColor Green
 } catch {
-    $failure = $_ | Out-String
-    try {
-        Add-Content -LiteralPath $startupLog -Value ([Environment]::NewLine + "STARTUP ERROR:" + [Environment]::NewLine + $failure)
-    } catch {}
+    Write-Host "RCC startup failed: $($_.Exception.Message)" -ForegroundColor Red
     throw
 } finally {
     try { Stop-Transcript | Out-Null } catch {}
