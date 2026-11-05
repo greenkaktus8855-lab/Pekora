@@ -892,7 +892,7 @@ async function route(request, env) {
 
   if (request.method === "GET" && path === "/api/resale/listings") {
     const rows = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,r.created_at,
-        i.name,i.description,i.category,i.image_url,i.model_url,i.is_limited,i.is_offsale,
+        i.name,i.description,i.category,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,
         u.username AS seller_name,u.public_id AS seller_public_id,u.is_verified AS seller_verified
       FROM resale_listings r
       JOIN items i ON i.id=r.item_id
