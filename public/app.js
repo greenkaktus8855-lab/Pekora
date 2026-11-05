@@ -2,7 +2,10 @@ const app=document.getElementById("app");
 const accountArea=document.getElementById("accountArea");
 const currency=document.getElementById("currency");
 const sidebar=document.getElementById("sidebar");
-let me=null,items=[],catalogSort="newest",ownedItemIds=new Set(),ownershipLoaded=true,ownershipUserId=null,pendingPurchases=new Set(),detectedBannedAccount=null;
+let me=null,items=[],catalogSort="newest",ownedItemIds=new Set(),ownedItemCounts=new Map(),ownershipLoaded=true,ownershipUserId=null,pendingPurchases=new Set(),detectedBannedAccount=null;
+function setOwnedInventory(list){ownedItemCounts=new Map((list||[]).map(item=>[item.id,Number(item.quantity||1)]));ownedItemIds=new Set([...ownedItemCounts.entries()].filter(([,quantity])=>quantity>0).map(([id])=>id));}
+function ownedItemCount(itemId){return Number(ownedItemCounts.get(itemId)||0);}
+function canBuyItem(item){const count=ownedItemCount(item.id);return Number(item.is_limited)===1?count<10:count===0;}
 let activeView=0;
 const ITEM_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 const CREATABLE_CATEGORIES=["Shirts","Pants"];
@@ -169,7 +172,7 @@ function setUser(user){
  const nextUserId=user?.id||null;
  if(nextUserId!==ownershipUserId){
   ownershipUserId=nextUserId;
-  ownedItemIds=new Set();
+  ownedItemIds=new Set();ownedItemCounts=new Map();
   ownershipLoaded=!user;
  }
  me=user;
@@ -322,10 +325,10 @@ async function showItem(itemId,updateHistory=true){
     item=items.find(x=>x.id===itemId);
    }
    if(me&&inventoryResult.status!=="fulfilled"){
-    ownedItemIds=new Set();
+    ownedItemIds=new Set();ownedItemCounts=new Map();
     ownershipLoaded=false;
    }else{
-    ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
+    setOwnedInventory(inventoryData.items||[]);
     ownershipLoaded=true;
    }
    item=item||(inventoryData.items||[]).find(x=>x.id===itemId)||(resaleResult.status==="fulfilled"?resaleResult.value.item:null);
@@ -339,7 +342,7 @@ async function showItem(itemId,updateHistory=true){
  if(!item){app.innerHTML='<div class="empty">Item not found. <a href="#catalog" data-page="catalog">Back to Catalog</a></div>';return}
  if(!resaleSnapshot){try{resaleSnapshot=await api("/api/resale/item/"+encodeURIComponent(item.id))}catch{resaleSnapshot={listings:[]}}}
  if(!isActiveView(view))return;
- const isOwned=ownedItemIds.has(item.id),isOffsale=Number(item.is_offsale)===1,stock=itemStockState(item);
+ const ownedCount=ownedItemCount(item.id),isOwned=ownedCount>0,isAtLimit=Number(item.is_limited)===1&&ownedCount>=10,isOffsale=Number(item.is_offsale)===1,stock=itemStockState(item);
  const resaleEligible=Number(item.is_limited)===1||isOffsale||stock.soldOut;
  const resaleListings=Array.isArray(resaleSnapshot.listings)?resaleSnapshot.listings:[];
  const myListing=me?resaleListings.find(listing=>listing.seller_id===me.id):null;
@@ -350,9 +353,9 @@ async function showItem(itemId,updateHistory=true){
  const resalePanel=resaleEligible?'<section class="resale-section"><div class="resale-section-heading"><div><h2>Player Marketplace</h2><p class="muted">Limited, Off Sale, and sold-out items can be resold by players.</p></div><a href="#resale" data-page="resale">Open market</a></div>'+ownListingMarkup+'<div class="resale-offer-list">'+listingRows+'</div></section>':"";
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
-  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+itemCreatorMarkup(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+currencyMarkup(item.price,item.currency||"P$")+'</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isOwned?'<button class="button secondary" id="detailBuy" type="button" disabled>Owned</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
+  '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+itemCreatorMarkup(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+currencyMarkup(item.price,item.currency||"P$")+'</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isAtLimit?'<button class="button secondary" id="detailBuy" type="button" disabled>Limit reached (10/10)</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
   '</div></div>'+resalePanel;
- if(!isOwned&&!isOffsale&&!stock.soldOut&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
+ if(canBuyItem(item)&&!isOffsale&&!stock.soldOut&&(!me||ownershipLoaded))document.getElementById("detailBuy").addEventListener("click",()=>buy(item.id));
  document.getElementById("copyItemLink")?.addEventListener("click",async()=>{const shareUrl=new URL("/item/"+encodeURIComponent(item.id),location.origin).href;try{await navigator.clipboard.writeText(shareUrl);toast("Item link copied")}catch{toast("Could not copy link. Copy it from the address bar.")}});
  document.getElementById("createResaleListing")?.addEventListener("submit",async event=>{
   event.preventDefault();
@@ -425,13 +428,13 @@ async function catalog(){
   const catalogData=await api("/api/catalog");
   if(!isActiveView(view)||(me?.id||null)!==requestedUserId)return;
   items=catalogData.items||[];
-  ownedItemIds=new Set();
+  ownedItemIds=new Set();ownedItemCounts=new Map();
   ownershipLoaded=!me;
   if(me){
    try{
     const inventoryData=await api("/api/inventory");
     if(!isActiveView(view)||(me?.id||null)!==requestedUserId)return;
-    ownedItemIds=new Set((inventoryData.items||[]).map(x=>x.id));
+    setOwnedInventory(inventoryData.items||[]);
     ownershipLoaded=true;
    }catch(error){
     if(!isActiveView(view)||(me?.id||null)!==requestedUserId)return;
@@ -444,7 +447,7 @@ async function catalog(){
   const grid=document.getElementById("catalogGrid");
   if(isActiveView(view)&&grid)grid.textContent=e.message;
   items=[];
-  ownedItemIds=new Set();
+  ownedItemIds=new Set();ownedItemCounts=new Map();
   ownershipLoaded=false;
   return;
  }
@@ -485,7 +488,7 @@ function drawCatalog(category,q){
  count.textContent=list.length+" items";
  el.innerHTML=list.length?list.map(x=>{
   const stock=itemStockState(x);
-  return '<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+itemBadgeMarkup(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div>'+(stock.finite?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(ownedItemIds.has(x.id)?'<button class="button secondary" type="button" disabled>Owned</button>':Number(x.is_offsale)===1?'<button class="button secondary offsale-button" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" type="button" disabled>Sold Out</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>';
+  return '<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+itemBadgeMarkup(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div>'+(stock.finite?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(ownedItemCount(x.id)>0&&(!Number(x.is_limited)||ownedItemCount(x.id)>=10)?'<button class="button secondary" type="button" disabled>'+(Number(x.is_limited)===1?'Limit reached (10/10)':'Owned')+'</button>':Number(x.is_offsale)===1?'<button class="button secondary offsale-button" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" type="button" disabled>Sold Out</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>';
  }).join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
 
@@ -502,7 +505,7 @@ function drawCatalog(category,q){
  try{
   const d=await api("/api/purchase",{method:"POST",body:JSON.stringify({itemId})});
   if(!me||me.id!==userId)return;
-  me.balance=d.balance;me.tixBalance=d.tixBalance;ownedItemIds.add(itemId);ownershipLoaded=true;
+  me.balance=d.balance;me.tixBalance=d.tixBalance;ownedItemCounts.set(itemId,ownedItemCount(itemId)+1);ownedItemIds.add(itemId);ownershipLoaded=true;
   const purchasedItem=items.find(item=>item.id===itemId);
   if(purchasedItem)purchasedItem.stock_sold=Number(purchasedItem.stock_sold||0)+1;
   setUser(me);toast("Item purchased");
@@ -520,7 +523,7 @@ function drawCatalog(category,q){
  finally{
   pendingPurchases.delete(pendingKey);
   buttons.forEach(button=>{if(button.isConnected){button.disabled=false;button.textContent="Buy"}});
-  if(detailButton?.isConnected&&!ownedItemIds.has(itemId)){detailButton.disabled=false;detailButton.textContent="Buy"}
+  if(detailButton?.isConnected&&canBuyItem(items.find(item=>item.id===itemId)||{id:itemId,is_limited:0})){detailButton.disabled=false;detailButton.textContent="Buy"}
  }
 }
 async function buyResaleListing(listingId,itemId,button){
@@ -529,10 +532,10 @@ async function buyResaleListing(listingId,itemId,button){
  try{
   const result=await api("/api/resale/listings/"+encodeURIComponent(listingId)+"/buy",{method:"POST",body:"{}"});
   setUser({...me,balance:Number(result.balance||0),tixBalance:Number(result.tixBalance??me.tixBalance??0)});
-  ownedItemIds=new Set();ownershipLoaded=false;
+  ownedItemIds=new Set();ownedItemCounts=new Map();ownershipLoaded=false;
   try{
    const inventoryData=await api("/api/inventory");
-   ownedItemIds=new Set((inventoryData.items||[]).map(item=>item.id));
+   setOwnedInventory(inventoryData.items||[]);
    ownershipLoaded=true;
   }catch(error){console.warn("[Sakura resale] Could not refresh inventory:",error)}
   toast("Purchased from "+(result.sellerName||"seller"));
@@ -869,10 +872,10 @@ async function tradesPage(){
      await api("/api/trades/"+encodeURIComponent(button.dataset.tradeId),{method:"POST",body:JSON.stringify({action})});
      if(action==="accept"){
       ownershipLoaded=false;
-      ownedItemIds=new Set();
+      ownedItemIds=new Set();ownedItemCounts=new Map();
       try{
        const inventoryState=await api("/api/inventory");
-       ownedItemIds=new Set((inventoryState.items||[]).map(item=>item.id));
+       setOwnedInventory(inventoryState.items||[]);
        ownershipLoaded=true;
       }catch(error){console.warn("[Sakura trades] Could not refresh inventory after trade:",error)}
      }
