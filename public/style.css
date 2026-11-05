@@ -1286,3 +1286,19 @@ model-viewer.pekora-model{display:block;width:100%;height:100%;min-height:150px;
 @keyframes sakuraLeaveBackdropIn{from{opacity:0}to{opacity:1}}
 @media(max-width:480px){.sakura-leave-dialog{padding:26px 18px 20px}.sakura-leave-actions{flex-direction:column}.sakura-leave-actions .button{width:100%}}
 @media(prefers-reduced-motion:reduce){.sakura-leave-backdrop{animation:none}.sakura-leave-face{transition:none}}
+
+/* Sakura inventory RAP leaderboard */
+.rap-people-heading,.rap-leaderboard-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.rap-people-heading .page-title,.rap-leaderboard-heading .page-title{margin-bottom:4px}
+.rap-people-heading .page-subtitle,.rap-leaderboard-heading .page-subtitle{margin-top:0}
+.rap-leaderboard-page{width:100%;min-width:0}
+.rap-leaderboard-table-wrap{width:100%;overflow-x:auto;border:1px solid #e5e1ea;border-radius:10px;background:#fff}
+.rap-leaderboard-table{width:100%;border-collapse:collapse;min-width:560px}
+.rap-leaderboard-table th,.rap-leaderboard-table td{padding:13px 15px;border-bottom:1px solid #eeeaf2;text-align:left;white-space:nowrap}
+.rap-leaderboard-table th{background:#f7f5fa;color:#51475d;font-size:13px;font-weight:700}
+.rap-leaderboard-table tbody tr:last-child td{border-bottom:0}
+.rap-leaderboard-table tbody tr:hover{background:#fbf9fd}
+.rap-rank-cell{font-weight:800;color:#7542aa}
+.rap-player-link{font-weight:700;text-decoration:none}
+.rap-player-link:hover{text-decoration:underline}
+@media(max-width:600px){.rap-leaderboard-heading,.rap-people-heading{align-items:flex-start}.rap-people-heading .button,.rap-leaderboard-heading .button{width:100%;text-align:center}}
