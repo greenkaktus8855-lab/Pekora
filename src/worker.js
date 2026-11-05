@@ -308,6 +308,31 @@ async function ensureSiteSettings(env) {
       if (!(inventoryColumns.results || []).some(column => column.name === "quantity")) {
         await env.DB.prepare("ALTER TABLE inventory ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity>=0)").run();
       }
+      const inventoryQuantityBackfill = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='inventory_quantity_backfill_2026_11_05'").first();
+      if (!inventoryQuantityBackfill) {
+        await env.DB.prepare(`UPDATE inventory
+          SET quantity=(
+            SELECT COUNT(*) FROM purchases p
+            WHERE p.user_id=inventory.user_id AND p.item_id=inventory.item_id
+          ) + (
+            SELECT COUNT(*) FROM resale_listings r
+            WHERE r.buyer_id=inventory.user_id AND r.item_id=inventory.item_id AND r.status='SOLD'
+          ) - (
+            SELECT COUNT(*) FROM resale_listings r
+            WHERE r.seller_id=inventory.user_id AND r.item_id=inventory.item_id AND r.status='SOLD'
+          )
+          WHERE COALESCE(quantity,1) < (
+            SELECT COUNT(*) FROM purchases p
+            WHERE p.user_id=inventory.user_id AND p.item_id=inventory.item_id
+          ) + (
+            SELECT COUNT(*) FROM resale_listings r
+            WHERE r.buyer_id=inventory.user_id AND r.item_id=inventory.item_id AND r.status='SOLD'
+          ) - (
+            SELECT COUNT(*) FROM resale_listings r
+            WHERE r.seller_id=inventory.user_id AND r.item_id=inventory.item_id AND r.status='SOLD'
+          )`).run();
+        await env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('inventory_quantity_backfill_2026_11_05','done')").run();
+      }
       const userColumns = await env.DB.prepare("PRAGMA table_info(users)").all();
       if (!(userColumns.results || []).some(column => column.name === "public_id")) {
         await env.DB.prepare("ALTER TABLE users ADD COLUMN public_id INTEGER").run();
@@ -597,6 +622,71 @@ async function runDailyMembershipPayout(controller,env) {
   console.log("[Sakura membership] Daily payout completed",JSON.stringify({rewardDate,awarded,members:(members.results || []).length}));
 }
 
+
+async function refreshItemRap(env,itemId) {
+  const item = await env.DB.prepare("SELECT is_limited,is_offsale,rap_currency FROM items WHERE id=?").bind(itemId).first();
+  if (!item || Number(item.is_limited)!==1 || Number(item.is_offsale)===1 || item.rap_currency!=="P$") return null;
+  const recent = await env.DB.prepare(`
+    SELECT CAST(ROUND(AVG(recent_sales.price)) AS INTEGER) AS rap
+    FROM (
+      SELECT sale.price
+      FROM (
+        SELECT p.price,p.purchased_at AS sold_at
+        FROM purchases p
+        WHERE p.item_id=? AND p.currency='P$'
+        UNION ALL
+        SELECT r.price,r.sold_at AS sold_at
+        FROM resale_listings r
+        WHERE r.item_id=? AND r.status='SOLD' AND r.currency='P$'
+      ) sale
+      ORDER BY sale.sold_at DESC
+      LIMIT 10
+    ) recent_sales
+  `).bind(itemId,itemId).first();
+  const rap = Number(recent?.rap||0);
+  if (rap>0) {
+    await env.DB.prepare("UPDATE items SET rap_value=?,rap_currency='P$' WHERE id=? AND is_limited=1 AND is_offsale=0").bind(rap,itemId).run();
+  }
+  return rap||null;
+}
+
+async function getProfileTotalRap(env,userId) {
+  const row = await env.DB.prepare(`
+    SELECT COALESCE(SUM(
+      CASE
+        WHEN rap_item.is_limited=1
+          AND COALESCE(rap_item.is_offsale,0)=0
+          AND rap_item.rap_currency='P$'
+          AND rap_item.rap_value>0
+        THEN COALESCE(
+          (
+            SELECT CAST(ROUND(AVG(recent_sales.price)) AS INTEGER)
+            FROM (
+              SELECT sale.price
+              FROM (
+                SELECT p.price,p.purchased_at AS sold_at
+                FROM purchases p
+                WHERE p.item_id=rap_item.id AND p.currency='P$'
+                UNION ALL
+                SELECT r.price,r.sold_at AS sold_at
+                FROM resale_listings r
+                WHERE r.item_id=rap_item.id AND r.status='SOLD' AND r.currency='P$'
+              ) sale
+              ORDER BY sale.sold_at DESC
+              LIMIT 10
+            ) recent_sales
+          ),
+          rap_item.rap_value
+        ) * COALESCE(rap_inventory.quantity,1)
+        ELSE 0
+      END
+    ),0) AS total_rap
+    FROM inventory rap_inventory
+    JOIN items rap_item ON rap_item.id=rap_inventory.item_id
+    WHERE rap_inventory.user_id=?
+  `).bind(userId).first();
+  return Number(row?.total_rap||0);
+}
 
 async function syncItemMarketPrice(env,itemId) {
   const baseline=await env.DB.prepare("SELECT base_price,base_currency FROM item_market_price_baselines WHERE item_id=?").bind(itemId).first();
@@ -1142,6 +1232,7 @@ async function route(request, env) {
       return fail("Purchase could not be completed. No items or balance should have changed.",409);
     }
     await syncItemMarketPrice(env,listing.item_id);
+    await refreshItemRap(env,listing.item_id);
     const updated = await env.DB.prepare("SELECT balance,tix_balance FROM users WHERE id=?").bind(user.id).first();
     return json({ok:true,item:{id:listing.item_id,name:listing.name},price:Number(listing.price),currency:"P$",seller:listing.seller_id,sellerName:listing.seller_name,balance:Number(updated?.balance||0),tixBalance:Number(updated?.tix_balance||0)});
   }
@@ -1191,6 +1282,7 @@ async function route(request, env) {
       console.error("[Sakura purchase] Purchase failed:",error);
       return fail("Purchase could not be completed.",400);
     }
+    await refreshItemRap(env,item.id);
     const updated = await env.DB.prepare("SELECT balance,tix_balance FROM users WHERE id=?").bind(user.id).first();
     return json({ok:true,balance:Number(updated?.balance||0),tixBalance:Number(updated?.tix_balance||0),currency:currencyCode});
   }
@@ -1223,22 +1315,15 @@ async function route(request, env) {
 
   const profileIdMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})$/);
   if (request.method === "GET" && profileIdMatch) {
-    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(CASE
-          WHEN rap_item.is_limited=1 AND COALESCE(rap_item.is_offsale,0)=0 AND rap_item.rap_currency='P$' AND rap_item.rap_value>0
-          THEN COALESCE(
-            (SELECT CAST(ROUND(AVG(recent_sales.price)) AS INTEGER)
-             FROM (SELECT r.price FROM resale_listings r WHERE r.item_id=rap_item.id AND r.status='SOLD' ORDER BY r.sold_at DESC LIMIT 10) recent_sales),
-            rap_item.rap_value)
-          ELSE 0 END),0)
-        FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id
-        WHERE rap_inventory.user_id=u.id) AS total_rap
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.public_id=? AND u.is_banned=0`).bind(Number(profileIdMatch[1])).first();
     if (!profile) return fail("User not found.",404);
-    const [count,badgeRows] = await Promise.all([
+    const [count,badgeRows,totalRap] = await Promise.all([
       env.DB.prepare("SELECT COALESCE(SUM(quantity),0) AS n FROM inventory WHERE user_id=? AND quantity>0").bind(profile.id).first(),
-      env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all()
+      env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all(),
+      getProfileTotalRap(env,profile.id)
     ]);
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap:Number(profile.total_rap||0),isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
   }
 
   const profileInventoryMatch = path.match(/^\/api\/profile\/([A-Za-z0-9_]{1,20})\/inventory$/);
@@ -1336,22 +1421,15 @@ async function route(request, env) {
     let username;
     try { username = decodeURIComponent(path.slice("/api/profile/".length)); }
     catch { return fail("Invalid username.",400); }
-    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(CASE
-          WHEN rap_item.is_limited=1 AND COALESCE(rap_item.is_offsale,0)=0 AND rap_item.rap_currency='P$' AND rap_item.rap_value>0
-          THEN COALESCE(
-            (SELECT CAST(ROUND(AVG(recent_sales.price)) AS INTEGER)
-             FROM (SELECT r.price FROM resale_listings r WHERE r.item_id=rap_item.id AND r.status='SOLD' ORDER BY r.sold_at DESC LIMIT 10) recent_sales),
-            rap_item.rap_value)
-          ELSE 0 END),0)
-        FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id
-        WHERE rap_inventory.user_id=u.id) AS total_rap
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const [count,badgeRows] = await Promise.all([
+    const [count,badgeRows,totalRap] = await Promise.all([
       env.DB.prepare("SELECT COALESCE(SUM(quantity),0) AS n FROM inventory WHERE user_id=? AND quantity>0").bind(profile.id).first(),
-      env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all()
+      env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all(),
+      getProfileTotalRap(env,profile.id)
     ]);
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap:Number(profile.total_rap||0),isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
   }
 
   if (request.method === "PUT" && path === "/api/profile") {
