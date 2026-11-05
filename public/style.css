@@ -1302,3 +1302,22 @@ model-viewer.pekora-model{display:block;width:100%;height:100%;min-height:150px;
 .rap-player-link{font-weight:700;text-decoration:none}
 .rap-player-link:hover{text-decoration:underline}
 @media(max-width:600px){.rap-leaderboard-heading,.rap-people-heading{align-items:flex-start}.rap-people-heading .button,.rap-leaderboard-heading .button{width:100%;text-align:center}}
+
+/* Sakura Limited item price history */
+.item-price-history{margin-top:22px;padding:20px;border:1px solid #e5e1ea;border-radius:12px;background:#fff}
+.item-price-history-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.item-price-history-heading h2{margin:0 0 5px;font-size:21px}
+.item-price-history-heading p{margin:0}
+.item-price-history-heading>strong{font-size:13px;color:#73509b;white-space:nowrap}
+.item-price-history-empty{padding:26px 16px;border:1px dashed #d9d1e2;border-radius:8px;color:#756d7d;text-align:center;background:#faf9fc}
+.item-price-chart-wrap{width:100%;overflow:hidden}
+.item-price-chart{display:block;width:100%;height:auto;min-width:0}
+.price-chart-gridline{stroke:#ece8f1;stroke-width:1}
+.price-chart-axis-label,.price-chart-date{font:12px Arial,sans-serif;fill:#81788a}
+.price-chart-area{fill:rgba(126,76,173,.12)}
+.price-chart-line{fill:none;stroke:#8650bd;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.price-chart-point{fill:#fff;stroke:#8650bd;stroke-width:2}
+.item-price-history-foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:8px;color:#756d7d;font-size:13px}
+.item-price-history-foot b{color:#352b40}
+.op-profile-rap-link{display:inline-flex;margin-top:12px}
+@media(max-width:560px){.item-price-history{padding:14px}.item-price-history-foot{font-size:12px}}
