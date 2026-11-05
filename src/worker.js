@@ -1123,7 +1123,29 @@ async function route(request, env) {
         AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
         AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
       ORDER BY r.price ASC,r.created_at ASC`).bind(item.id).all();
-    return json({item,listings:rows.results||[]});
+    const history = await env.DB.prepare(`
+      SELECT price,sold_at,source FROM (
+        SELECT price,sold_at,source FROM (
+          SELECT p.price,p.purchased_at AS sold_at,'Catalog sale' AS source
+          FROM purchases p
+          WHERE p.item_id=? AND p.currency='P
+  }
+
+
+          UNION ALL
+          SELECT r.price,r.sold_at AS sold_at,'Resale sale' AS source
+          FROM resale_listings r
+          WHERE r.item_id=? AND r.status='SOLD' AND r.currency='P
+  }
+
+ AND r.sold_at IS NOT NULL
+        ) all_sales
+        ORDER BY sold_at DESC
+        LIMIT 80
+      ) recent_sales
+      ORDER BY sold_at ASC
+    `).bind(item.id,item.id).all();
+    return json({item,listings:rows.results||[],history:history.results||[]});
   }
 
   if (request.method === "POST" && path === "/api/resale/listings") {
