@@ -1,84 +1,128 @@
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$candidateRoots = @(
-    $env:SAKURA_OPENPEKORA_ROOT,
-    $repoRoot,
-    (Join-Path $repoRoot "OpenPekora"),
-    "C:\Pekora-RCC-Host\OpenPekora"
-) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
-$openPekoraRoot = $null
-foreach ($candidate in $candidateRoots) {
-    $candidateRenderer = Join-Path $candidate "game-renderer"
-    $candidateRcc = Join-Path $candidate "RCCService\RCCService2020"
-    if ((Test-Path -LiteralPath (Join-Path $candidateRenderer "config.json")) -and (Test-Path -LiteralPath (Join-Path $candidateRcc "RCCService.exe"))) {
-        $openPekoraRoot = $candidate
-        break
+# Create diagnostics before any validation so early failures are recorded.
+$logDir = [string]$env:SAKURA_RENDERER_LOG_DIR
+if ([string]::IsNullOrWhiteSpace($logDir)) {
+    $logDir = Join-Path $env:LOCALAPPDATA "SakuraRenderer\logs"
+}
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+$startupLog = Join-Path $logDir "rcc-startup.log"
+$probeLog = Join-Path $logDir "rcc-soap-probe.log"
+[System.IO.File]::WriteAllText($probeLog, "SOAP check has not run yet.", [System.Text.UTF8Encoding]::new($false))
+
+try { Start-Transcript -Path $startupLog -Force | Out-Null } catch {}
+
+try {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $candidateRoots = @(
+        $env:SAKURA_OPENPEKORA_ROOT,
+        $repoRoot,
+        (Join-Path $repoRoot "OpenPekora"),
+        "C:\Pekora-RCC-Host\OpenPekora"
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+    $openPekoraRoot = $null
+    foreach ($candidate in $candidateRoots) {
+        $candidateRenderer = Join-Path $candidate "game-renderer"
+        $candidateRcc = Join-Path $candidate "RCCService\RCCService2020"
+        if ((Test-Path -LiteralPath (Join-Path $candidateRenderer "config.json")) -and
+            (Test-Path -LiteralPath (Join-Path $candidateRcc "RCCService.exe"))) {
+            $openPekoraRoot = (Resolve-Path -LiteralPath $candidate).Path
+            break
+        }
     }
-}
-if (-not $openPekoraRoot) {
-    throw "Could not find the OpenPekora checkout. Expected game-renderer\config.json and RCCService\RCCService2020\RCCService.exe under C:\Pekora-RCC-Host\OpenPekora or beside this Sakura repository."
-}
-$rccDir = Join-Path $openPekoraRoot "RCCService\RCCService2020"
-$rccExe = Join-Path $rccDir "RCCService.exe"
-$settingsPath = Join-Path $rccDir "Settings.json"
-$configPath = Join-Path $openPekoraRoot "game-renderer\config.json"
-$rendererDir = Join-Path $openPekoraRoot "game-renderer"
-$baseControllerPath = Join-Path $rendererDir "src\Controllers\BaseController.ts"
-$requestPath = Join-Path $rendererDir "src\Utilities\Libraries\Request.ts"
-$soapPath = Join-Path $rendererDir "src\Utilities\Libraries\SOAP.ts"
-if (-not (Test-Path -LiteralPath $soapPath)) { throw "Renderer SOAP helper not found: $soapPath" }
-$ports = @(64989)
-if (-not (Test-Path -LiteralPath $rccExe)) { throw "RCCService 2020 executable not found: $rccExe" }
-if (-not (Test-Path -LiteralPath $configPath)) { throw "game-renderer\config.json was not found: $configPath" }
-if (-not (Test-Path -LiteralPath $settingsPath)) {
-    [System.IO.File]::WriteAllText($settingsPath, '{"applicationSettings":{}}', [System.Text.UTF8Encoding]::new($false))
-}
 
-# OpenPekora RCCService 2020 exposes its SOAP endpoint on TCP 64989.
-try { $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json }
-catch { throw "game-renderer\config.json is not valid JSON. No changes were made. $($_.Exception.Message)" }
+    if (-not $openPekoraRoot) {
+        throw "Could not find the OpenPekora folder containing game-renderer\config.json and RCCService\RCCService2020\RCCService.exe."
+    }
 
-if (-not $config.Ports) { throw "config.json is missing Ports. Restore the normal OpenPekora renderer config first." }
-if (-not $config.Ports.RCC) { $config.Ports | Add-Member -MemberType NoteProperty -Name RCC -Value ([pscustomobject]@{}) }
-function Set-ConfigValue($Object, [string]$Name, $Value) {
-    if ($Object.PSObject.Properties[$Name]) { $Object.$Name = $Value }
-    else { $Object | Add-Member -MemberType NoteProperty -Name $Name -Value $Value }
-}
-$platformBaseUrl = [string]$env:SAKURA_PLATFORM_URL
-if ([string]::IsNullOrWhiteSpace($platformBaseUrl)) {
-    $platformBaseUrl = "https://sakura.green-kaktus8855.workers.dev/"
-}
-try { $platformUri = [Uri]$platformBaseUrl }
-catch { throw "SAKURA_PLATFORM_URL is not a valid URL: $platformBaseUrl" }
-if (-not $platformUri.IsAbsoluteUri -or $platformUri.Scheme -ne "https" -or
-    $platformUri.AbsolutePath -ne "/" -or $platformUri.Query -or $platformUri.Fragment) {
-    throw "SAKURA_PLATFORM_URL must be an HTTPS site origin, for example https://sakura.green-kaktus8855.workers.dev/"
-}
-$platformBaseUrl = $platformUri.GetLeftPart([System.UriPartial]::Authority) + "/"
-Set-ConfigValue $config "BaseUrl" $platformBaseUrl
-Write-Host "Renderer avatar API base URL: $platformBaseUrl"
-Set-ConfigValue $config "RCCUrl" "http://127.0.0.1"
-$singleRccPort = @($ports)
-Set-ConfigValue $config.Ports.RCC "All" $singleRccPort
-Set-ConfigValue $config.Ports.RCC "Player" $singleRccPort
-Set-ConfigValue $config.Ports.RCC "Image" $singleRccPort
-Set-ConfigValue $config.Ports.RCC "Place" $singleRccPort
-Set-ConfigValue $config.Ports.RCC "Catalog" $singleRccPort
-if (-not $config.Paths) { $config | Add-Member -MemberType NoteProperty -Name Paths -Value ([pscustomobject]@{}) }
-Set-ConfigValue $config.Paths "RCCService" "..\RCCService\RCCService2020"
-[System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 30), [System.Text.UTF8Encoding]::new($false))
-Write-Host "Renderer config now points to the local RCCService 2020 SOAP endpoint on port 64989."
+    $rendererDir = Join-Path $openPekoraRoot "game-renderer"
+    $rccDir = Join-Path $openPekoraRoot "RCCService\RCCService2020"
+    $rccExe = Join-Path $rccDir "RCCService.exe"
+    $settingsPath = Join-Path $rccDir "Settings.json"
+    $configPath = Join-Path $rendererDir "config.json"
+    $baseControllerPath = Join-Path $rendererDir "src\Controllers\BaseController.ts"
+    $requestPath = Join-Path $rendererDir "src\Utilities\Libraries\Request.ts"
 
-# Patch the OpenPekora SOAP client to match the RCCService 2020 SOAP contract.
-# Keep platform URL (BaseUrl) separate from the standard RCC SOAP namespace.
-$lf = [string][char]10
-$crlf = [string][char]13 + [string][char]10
-$baseSource = [System.IO.File]::ReadAllText($baseControllerPath).Replace($crlf,$lf)
-$requestSource = [System.IO.File]::ReadAllText($requestPath).Replace($crlf,$lf)
-$soapSource = [System.IO.File]::ReadAllText($soapPath).Replace($crlf,$lf)
+    foreach ($requiredFile in @(
+        (Join-Path $rendererDir "package.json"),
+        $configPath,
+        $baseControllerPath,
+        $requestPath,
+        $rccExe
+    )) {
+        if (-not (Test-Path -LiteralPath $requiredFile)) {
+            throw "Required OpenPekora file not found: $requiredFile"
+        }
+    }
 
-$newBaseBlock = @'
+    if (-not (Test-Path -LiteralPath $settingsPath)) {
+        [System.IO.File]::WriteAllText($settingsPath, '{"applicationSettings":{}}', [System.Text.UTF8Encoding]::new($false))
+    }
+
+    # Keep the website origin separate from RCC's SOAP namespace.
+    try {
+        $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+    } catch {
+        throw "game-renderer\config.json is invalid JSON: $($_.Exception.Message)"
+    }
+
+    if (-not $config.Ports) {
+        throw "game-renderer\config.json has no Ports object. Restore a valid OpenPekora config.json."
+    }
+    if (-not $config.Ports.RCC) {
+        $config.Ports | Add-Member -MemberType NoteProperty -Name RCC -Value ([pscustomobject]@{})
+    }
+    if (-not $config.Paths) {
+        $config | Add-Member -MemberType NoteProperty -Name Paths -Value ([pscustomobject]@{})
+    }
+
+    function Set-ConfigValue($Object, [string]$Name, $Value) {
+        if ($Object.PSObject.Properties[$Name]) {
+            $Object.$Name = $Value
+        } else {
+            $Object | Add-Member -MemberType NoteProperty -Name $Name -Value $Value
+        }
+    }
+
+    $platformBaseUrl = [string]$env:SAKURA_PLATFORM_URL
+    if ([string]::IsNullOrWhiteSpace($platformBaseUrl)) {
+        $platformBaseUrl = "https://sakura.green-kaktus8855.workers.dev/"
+    }
+    try { $platformUri = [Uri]$platformBaseUrl }
+    catch { throw "SAKURA_PLATFORM_URL is not a valid URL: $platformBaseUrl" }
+
+    if (-not $platformUri.IsAbsoluteUri -or $platformUri.Scheme -ne "https" -or
+        $platformUri.AbsolutePath -ne "/" -or $platformUri.Query -or $platformUri.Fragment) {
+        throw "SAKURA_PLATFORM_URL must be an HTTPS site origin, for example https://sakura.green-kaktus8855.workers.dev/"
+    }
+
+    $platformBaseUrl = $platformUri.GetLeftPart([System.UriPartial]::Authority) + "/"
+    $rccPorts = @(64989)
+    Set-ConfigValue $config "BaseUrl" $platformBaseUrl
+    Set-ConfigValue $config "RCCUrl" "http://127.0.0.1"
+    Set-ConfigValue $config.Ports.RCC "All" $rccPorts
+    Set-ConfigValue $config.Ports.RCC "Player" $rccPorts
+    Set-ConfigValue $config.Ports.RCC "Image" $rccPorts
+    Set-ConfigValue $config.Ports.RCC "Place" $rccPorts
+    Set-ConfigValue $config.Ports.RCC "Catalog" $rccPorts
+    Set-ConfigValue $config.Paths "RCCService" "..\RCCService\RCCService2020"
+
+    $configBackup = "$configPath.sakura-backup"
+    if (-not (Test-Path -LiteralPath $configBackup)) {
+        Copy-Item -LiteralPath $configPath -Destination $configBackup
+    }
+    [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 30), [System.Text.UTF8Encoding]::new($false))
+    Write-Host "OpenPekora BaseUrl: $platformBaseUrl"
+    Write-Host "RCC SOAP endpoint: http://127.0.0.1:64989"
+
+    # Patch the renderer controller so failed RCC requests produce a useful HTTP 503.
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    $baseSource = [System.IO.File]::ReadAllText($baseControllerPath)
+    $baseSource = $baseSource.Replace([string][char]13 + [string][char]10, [string][char]10)
+
+    $directCall = "    const response: any = await RCCRequest(port, xml, request.jobExpiration);"
+    $newCall = @'
     let response: any;
     try {
         response = await RCCRequest(port, xml, request.jobExpiration);
@@ -92,66 +136,50 @@ $newBaseBlock = @'
     }
 '@
 
-$legacyBaseBlock = @'
-    const response: any = await RCCRequest(port, xml, request.jobExpiration);
-    if (typeof response !== "string" || !response.trim()) {
-        return Resp(res, 503, "RCCService did not return a SOAP response. Check RCCService 2020 on the configured render ports.", false);
+    if (-not $baseSource.Contains("RCCService SOAP request failed:")) {
+        if (-not $baseSource.Contains($directCall)) {
+            throw "BaseController.ts did not match the expected OpenPekora RCC call. No controller patch was made."
+        }
+        $baseBackup = "$baseControllerPath.sakura-backup"
+        if (-not (Test-Path -LiteralPath $baseBackup)) {
+            Copy-Item -LiteralPath $baseControllerPath -Destination $baseBackup
+        }
+        $baseSource = $baseSource.Replace($directCall, $newCall.TrimEnd())
+        [System.IO.File]::WriteAllText($baseControllerPath, $baseSource, $utf8NoBom)
     }
-'@
 
-$directBaseCall = "    const response: any = await RCCRequest(port, xml, request.jobExpiration);"
-if ($baseSource.Contains("RCCService SOAP request failed:")) {
-    Write-Host "Renderer controller already contains detailed SOAP error handling."
-} elseif ($baseSource.Contains($legacyBaseBlock)) {
-    $baseSource = $baseSource.Replace($legacyBaseBlock, $newBaseBlock)
-} elseif ($baseSource.Contains($directBaseCall)) {
-    $baseSource = $baseSource.Replace($directBaseCall, $newBaseBlock.TrimEnd())
-} else {
-    throw "BaseController.ts did not match the known OpenPekora RCC call. No controller patch was applied."
-}
+    # Use the standard RCC SOAP namespace. RCC clients send text/xml; this
+    # implementation intentionally does not add an unverified SOAPAction header.
+    $requestSource = [System.IO.File]::ReadAllText($requestPath)
+    $requestSource = $requestSource.Replace([string][char]13 + [string][char]10, [string][char]10)
+    $standardSoapCall = 'const xml = SOAP("http://roblox.com/", jobExpiration, JSON.stringify(data));'
+    $legacySoapCall = 'const xml = SOAP(Config.BaseUrl, jobExpiration, JSON.stringify(data));'
+    if ($requestSource.Contains($legacySoapCall)) {
+        $requestSource = $requestSource.Replace($legacySoapCall, $standardSoapCall)
+    } elseif (-not $requestSource.Contains($standardSoapCall)) {
+        throw "Request.ts SOAP namespace call was not recognized. No Request.ts patch was made."
+    }
 
-# RCCService gSOAP expects the standard Roblox namespace and SOAPAction.
-$oldHeaders = @'
-        const headers = {
-            "Content-Type": "text/xml",
-        };
-'@
-$newHeaders = @'
+    $requestFunctionPattern = '(?s)export const RCCRequest = async <T>\(.*?\n\};(?=\s*\nexport enum HttpMethod)'
+    $newRequestFunction = @'
+export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration: number): Promise<T> => {
+    try {
         const headers = {
             "Content-Type": "text/xml; charset=utf-8",
-            "SOAPAction": "http://roblox.com/BatchJob",
         };
-'@
-if ($requestSource.Contains($oldHeaders)) {
-    $requestSource = $requestSource.Replace($oldHeaders, $newHeaders)
-} elseif (-not $requestSource.Contains('"SOAPAction": "http://roblox.com/BatchJob"')) {
-    throw "Request.ts HTTP headers did not match the expected OpenPekora source."
-}
-
-$oldSoapCall = 'const xml = SOAP(Config.BaseUrl, jobExpiration, JSON.stringify(data));'
-$newSoapCall = 'const xml = SOAP("http://roblox.com/", jobExpiration, JSON.stringify(data));'
-if ($requestSource.Contains($oldSoapCall)) {
-    $requestSource = $requestSource.Replace($oldSoapCall, $newSoapCall)
-} elseif (-not $requestSource.Contains('SOAP("http://roblox.com/", jobExpiration')) {
-    throw "Request.ts SOAP namespace call did not match the expected source."
-}
-$requestSource = $requestSource.Replace('import Config from "./Config.js";' + $lf, "")
-
-$oldTimeout = "timeout: jobExpiration * 1000,"
-$newTimeout = "timeout: (jobExpiration + 15) * 1000,"
-if ($requestSource.Contains($oldTimeout)) {
-    $requestSource = $requestSource.Replace($oldTimeout, $newTimeout)
-}
-
-# Preserve the actual HTTP/network error rather than returning null or AxiosResponse.
-$rccStart = $requestSource.IndexOf("export const RCCRequest")
-$catchStart = $requestSource.IndexOf("    } catch (e: any) {", $rccStart)
-$catchMarker = $lf + "    }" + $lf + "};"
-$catchEnd = if ($catchStart -ge 0) { $requestSource.IndexOf($catchMarker, $catchStart) } else { -1 }
-if ($rccStart -lt 0 -or $catchStart -lt 0 -or $catchEnd -lt 0) {
-    throw "Could not locate the RCCRequest error handler in Request.ts."
-}
-$newCatch = @'
+        const xml = SOAP("http://roblox.com/", jobExpiration, JSON.stringify(data));
+        const response = await axios.request({
+            method: HttpMethod.POST,
+            url: Config.RCCUrl + ":" + port,
+            timeout: (jobExpiration + 20) * 1000,
+            data: xml,
+            maxRedirects: 0,
+            headers,
+        });
+        if (typeof response.data !== "string" || !response.data.trim()) {
+            throw new Error("RCCService returned an empty HTTP response.");
+        }
+        return response.data as T;
     } catch (e: any) {
         if (axios.isAxiosError(e)) {
             const status = e.response?.status;
@@ -160,8 +188,8 @@ $newCatch = @'
                 ? ""
                 : (typeof responseBody === "string" ? responseBody : JSON.stringify(responseBody)).slice(0, 500);
             const message = status
-                ? "RCCService returned HTTP " + status + ": " + (detail || e.message)
-                : "RCCService request failed" + (e.code ? " (" + e.code + ")" : "") + ": " + e.message;
+                ? "RCCService HTTP " + status + ": " + (detail || e.message)
+                : "RCCService connection failed" + (e.code ? " (" + e.code + ")" : "") + ": " + e.message;
             Console.Error(message);
             throw new Error(message);
         }
@@ -169,229 +197,121 @@ $newCatch = @'
         Console.Error("RCCService request failed: " + message);
         throw new Error("RCCService request failed: " + message);
     }
+};
 '@
-$requestSource = $requestSource.Substring(0, $catchStart) + $newCatch.TrimEnd() + $requestSource.Substring($catchEnd + $catchMarker.Length - 3)
 
-# The RCC Job structure requires a category; category 1 is used for thumbnail jobs.
-$jobPlaceholder = [string][char]36 + "{jobExpiration}"
-$oldJobFields = "            <ns1:expirationInSeconds>" + $jobPlaceholder + "</ns1:expirationInSeconds>" + $lf + "            <ns1:cores>1</ns1:cores>" + $lf
-$newJobFields = "            <ns1:expirationInSeconds>" + $jobPlaceholder + "</ns1:expirationInSeconds>" + $lf + "            <ns1:category>1</ns1:category>" + $lf + "            <ns1:cores>1</ns1:cores>" + $lf
-if ($soapSource.Contains($oldJobFields)) {
-    $soapSource = $soapSource.Replace($oldJobFields, $newJobFields)
-} elseif (-not $soapSource.Contains("<ns1:category>1</ns1:category>")) {
-    throw "SOAP.ts job structure did not match the expected OpenPekora source."
-}
-
-foreach ($file in @($baseControllerPath, $requestPath, $soapPath)) {
-    $fileSource = if ($file -eq $baseControllerPath) { $baseSource } elseif ($file -eq $requestPath) { $requestSource } else { $soapSource }
-    $backup = "$file.sakura-backup"
-    if (-not (Test-Path -LiteralPath $backup)) { Copy-Item -LiteralPath $file -Destination $backup }
-    [System.IO.File]::WriteAllText($file, $fileSource, [System.Text.UTF8Encoding]::new($false))
-}
-Write-Host "Applied RCC SOAPAction, standard SOAP namespace, thumbnail job category, extended timeout and detailed error handling."
-
-# RCCService 2020 has no authentication of its own. Block all inbound access to
-# its ports; the local renderer can still reach 127.0.0.1.
-$blockedPorts = $ports
-foreach ($port in $blockedPorts) {
-    $ruleName = "Sakura RCC local-only TCP $port"
-    if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
-        New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $port -Action Block -Profile Any | Out-Null
-    }
-}
-
-if (-not (Test-Path -LiteralPath (Join-Path $rendererDir "package.json"))) { throw "game-renderer package.json was not found." }
-Push-Location $rendererDir
-try {
-    Write-Host "Building the patched OpenPekora renderer..."
-    & npm run build
-    if ($LASTEXITCODE -ne 0) { throw "Renderer build failed with exit code $LASTEXITCODE." }
-} finally { Pop-Location }
-
-# Only stop an existing RCCService process on the four ports we are about to use.
-foreach ($port in $ports) {
-    $existing = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($existing) {
-        $existingProcess = Get-Process -Id $existing.OwningProcess -ErrorAction SilentlyContinue
-        if (-not $existingProcess -or $existingProcess.ProcessName -notmatch "^RCCService") {
-            throw "Port $port is occupied by another process. It was not stopped."
+    $newRequestSource = [regex]::Replace($requestSource, $requestFunctionPattern, $newRequestFunction.TrimEnd(), 1)
+    if ($newRequestSource -eq $requestSource) {
+        if (-not $requestSource.Contains("RCCService connection failed")) {
+            throw "Could not safely locate the RCCRequest function in Request.ts."
         }
-        Stop-Process -Id $existing.OwningProcess -Force
+    } else {
+        $requestBackup = "$requestPath.sakura-backup"
+        if (-not (Test-Path -LiteralPath $requestBackup)) {
+            Copy-Item -LiteralPath $requestPath -Destination $requestBackup
+        }
+        [System.IO.File]::WriteAllText($requestPath, $newRequestSource, $utf8NoBom)
     }
-}
-Start-Sleep -Seconds 2
 
-$logDir = [string]$env:SAKURA_RENDERER_LOG_DIR
-if ([string]::IsNullOrWhiteSpace($logDir)) {
-    $logDir = Join-Path $env:LOCALAPPDATA "SakuraRenderer\logs"
-}
-New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-
-$started = @()
-foreach ($port in $ports) {
-    Write-Host "Starting RCCService 2020 on 127.0.0.1:$port..."
-    $process = Start-Process -FilePath $rccExe -ArgumentList @(
-        "-Console", "-verbose", "-settingsfile", "Settings.json", "-port", "$port"
-    ) -WorkingDirectory $rccDir -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDir "rcc-$port-out.log") -RedirectStandardError (Join-Path $logDir "rcc-$port-error.log") -PassThru
-    $ready = $false
-    for ($attempt = 0; $attempt -lt 30; $attempt++) {
-        Start-Sleep -Seconds 1
-        $process.Refresh()
-        if ($process.HasExited) { throw "RCCService 2020 exited on port $port with code $($process.ExitCode). Check its console output." }
-        $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($listener -and $listener.OwningProcess -eq $process.Id) { $ready = $true; break }
+    # RCCService has no built-in authentication. Keep the SOAP listener
+    # local-only; do not expose TCP 64989 through the router or tunnel.
+    $firewallRule = "Sakura RCC local-only TCP 64989"
+    if (-not (Get-NetFirewallRule -DisplayName $firewallRule -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName $firewallRule -Direction Inbound -Protocol TCP -LocalPort 64989 -Action Block -Profile Any | Out-Null
     }
-    if (-not $ready) { throw "RCCService 2020 did not open port $port within 30 seconds." }
-    $started += $port
-}
 
-# Verify the actual SOAP endpoint; a listening TCP port alone is not sufficient.
-$probeLog = Join-Path $logDir "rcc-soap-probe.log"
-$probeXml = @'
-<?xml version="1.0" encoding="utf-8"?>
-<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://roblox.com/">
-  <SOAP-ENV:Header/>
-  <SOAP-ENV:Body>
-    <ns1:GetStatus/>
-  </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>
-'@
-try {
-    $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:64989" -Method Post -ContentType "text/xml; charset=utf-8" -Headers @{ SOAPAction = "http://roblox.com/GetStatus" } -Body $probeXml -UseBasicParsing -TimeoutSec 15
-    $statusBody = [string]$statusResponse.Content
-    if ([int]$statusResponse.StatusCode -ne 200 -or $statusBody -notmatch "GetStatusResponse") {
-        $sample = $statusBody.Substring(0,[Math]::Min(500,$statusBody.Length))
-        throw "RCC returned HTTP $($statusResponse.StatusCode) without a valid GetStatus SOAP response: $sample"
-    }
-    $sample = $statusBody.Substring(0,[Math]::Min(1000,$statusBody.Length))
-    [System.IO.File]::WriteAllText($probeLog, "SOAP GetStatus succeeded." + [Environment]::NewLine + $sample, [System.Text.UTF8Encoding]::new($false))
-    Write-Host "RCC SOAP GetStatus succeeded on 127.0.0.1:64989." -ForegroundColor Green
-} catch {
-    $probeError = $_.Exception.Message
+    # Compile before starting RCC so broken TypeScript cannot leave a half-started service.
+    $npmCmd = (Get-Command "npm.cmd" -ErrorAction Stop).Source
+    Push-Location $rendererDir
     try {
-        if ($_.Exception.Response) {
-            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-            $responseText = $reader.ReadToEnd()
-            if ($responseText) { $probeError += " | Response: " + $responseText.Substring(0,[Math]::Min(500,$responseText.Length)) }
-            $reader.Dispose()
+        Write-Host "Building patched OpenPekora Renderer..."
+        & $npmCmd run build
+        if ($LASTEXITCODE -ne 0) {
+            throw "OpenPekora Renderer TypeScript build failed with exit code $LASTEXITCODE."
         }
-    } catch {}
-    [System.IO.File]::WriteAllText($probeLog, "SOAP GetStatus failed: " + $probeError, [System.Text.UTF8Encoding]::new($false))
-    throw "RCCService is listening, but SOAP GetStatus failed. $probeError. See $probeLog"
-}
-
-Write-Host ""
-Write-Host "RCCService 2020 is running on the OpenPekora SOAP port: $($started -join ', ')." -ForegroundColor Green
-Write-Host "Inbound firewall blocks were added. Renderer connections must use 127.0.0.1."
-Write-Host "The renderer config and TypeScript build are ready. Start the secured renderer process next."
- + '{jobExpiration}'
-$oldJobFields = "            <ns1:expirationInSeconds>" + $jobPlaceholder + "</ns1:expirationInSeconds>" + $lf + "            <ns1:cores>1</ns1:cores>" + $lf
-$newJobFields = "            <ns1:expirationInSeconds>" + $jobPlaceholder + "</ns1:expirationInSeconds>" + $lf + "            <ns1:category>1</ns1:category>" + $lf + "            <ns1:cores>1</ns1:cores>" + $lf
-if ($soapSource.Contains($oldJobFields)) {
-    $soapSource = $soapSource.Replace($oldJobFields, $newJobFields)
-} elseif (-not $soapSource.Contains("<ns1:category>1</ns1:category>")) {
-    throw "SOAP.ts job structure did not match the expected OpenPekora source."
-}
-
-foreach ($file in @($baseControllerPath, $requestPath, $soapPath)) {
-    $fileSource = if ($file -eq $baseControllerPath) { $baseSource } elseif ($file -eq $requestPath) { $requestSource } else { $soapSource }
-    $backup = "$file.sakura-backup"
-    if (-not (Test-Path -LiteralPath $backup)) { Copy-Item -LiteralPath $file -Destination $backup }
-    [System.IO.File]::WriteAllText($file, $fileSource, [System.Text.UTF8Encoding]::new($false))
-}
-Write-Host "Applied RCC SOAPAction, standard SOAP namespace, thumbnail job category, extended timeout and detailed error handling."
-
-# RCCService 2020 has no authentication of its own. Block all inbound access to
-# its ports; the local renderer can still reach 127.0.0.1.
-$blockedPorts = $ports
-foreach ($port in $blockedPorts) {
-    $ruleName = "Sakura RCC local-only TCP $port"
-    if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
-        New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $port -Action Block -Profile Any | Out-Null
+    } finally {
+        Pop-Location
     }
-}
 
-if (-not (Test-Path -LiteralPath (Join-Path $rendererDir "package.json"))) { throw "game-renderer package.json was not found." }
-Push-Location $rendererDir
-try {
-    Write-Host "Building the patched OpenPekora renderer..."
-    & npm run build
-    if ($LASTEXITCODE -ne 0) { throw "Renderer build failed with exit code $LASTEXITCODE." }
-} finally { Pop-Location }
-
-# Only stop an existing RCCService process on the four ports we are about to use.
-foreach ($port in $ports) {
-    $existing = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($existing) {
-        $existingProcess = Get-Process -Id $existing.OwningProcess -ErrorAction SilentlyContinue
+    # Stop only a known RCCService process that is occupying our local port.
+    $existingListener = Get-NetTCPConnection -LocalPort 64989 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($existingListener) {
+        $existingProcess = Get-Process -Id $existingListener.OwningProcess -ErrorAction SilentlyContinue
         if (-not $existingProcess -or $existingProcess.ProcessName -notmatch "^RCCService") {
-            throw "Port $port is occupied by another process. It was not stopped."
+            throw "TCP 64989 is occupied by another process. It was not stopped. Process: $($existingProcess.ProcessName) (PID $($existingListener.OwningProcess))."
         }
-        Stop-Process -Id $existing.OwningProcess -Force
+        Stop-Process -Id $existingListener.OwningProcess -Force
+        Start-Sleep -Seconds 2
     }
-}
-Start-Sleep -Seconds 2
 
-$logDir = [string]$env:SAKURA_RENDERER_LOG_DIR
-if ([string]::IsNullOrWhiteSpace($logDir)) {
-    $logDir = Join-Path $env:LOCALAPPDATA "SakuraRenderer\logs"
-}
-New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    $rccOut = Join-Path $logDir "rcc-64989-out.log"
+    $rccErr = Join-Path $logDir "rcc-64989-error.log"
+    Write-Host "Starting RCCService 2020 on 127.0.0.1:64989..."
+    $rccProcess = Start-Process -FilePath $rccExe -ArgumentList @(
+        "-Console", "-verbose", "-settingsfile", "Settings.json", "-port", "64989"
+    ) -WorkingDirectory $rccDir -WindowStyle Hidden -RedirectStandardOutput $rccOut -RedirectStandardError $rccErr -PassThru
 
-$started = @()
-foreach ($port in $ports) {
-    Write-Host "Starting RCCService 2020 on 127.0.0.1:$port..."
-    $process = Start-Process -FilePath $rccExe -ArgumentList @(
-        "-Console", "-verbose", "-settingsfile", "Settings.json", "-port", "$port"
-    ) -WorkingDirectory $rccDir -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDir "rcc-$port-out.log") -RedirectStandardError (Join-Path $logDir "rcc-$port-error.log") -PassThru
-    $ready = $false
-    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+    $listenerReady = $false
+    for ($attempt = 0; $attempt -lt 45; $attempt++) {
         Start-Sleep -Seconds 1
-        $process.Refresh()
-        if ($process.HasExited) { throw "RCCService 2020 exited on port $port with code $($process.ExitCode). Check its console output." }
-        $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($listener -and $listener.OwningProcess -eq $process.Id) { $ready = $true; break }
-    }
-    if (-not $ready) { throw "RCCService 2020 did not open port $port within 30 seconds." }
-    $started += $port
-}
-
-# Verify the actual SOAP endpoint; a listening TCP port alone is not sufficient.
-$probeLog = Join-Path $logDir "rcc-soap-probe.log"
-$probeXml = @'
-<?xml version="1.0" encoding="utf-8"?>
-<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://roblox.com/">
-  <SOAP-ENV:Header/>
-  <SOAP-ENV:Body>
-    <ns1:GetStatus/>
-  </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>
-'@
-try {
-    $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:64989" -Method Post -ContentType "text/xml; charset=utf-8" -Headers @{ SOAPAction = "http://roblox.com/GetStatus" } -Body $probeXml -UseBasicParsing -TimeoutSec 15
-    $statusBody = [string]$statusResponse.Content
-    if ([int]$statusResponse.StatusCode -ne 200 -or $statusBody -notmatch "GetStatusResponse") {
-        $sample = $statusBody.Substring(0,[Math]::Min(500,$statusBody.Length))
-        throw "RCC returned HTTP $($statusResponse.StatusCode) without a valid GetStatus SOAP response: $sample"
-    }
-    $sample = $statusBody.Substring(0,[Math]::Min(1000,$statusBody.Length))
-    [System.IO.File]::WriteAllText($probeLog, "SOAP GetStatus succeeded." + [Environment]::NewLine + $sample, [System.Text.UTF8Encoding]::new($false))
-    Write-Host "RCC SOAP GetStatus succeeded on 127.0.0.1:64989." -ForegroundColor Green
-} catch {
-    $probeError = $_.Exception.Message
-    try {
-        if ($_.Exception.Response) {
-            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-            $responseText = $reader.ReadToEnd()
-            if ($responseText) { $probeError += " | Response: " + $responseText.Substring(0,[Math]::Min(500,$responseText.Length)) }
-            $reader.Dispose()
+        $rccProcess.Refresh()
+        if ($rccProcess.HasExited) {
+            throw "RCCService exited during startup with code $($rccProcess.ExitCode). See $rccOut and $rccErr."
         }
-    } catch {}
-    [System.IO.File]::WriteAllText($probeLog, "SOAP GetStatus failed: " + $probeError, [System.Text.UTF8Encoding]::new($false))
-    throw "RCCService is listening, but SOAP GetStatus failed. $probeError. See $probeLog"
-}
+        $listener = Get-NetTCPConnection -LocalPort 64989 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($listener -and $listener.OwningProcess -eq $rccProcess.Id) {
+            $listenerReady = $true
+            break
+        }
+    }
+    if (-not $listenerReady) {
+        throw "RCCService did not open TCP 64989 within 45 seconds. See $rccOut and $rccErr."
+    }
 
-Write-Host ""
-Write-Host "RCCService 2020 is running on the OpenPekora SOAP port: $($started -join ', ')." -ForegroundColor Green
-Write-Host "Inbound firewall blocks were added. Renderer connections must use 127.0.0.1."
-Write-Host "The renderer config and TypeScript build are ready. Start the secured renderer process next."
+    # Test the actual SOAP endpoint. The known RCC client uses text/xml and
+    # the standard http://roblox.com/ SOAP namespace, without a SOAPAction header.
+    $probeXml = @'
+<?xml version="1.0" encoding="utf-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:rob="http://roblox.com/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <rob:GetStatus/>
+  </soapenv:Body>
+</soapenv:Envelope>
+'@
+
+    try {
+        $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:64989" -Method Post -ContentType "text/xml" -Body $probeXml -UseBasicParsing -TimeoutSec 20
+        $statusBody = [string]$statusResponse.Content
+        if ([int]$statusResponse.StatusCode -ne 200 -or $statusBody -notmatch "GetStatusResponse") {
+            throw "RCC returned HTTP $($statusResponse.StatusCode), but the body was not a valid GetStatus SOAP response: $($statusBody.Substring(0,[Math]::Min(700,$statusBody.Length)))"
+        }
+        $preview = $statusBody.Substring(0,[Math]::Min(1500,$statusBody.Length))
+        [System.IO.File]::WriteAllText($probeLog, "SOAP GetStatus succeeded on 127.0.0.1:64989." + [Environment]::NewLine + $preview, $utf8NoBom)
+        Write-Host "SOAP GetStatus succeeded on 127.0.0.1:64989." -ForegroundColor Green
+    } catch {
+        $probeError = $_.Exception.Message
+        try {
+            if ($_.Exception.Response) {
+                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                $responseText = $reader.ReadToEnd()
+                $reader.Dispose()
+                if ($responseText) {
+                    $probeError += " | Response: " + $responseText.Substring(0,[Math]::Min(700,$responseText.Length))
+                }
+            }
+        } catch {}
+        [System.IO.File]::WriteAllText($probeLog, "SOAP GetStatus failed: " + $probeError, $utf8NoBom)
+        throw "RCCService is listening but did not pass the SOAP test. $probeError. See $probeLog"
+    }
+
+    Write-Host "RCCService startup and SOAP test completed successfully." -ForegroundColor Green
+} catch {
+    $failure = $_ | Out-String
+    try {
+        Add-Content -LiteralPath $startupLog -Value ([Environment]::NewLine + "STARTUP ERROR:" + [Environment]::NewLine + $failure)
+    } catch {}
+    throw
+} finally {
+    try { Stop-Transcript | Out-Null } catch {}
+}
