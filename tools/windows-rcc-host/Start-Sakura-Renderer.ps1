@@ -170,10 +170,24 @@ try {
         $rendererProcess = Start-Process -FilePath $powershell -ArgumentList $rendererArguments -WorkingDirectory $repoRoot -WindowStyle Hidden -RedirectStandardOutput $rendererOut -RedirectStandardError $rendererErr -PassThru
     }
 } catch {
+    $errorDetails = [string]$_.Exception.Message
+    if (Test-Path -LiteralPath $rccLog) {
+        $rccTail = (Get-Content -LiteralPath $rccLog -Tail 18 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+        if (-not [string]::IsNullOrWhiteSpace($rccTail)) {
+            $errorDetails += [Environment]::NewLine + [Environment]::NewLine + "RCC startup log:" + [Environment]::NewLine + $rccTail
+        }
+    }
+    $probeLogPath = Join-Path $logDir "rcc-soap-probe.log"
+    if (Test-Path -LiteralPath $probeLogPath) {
+        $probeText = Get-Content -LiteralPath $probeLogPath -Raw -ErrorAction SilentlyContinue
+        if (-not [string]::IsNullOrWhiteSpace($probeText)) {
+            $errorDetails += [Environment]::NewLine + [Environment]::NewLine + "SOAP check:" + [Environment]::NewLine + $probeText
+        }
+    }
     Remove-Item Env:PEKORA_RENDERER_SECRET -ErrorAction SilentlyContinue
     Remove-Item Env:SAKURA_OPENPEKORA_ROOT -ErrorAction SilentlyContinue
     Remove-Item Env:SAKURA_RENDERER_LOG_DIR -ErrorAction SilentlyContinue
-    Show-Notice ("Could not start the OpenPekora renderer." + [Environment]::NewLine + [Environment]::NewLine + $_.Exception.Message + [Environment]::NewLine + [Environment]::NewLine + "Logs: " + $logDir) "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Error)
+    Show-Notice ("Could not start the OpenPekora renderer." + [Environment]::NewLine + [Environment]::NewLine + $errorDetails + [Environment]::NewLine + [Environment]::NewLine + "Full logs: " + $logDir) "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Error)
     exit
 } finally {
     $secret = $null
