@@ -651,39 +651,17 @@ async function refreshItemRap(env,itemId) {
 }
 
 async function getProfileTotalRap(env,userId) {
+  // Count the current P$ value of each owned copy, including non-limited items.
   const row = await env.DB.prepare(`
     SELECT COALESCE(SUM(
-      CASE
-        WHEN rap_item.is_limited=1
-          AND COALESCE(rap_item.is_offsale,0)=0
-          AND rap_item.rap_currency='P$'
-          AND rap_item.rap_value>0
-        THEN COALESCE(
-          (
-            SELECT CAST(ROUND(AVG(recent_sales.price)) AS INTEGER)
-            FROM (
-              SELECT sale.price
-              FROM (
-                SELECT p.price,p.purchased_at AS sold_at
-                FROM purchases p
-                WHERE p.item_id=rap_item.id AND p.currency='P$'
-                UNION ALL
-                SELECT r.price,r.sold_at AS sold_at
-                FROM resale_listings r
-                WHERE r.item_id=rap_item.id AND r.status='SOLD' AND r.currency='P$'
-              ) sale
-              ORDER BY sale.sold_at DESC
-              LIMIT 10
-            ) recent_sales
-          ),
-          rap_item.rap_value
-        ) * COALESCE(rap_inventory.quantity,1)
+      CASE WHEN COALESCE(i.currency,'P$')='P$'
+        THEN MAX(COALESCE(i.price,0),0) * MAX(COALESCE(v.quantity,0),0)
         ELSE 0
       END
     ),0) AS total_rap
-    FROM inventory rap_inventory
-    JOIN items rap_item ON rap_item.id=rap_inventory.item_id
-    WHERE rap_inventory.user_id=?
+    FROM inventory v
+    JOIN items i ON i.id=v.item_id
+    WHERE v.user_id=? AND v.quantity>0
   `).bind(userId).first();
   return Number(row?.total_rap||0);
 }
@@ -2310,6 +2288,430 @@ async function route(request, env) {
     const numericId = /^\d+$/.test(q) && Number.isSafeInteger(Number(q)) ? Number(q) : -1;
     const rows = await env.DB.prepare("SELECT username,role,public_id,is_verified,is_banned FROM users WHERE (instr(lower(username),lower(?))>0 OR public_id=?) ORDER BY is_banned DESC,username LIMIT 20").bind(q,numericId).all();
     return json({users:rows.results || []});
+  }
+
+  if (request.method === "GET" && path === "/api/rap-leaderboard") {
+    const rows = await env.DB.prepare(`
+      SELECT u.public_id,u.username,u.is_verified,
+        COALESCE(SUM(
+          CASE WHEN COALESCE(i.currency,'P
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const rows = await env.DB.prepare(`
+      SELECT c.code,c.claimed_at,p.reward_amount,p.reward_currency,
+        (SELECT GROUP_CONCAT(i.name, ', ') FROM promo_code_items pi JOIN items i ON i.id=pi.item_id WHERE pi.code=p.code) AS item_names
+      FROM promo_code_claims c
+      JOIN promo_codes p ON p.code=c.code
+      WHERE c.user_id=?
+      ORDER BY c.claimed_at DESC
+      LIMIT 25
+    `).bind(user.id).all();
+    return json({claims:rows.results||[]});
+  }
+
+  if (path === "/api/promocodes/redeem" && request.method === "POST") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const data = await body(request);
+    const code = String(data?.code||"").trim().toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(code)) return fail("Enter a valid promo code.");
+    const promo = await env.DB.prepare("SELECT code,reward_amount,reward_currency,max_uses,expires_at,is_active FROM promo_codes WHERE code=? COLLATE NOCASE").bind(code).first();
+    if (!promo || Number(promo.is_active)!==1) return fail("This promo code is invalid or inactive.",404);
+    if (promo.expires_at && Date.parse(promo.expires_at)<=Date.now()) return fail("This promo code has expired.",410);
+    const rewardItems = await env.DB.prepare("SELECT pi.item_id,i.name FROM promo_code_items pi JOIN items i ON i.id=pi.item_id WHERE pi.code=? ORDER BY i.name").bind(code).all();
+    if (Number(promo.reward_amount||0)<=0 && !(rewardItems.results||[]).length) return fail("This promo code has no reward configured.",409);
+    const claimId = randomToken();
+    const statements = [
+      env.DB.prepare(`
+        INSERT INTO promo_code_claims (code,user_id,claim_id)
+        SELECT ?,?,?
+        WHERE EXISTS (
+          SELECT 1 FROM promo_codes p
+          WHERE p.code=? COLLATE NOCASE
+            AND p.is_active=1
+            AND (p.expires_at IS NULL OR datetime(p.expires_at)>datetime('now'))
+            AND (p.max_uses IS NULL OR (SELECT COUNT(*) FROM promo_code_claims c WHERE c.code=p.code)<p.max_uses)
+        )
+        ON CONFLICT(code,user_id) DO NOTHING
+      `).bind(code,user.id,claimId,code),
+      env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND ?='P$' AND EXISTS (SELECT 1 FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=? AND claim_id=?)")
+        .bind(Number(promo.reward_amount||0),user.id,promo.reward_currency||"P$",code,user.id,claimId),
+      env.DB.prepare("UPDATE users SET tix_balance=tix_balance+? WHERE id=? AND ?='Tix' AND EXISTS (SELECT 1 FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=? AND claim_id=?)")
+        .bind(Number(promo.reward_amount||0),user.id,promo.reward_currency||"P$",code,user.id,claimId),
+      ...(rewardItems.results||[]).map(item=>env.DB.prepare("INSERT OR IGNORE INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE EXISTS (SELECT 1 FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=? AND claim_id=?)")
+        .bind(id(),user.id,item.item_id,code,user.id,claimId))
+    ];
+    const results = await env.DB.batch(statements);
+    if (Number(results?.[0]?.meta?.changes||0)!==1) {
+      const duplicate = await env.DB.prepare("SELECT 1 AS claimed FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=?").bind(code,user.id).first();
+      if (duplicate) return fail("You have already redeemed this promo code.",409);
+      return fail("This promo code has reached its maximum number of uses or is no longer available.",410);
+    }
+    return json({ok:true,reward:{amount:Number(promo.reward_amount||0),currency:promo.reward_currency||"P$",items:(rewardItems.results||[]).map(item=>item.name)}});
+  }
+
+  if (path === "/api/owner/promocodes" || path.startsWith("/api/owner/promocodes/")) {
+    const actor = await requireUser(request,env);
+    if (!actor) return fail("Please sign in.",401);
+    if (actor.role !== "OWNER") return fail("Owner access required.",403);
+    if (path === "/api/owner/promocodes" && request.method === "GET") {
+      const [codes,items] = await Promise.all([
+        env.DB.prepare(`
+          SELECT p.code,p.reward_amount,p.reward_currency,p.max_uses,p.expires_at,p.is_active,p.created_at,
+            (SELECT COUNT(*) FROM promo_code_claims c WHERE c.code=p.code) AS usage_count,
+            (SELECT GROUP_CONCAT(i.name, ', ') FROM promo_code_items pi JOIN items i ON i.id=pi.item_id WHERE pi.code=p.code) AS item_names
+          FROM promo_codes p
+          ORDER BY p.created_at DESC,p.code
+        `).all(),
+        env.DB.prepare("SELECT id,name,category,image_url FROM items ORDER BY name").all()
+      ]);
+      return json({promocodes:codes.results||[],items:items.results||[]});
+    }
+    if (path === "/api/owner/promocodes" && request.method === "POST") {
+      const data = await body(request);
+      const code = String(data?.code||"").trim().toUpperCase();
+      if (!/^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(code)) return fail("Promo codes must be 3–32 characters and use letters, numbers, _ or -.");
+      const amount = Number(data?.reward_amount ?? 0);
+      if (!Number.isSafeInteger(amount) || amount < 0 || amount > 1000000) return fail("Reward amount must be from 0 to 1,000,000.");
+      const currency = String(data?.reward_currency||"P$");
+      if (!["P$","Tix"].includes(currency)) return fail("Choose P$ or Tix for the reward.");
+      const rawItems = Array.isArray(data?.item_ids) ? data.item_ids : [];
+      const itemIds = [...new Set(rawItems.map(value=>String(value||"").trim()).filter(Boolean))];
+      if (itemIds.length>25) return fail("Choose up to 25 reward items.");
+      if (!amount && !itemIds.length) return fail("Choose at least one currency or item reward.");
+      if (itemIds.length) {
+        const placeholders = itemIds.map(()=>"?").join(",");
+        const found = await env.DB.prepare("SELECT COUNT(*) AS n FROM items WHERE id IN ("+placeholders+")").bind(...itemIds).first();
+        if (Number(found?.n||0)!==itemIds.length) return fail("One or more selected reward items were not found.",404);
+      }
+      const maxUsesRaw = data?.max_uses;
+      const maxUses = maxUsesRaw===undefined || maxUsesRaw===null || maxUsesRaw==="" ? null : Number(maxUsesRaw);
+      if (maxUses!==null && (!Number.isSafeInteger(maxUses) || maxUses<1 || maxUses>1000000)) return fail("Maximum uses must be between 1 and 1,000,000.");
+      let expiresAt = null;
+      if (data?.expires_at) {
+        const expiry = Date.parse(String(data.expires_at));
+        if (!Number.isFinite(expiry) || expiry<=Date.now()) return fail("Expiry date must be a valid future date.");
+        expiresAt = new Date(expiry).toISOString();
+      }
+      const existing = await env.DB.prepare("SELECT code FROM promo_codes WHERE code=? COLLATE NOCASE").bind(code).first();
+      if (existing) return fail("That promo code already exists.",409);
+      const createStatements = [
+        env.DB.prepare("INSERT INTO promo_codes (code,reward_amount,reward_currency,max_uses,expires_at,created_by) VALUES (?,?,?,?,?,?)").bind(code,amount,currency,maxUses,expiresAt,actor.id),
+        ...itemIds.map(itemId=>env.DB.prepare("INSERT INTO promo_code_items (code,item_id) VALUES (?,?)").bind(code,itemId))
+      ];
+      await env.DB.batch(createStatements);
+      return json({ok:true,code},201);
+    }
+    const promoMatch = path.match(/^\/api\/owner\/promocodes\/([A-Za-z0-9_-]{3,32})$/i);
+    if (promoMatch && request.method === "PATCH") {
+      const data = await body(request);
+      if (typeof data?.is_active !== "boolean") return fail("Promo code status must be true or false.");
+      const result = await env.DB.prepare("UPDATE promo_codes SET is_active=? WHERE code=? COLLATE NOCASE").bind(data.is_active?1:0,promoMatch[1]).run();
+      if (!result?.meta?.changes) return fail("Promo code not found.",404);
+      return json({ok:true,is_active:data.is_active});
+    }
+    return fail("Unsupported promo code management action.",405);
+  }
+
+  return fail("API route not found.",404);
+}
+
+export default {
+  async scheduled(controller,env,ctx) {
+    const task = runDailyMembershipPayout(controller,env).catch(error => {
+      console.error("[Sakura membership] Daily payout failed:",error);
+      throw error;
+    });
+    ctx.waitUntil(task);
+  },
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/")) {
+      const auditEnabled = url.pathname.startsWith("/api/") && ["POST","PUT","PATCH","DELETE"].includes(request.method.toUpperCase()) && Boolean(env.DB);
+      const auditRequest = auditEnabled ? request.clone() : null;
+      const auditActorPromise = auditEnabled ? currentUser(request,env).catch(()=>null) : Promise.resolve(null);
+      try {
+        const response = await route(request,env);
+        if (auditEnabled && response.status >= 200 && response.status < 300) {
+          const auditTask = (async()=>{
+            const actor = await auditActorPromise;
+            const event = await buildSiteAuditEvent(auditRequest,env,actor,response);
+            await recordSiteAudit(env,event);
+          })().catch(error=>console.error("[Sakura Logs] Audit task failed:",error));
+          if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(auditTask);
+          else await auditTask;
+        }
+        return response;
+      } catch (error) {
+        if (error instanceof RequestBodyTooLarge) return fail("Request body must be 16 KB or smaller.",413);
+        console.error("[Pekora API] Unhandled error:", request.method, url.pathname, error);
+        return fail("Server error. Check the Worker logs. Reference: " + crypto.randomUUID().slice(0,8),500);
+      }
+    }
+    if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
+      return new Response("Static asset binding ASSETS is missing.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+    }
+    const itemShareMatch = url.pathname.match(new RegExp("^/item/([A-Za-z0-9_-]{1,80})/?$"));
+    if (request.method === "GET" && itemShareMatch && env.DB) {
+      const sharedItem = await env.DB.prepare("SELECT id,name,description,category,price,currency,image_url FROM items WHERE id=? AND is_for_sale=1").bind(itemShareMatch[1]).first();
+      if (sharedItem) {
+        const pageResponse = await env.ASSETS.fetch(new Request(new URL("/",url), { method:"GET", headers:request.headers }));
+        if (pageResponse.ok && (pageResponse.headers.get("content-type")||"").includes("text/html")) {
+          const escapeHtml = value => String(value??"").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+          const title = String(sharedItem.name||"Sakura item").slice(0,100);
+          const description = (sharedItem.category+" · "+Number(sharedItem.price||0).toLocaleString("en-US")+" "+(sharedItem.currency||"P$")+(String(sharedItem.description||"").trim()?" · "+String(sharedItem.description).trim():"")).slice(0,300);
+          const image = /^https:\/\//i.test(String(sharedItem.image_url||"")) ? String(sharedItem.image_url) : "https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/pekora-logo.png";
+          const canonical = new URL("/item/"+encodeURIComponent(sharedItem.id),url.origin).href;
+          const metadata = '<meta name="description" content="'+escapeHtml(description)+'">' +
+            '<meta property="og:type" content="website"><meta property="og:site_name" content="Sakura">' +
+            '<meta property="og:title" content="'+escapeHtml(title)+'">' +
+            '<meta property="og:description" content="'+escapeHtml(description)+'">' +
+            '<meta property="og:image" content="'+escapeHtml(image)+'"><meta property="og:url" content="'+escapeHtml(canonical)+'">' +
+            '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="'+escapeHtml(title)+'">' +
+            '<meta name="twitter:description" content="'+escapeHtml(description)+'"><meta name="twitter:image" content="'+escapeHtml(image)+'">';
+          let html = await pageResponse.text();
+          html = html.replace(/<title>[\s\S]*?<\/title>/i,'<title>'+escapeHtml(title)+' | Sakura</title>');
+          html = html.replace(/<meta\s+name=["']description["'][^>]*>/i,"");
+          html = html.replace("</head>",metadata+"</head>");
+          const headers = new Headers(pageResponse.headers);
+          headers.set("content-type","text/html; charset=utf-8");
+          headers.set("cache-control","public, max-age=60, s-maxage=300");
+          headers.set("X-Content-Type-Options","nosniff");
+          headers.set("X-Frame-Options","DENY");
+          headers.set("Referrer-Policy","strict-origin-when-cross-origin");
+          headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
+          headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
+          return new Response(html,{status:200,headers});
+        }
+      }
+    }
+    const response = await env.ASSETS.fetch(request);
+    const headers = new Headers(response.headers);
+    headers.set("X-Content-Type-Options","nosniff");
+    headers.set("X-Frame-Options","DENY");
+    headers.set("Referrer-Policy","strict-origin-when-cross-origin");
+    headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
+    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
+    return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+  }
+};
+)='P
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const rows = await env.DB.prepare(`
+      SELECT c.code,c.claimed_at,p.reward_amount,p.reward_currency,
+        (SELECT GROUP_CONCAT(i.name, ', ') FROM promo_code_items pi JOIN items i ON i.id=pi.item_id WHERE pi.code=p.code) AS item_names
+      FROM promo_code_claims c
+      JOIN promo_codes p ON p.code=c.code
+      WHERE c.user_id=?
+      ORDER BY c.claimed_at DESC
+      LIMIT 25
+    `).bind(user.id).all();
+    return json({claims:rows.results||[]});
+  }
+
+  if (path === "/api/promocodes/redeem" && request.method === "POST") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const data = await body(request);
+    const code = String(data?.code||"").trim().toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(code)) return fail("Enter a valid promo code.");
+    const promo = await env.DB.prepare("SELECT code,reward_amount,reward_currency,max_uses,expires_at,is_active FROM promo_codes WHERE code=? COLLATE NOCASE").bind(code).first();
+    if (!promo || Number(promo.is_active)!==1) return fail("This promo code is invalid or inactive.",404);
+    if (promo.expires_at && Date.parse(promo.expires_at)<=Date.now()) return fail("This promo code has expired.",410);
+    const rewardItems = await env.DB.prepare("SELECT pi.item_id,i.name FROM promo_code_items pi JOIN items i ON i.id=pi.item_id WHERE pi.code=? ORDER BY i.name").bind(code).all();
+    if (Number(promo.reward_amount||0)<=0 && !(rewardItems.results||[]).length) return fail("This promo code has no reward configured.",409);
+    const claimId = randomToken();
+    const statements = [
+      env.DB.prepare(`
+        INSERT INTO promo_code_claims (code,user_id,claim_id)
+        SELECT ?,?,?
+        WHERE EXISTS (
+          SELECT 1 FROM promo_codes p
+          WHERE p.code=? COLLATE NOCASE
+            AND p.is_active=1
+            AND (p.expires_at IS NULL OR datetime(p.expires_at)>datetime('now'))
+            AND (p.max_uses IS NULL OR (SELECT COUNT(*) FROM promo_code_claims c WHERE c.code=p.code)<p.max_uses)
+        )
+        ON CONFLICT(code,user_id) DO NOTHING
+      `).bind(code,user.id,claimId,code),
+      env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND ?='P$' AND EXISTS (SELECT 1 FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=? AND claim_id=?)")
+        .bind(Number(promo.reward_amount||0),user.id,promo.reward_currency||"P$",code,user.id,claimId),
+      env.DB.prepare("UPDATE users SET tix_balance=tix_balance+? WHERE id=? AND ?='Tix' AND EXISTS (SELECT 1 FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=? AND claim_id=?)")
+        .bind(Number(promo.reward_amount||0),user.id,promo.reward_currency||"P$",code,user.id,claimId),
+      ...(rewardItems.results||[]).map(item=>env.DB.prepare("INSERT OR IGNORE INTO inventory (id,user_id,item_id) SELECT ?,?,? WHERE EXISTS (SELECT 1 FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=? AND claim_id=?)")
+        .bind(id(),user.id,item.item_id,code,user.id,claimId))
+    ];
+    const results = await env.DB.batch(statements);
+    if (Number(results?.[0]?.meta?.changes||0)!==1) {
+      const duplicate = await env.DB.prepare("SELECT 1 AS claimed FROM promo_code_claims WHERE code=? COLLATE NOCASE AND user_id=?").bind(code,user.id).first();
+      if (duplicate) return fail("You have already redeemed this promo code.",409);
+      return fail("This promo code has reached its maximum number of uses or is no longer available.",410);
+    }
+    return json({ok:true,reward:{amount:Number(promo.reward_amount||0),currency:promo.reward_currency||"P$",items:(rewardItems.results||[]).map(item=>item.name)}});
+  }
+
+  if (path === "/api/owner/promocodes" || path.startsWith("/api/owner/promocodes/")) {
+    const actor = await requireUser(request,env);
+    if (!actor) return fail("Please sign in.",401);
+    if (actor.role !== "OWNER") return fail("Owner access required.",403);
+    if (path === "/api/owner/promocodes" && request.method === "GET") {
+      const [codes,items] = await Promise.all([
+        env.DB.prepare(`
+          SELECT p.code,p.reward_amount,p.reward_currency,p.max_uses,p.expires_at,p.is_active,p.created_at,
+            (SELECT COUNT(*) FROM promo_code_claims c WHERE c.code=p.code) AS usage_count,
+            (SELECT GROUP_CONCAT(i.name, ', ') FROM promo_code_items pi JOIN items i ON i.id=pi.item_id WHERE pi.code=p.code) AS item_names
+          FROM promo_codes p
+          ORDER BY p.created_at DESC,p.code
+        `).all(),
+        env.DB.prepare("SELECT id,name,category,image_url FROM items ORDER BY name").all()
+      ]);
+      return json({promocodes:codes.results||[],items:items.results||[]});
+    }
+    if (path === "/api/owner/promocodes" && request.method === "POST") {
+      const data = await body(request);
+      const code = String(data?.code||"").trim().toUpperCase();
+      if (!/^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(code)) return fail("Promo codes must be 3–32 characters and use letters, numbers, _ or -.");
+      const amount = Number(data?.reward_amount ?? 0);
+      if (!Number.isSafeInteger(amount) || amount < 0 || amount > 1000000) return fail("Reward amount must be from 0 to 1,000,000.");
+      const currency = String(data?.reward_currency||"P$");
+      if (!["P$","Tix"].includes(currency)) return fail("Choose P$ or Tix for the reward.");
+      const rawItems = Array.isArray(data?.item_ids) ? data.item_ids : [];
+      const itemIds = [...new Set(rawItems.map(value=>String(value||"").trim()).filter(Boolean))];
+      if (itemIds.length>25) return fail("Choose up to 25 reward items.");
+      if (!amount && !itemIds.length) return fail("Choose at least one currency or item reward.");
+      if (itemIds.length) {
+        const placeholders = itemIds.map(()=>"?").join(",");
+        const found = await env.DB.prepare("SELECT COUNT(*) AS n FROM items WHERE id IN ("+placeholders+")").bind(...itemIds).first();
+        if (Number(found?.n||0)!==itemIds.length) return fail("One or more selected reward items were not found.",404);
+      }
+      const maxUsesRaw = data?.max_uses;
+      const maxUses = maxUsesRaw===undefined || maxUsesRaw===null || maxUsesRaw==="" ? null : Number(maxUsesRaw);
+      if (maxUses!==null && (!Number.isSafeInteger(maxUses) || maxUses<1 || maxUses>1000000)) return fail("Maximum uses must be between 1 and 1,000,000.");
+      let expiresAt = null;
+      if (data?.expires_at) {
+        const expiry = Date.parse(String(data.expires_at));
+        if (!Number.isFinite(expiry) || expiry<=Date.now()) return fail("Expiry date must be a valid future date.");
+        expiresAt = new Date(expiry).toISOString();
+      }
+      const existing = await env.DB.prepare("SELECT code FROM promo_codes WHERE code=? COLLATE NOCASE").bind(code).first();
+      if (existing) return fail("That promo code already exists.",409);
+      const createStatements = [
+        env.DB.prepare("INSERT INTO promo_codes (code,reward_amount,reward_currency,max_uses,expires_at,created_by) VALUES (?,?,?,?,?,?)").bind(code,amount,currency,maxUses,expiresAt,actor.id),
+        ...itemIds.map(itemId=>env.DB.prepare("INSERT INTO promo_code_items (code,item_id) VALUES (?,?)").bind(code,itemId))
+      ];
+      await env.DB.batch(createStatements);
+      return json({ok:true,code},201);
+    }
+    const promoMatch = path.match(/^\/api\/owner\/promocodes\/([A-Za-z0-9_-]{3,32})$/i);
+    if (promoMatch && request.method === "PATCH") {
+      const data = await body(request);
+      if (typeof data?.is_active !== "boolean") return fail("Promo code status must be true or false.");
+      const result = await env.DB.prepare("UPDATE promo_codes SET is_active=? WHERE code=? COLLATE NOCASE").bind(data.is_active?1:0,promoMatch[1]).run();
+      if (!result?.meta?.changes) return fail("Promo code not found.",404);
+      return json({ok:true,is_active:data.is_active});
+    }
+    return fail("Unsupported promo code management action.",405);
+  }
+
+  return fail("API route not found.",404);
+}
+
+export default {
+  async scheduled(controller,env,ctx) {
+    const task = runDailyMembershipPayout(controller,env).catch(error => {
+      console.error("[Sakura membership] Daily payout failed:",error);
+      throw error;
+    });
+    ctx.waitUntil(task);
+  },
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/")) {
+      const auditEnabled = url.pathname.startsWith("/api/") && ["POST","PUT","PATCH","DELETE"].includes(request.method.toUpperCase()) && Boolean(env.DB);
+      const auditRequest = auditEnabled ? request.clone() : null;
+      const auditActorPromise = auditEnabled ? currentUser(request,env).catch(()=>null) : Promise.resolve(null);
+      try {
+        const response = await route(request,env);
+        if (auditEnabled && response.status >= 200 && response.status < 300) {
+          const auditTask = (async()=>{
+            const actor = await auditActorPromise;
+            const event = await buildSiteAuditEvent(auditRequest,env,actor,response);
+            await recordSiteAudit(env,event);
+          })().catch(error=>console.error("[Sakura Logs] Audit task failed:",error));
+          if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(auditTask);
+          else await auditTask;
+        }
+        return response;
+      } catch (error) {
+        if (error instanceof RequestBodyTooLarge) return fail("Request body must be 16 KB or smaller.",413);
+        console.error("[Pekora API] Unhandled error:", request.method, url.pathname, error);
+        return fail("Server error. Check the Worker logs. Reference: " + crypto.randomUUID().slice(0,8),500);
+      }
+    }
+    if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
+      return new Response("Static asset binding ASSETS is missing.",{status:503,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+    }
+    const itemShareMatch = url.pathname.match(new RegExp("^/item/([A-Za-z0-9_-]{1,80})/?$"));
+    if (request.method === "GET" && itemShareMatch && env.DB) {
+      const sharedItem = await env.DB.prepare("SELECT id,name,description,category,price,currency,image_url FROM items WHERE id=? AND is_for_sale=1").bind(itemShareMatch[1]).first();
+      if (sharedItem) {
+        const pageResponse = await env.ASSETS.fetch(new Request(new URL("/",url), { method:"GET", headers:request.headers }));
+        if (pageResponse.ok && (pageResponse.headers.get("content-type")||"").includes("text/html")) {
+          const escapeHtml = value => String(value??"").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+          const title = String(sharedItem.name||"Sakura item").slice(0,100);
+          const description = (sharedItem.category+" · "+Number(sharedItem.price||0).toLocaleString("en-US")+" "+(sharedItem.currency||"P$")+(String(sharedItem.description||"").trim()?" · "+String(sharedItem.description).trim():"")).slice(0,300);
+          const image = /^https:\/\//i.test(String(sharedItem.image_url||"")) ? String(sharedItem.image_url) : "https://raw.githubusercontent.com/Blue7366/OpenPekora/main/frontend/public/img/pekora-logo.png";
+          const canonical = new URL("/item/"+encodeURIComponent(sharedItem.id),url.origin).href;
+          const metadata = '<meta name="description" content="'+escapeHtml(description)+'">' +
+            '<meta property="og:type" content="website"><meta property="og:site_name" content="Sakura">' +
+            '<meta property="og:title" content="'+escapeHtml(title)+'">' +
+            '<meta property="og:description" content="'+escapeHtml(description)+'">' +
+            '<meta property="og:image" content="'+escapeHtml(image)+'"><meta property="og:url" content="'+escapeHtml(canonical)+'">' +
+            '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="'+escapeHtml(title)+'">' +
+            '<meta name="twitter:description" content="'+escapeHtml(description)+'"><meta name="twitter:image" content="'+escapeHtml(image)+'">';
+          let html = await pageResponse.text();
+          html = html.replace(/<title>[\s\S]*?<\/title>/i,'<title>'+escapeHtml(title)+' | Sakura</title>');
+          html = html.replace(/<meta\s+name=["']description["'][^>]*>/i,"");
+          html = html.replace("</head>",metadata+"</head>");
+          const headers = new Headers(pageResponse.headers);
+          headers.set("content-type","text/html; charset=utf-8");
+          headers.set("cache-control","public, max-age=60, s-maxage=300");
+          headers.set("X-Content-Type-Options","nosniff");
+          headers.set("X-Frame-Options","DENY");
+          headers.set("Referrer-Policy","strict-origin-when-cross-origin");
+          headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
+          headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
+          return new Response(html,{status:200,headers});
+        }
+      }
+    }
+    const response = await env.ASSETS.fetch(request);
+    const headers = new Headers(response.headers);
+    headers.set("X-Content-Type-Options","nosniff");
+    headers.set("X-Frame-Options","DENY");
+    headers.set("Referrer-Policy","strict-origin-when-cross-origin");
+    headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
+    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
+    return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+  }
+};
+
+            THEN MAX(COALESCE(i.price,0),0) * MAX(COALESCE(v.quantity,0),0)
+            ELSE 0
+          END
+        ),0) AS total_rap,
+        COALESCE(SUM(v.quantity),0) AS item_count
+      FROM users u
+      JOIN inventory v ON v.user_id=u.id AND v.quantity>0
+      JOIN items i ON i.id=v.item_id
+      WHERE u.is_banned=0
+      GROUP BY u.id
+      HAVING total_rap>0
+      ORDER BY total_rap DESC,item_count DESC,u.username COLLATE NOCASE ASC
+      LIMIT 10
+    `).all();
+    return json({users:rows.results||[]});
   }
 
   if (path === "/api/promocodes" && request.method === "GET") {
