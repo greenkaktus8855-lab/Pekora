@@ -1,5 +1,6 @@
 const encoder = new TextEncoder();
 const DUMMY_PASSWORD_SALT = "pekora-login-timing-protection-v1";
+const OFFICIAL_SAKURA_GROUP_ID = "c2027280-9689-4d0a-863c-6bca37f30176";
 const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
   status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers }
 });
@@ -215,6 +216,8 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS sakura_groups (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, description TEXT NOT NULL DEFAULT '', avatar_url TEXT NOT NULL DEFAULT '', is_verified INTEGER NOT NULL DEFAULT 0, owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS group_image_files (id TEXT PRIMARY KEY, group_id TEXT NOT NULL UNIQUE REFERENCES sakura_groups(id) ON DELETE CASCADE, image_data BLOB NOT NULL, content_type TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS group_members (group_id TEXT NOT NULL REFERENCES sakura_groups(id) ON DELETE CASCADE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL DEFAULT 'MEMBER' CHECK(role IN ('OWNER','MEMBER')), joined_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(group_id,user_id))"),
+        env.DB.prepare("INSERT OR IGNORE INTO group_members (group_id,user_id,role) SELECT ?,u.id,CASE WHEN g.owner_id=u.id THEN 'OWNER' ELSE 'MEMBER' END FROM users u JOIN sakura_groups g ON g.id=? WHERE NOT EXISTS (SELECT 1 FROM site_settings WHERE setting_key='official_sakura_group_backfill_v1')").bind(OFFICIAL_SAKURA_GROUP_ID, OFFICIAL_SAKURA_GROUP_ID),
+        env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) SELECT 'official_sakura_group_backfill_v1',datetime('now') WHERE EXISTS (SELECT 1 FROM sakura_groups WHERE id=?) AND NOT EXISTS (SELECT 1 FROM site_settings WHERE setting_key='official_sakura_group_backfill_v1')").bind(OFFICIAL_SAKURA_GROUP_ID),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS trades (id TEXT PRIMARY KEY, sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, offered_items TEXT NOT NULL DEFAULT '[]', requested_items TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','DECLINED','CANCELLED')), created_at TEXT NOT NULL DEFAULT (datetime('now')), responded_at TEXT)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS resale_listings (id TEXT PRIMARY KEY, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, seller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, price INTEGER NOT NULL CHECK(price>0 AND price<=9007199254740991), currency TEXT NOT NULL DEFAULT 'P$' CHECK(currency='P$'), status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','SOLD','CANCELLED')), buyer_id TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), sold_at TEXT)"),
 
@@ -792,7 +795,8 @@ async function route(request, env) {
       await env.DB.batch([
         env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,balance,public_id) VALUES (?,?,?,?,100,(SELECT COALESCE(MAX(public_id),0)+1 FROM users))").bind(userId, username, hash, salt),
         env.DB.prepare("INSERT INTO profiles (user_id) VALUES (?)").bind(userId),
-        env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token), userId)
+        env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token), userId),
+        env.DB.prepare("INSERT OR IGNORE INTO group_members (group_id,user_id,role) SELECT ?,?,'MEMBER' WHERE EXISTS (SELECT 1 FROM sakura_groups WHERE id=?)").bind(OFFICIAL_SAKURA_GROUP_ID, userId, OFFICIAL_SAKURA_GROUP_ID)
       ]);
     } catch (error) {
       const existing = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first().catch(() => null);
