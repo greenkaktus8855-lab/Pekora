@@ -616,7 +616,7 @@ async function route(request, env) {
         "SELECT token_hash,user_id,expires_at FROM sessions LIMIT 0",
         "SELECT user_id,description,avatar_json FROM profiles LIMIT 0",
         "SELECT user_id,body_colors,rig_type,scales_json FROM avatar_settings LIMIT 0",
-        "SELECT id,name,description,category,price,currency,image_url,model_url,is_limited,is_for_sale,is_offsale,created_at FROM items LIMIT 0",
+        "SELECT id,name,description,category,price,currency,rap_value,rap_currency,image_url,model_url,is_limited,is_for_sale,is_offsale,created_at FROM items LIMIT 0",
         "SELECT id,user_id,item_id,purchased_at FROM inventory LIMIT 0",
         "SELECT id,user_id,item_id,price,currency,purchased_at FROM purchases LIMIT 0",
         "SELECT user_id,friend_id,status,created_at FROM friends LIMIT 0"
@@ -897,7 +897,7 @@ async function route(request, env) {
       FROM resale_listings r
       JOIN items i ON i.id=r.item_id
       JOIN users u ON u.id=r.seller_id
-      WHERE r.status='ACTIVE' AND u.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1)
+      WHERE r.status='ACTIVE' AND u.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit))
         AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
         AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
       ORDER BY r.created_at DESC LIMIT 200`).all();
@@ -912,6 +912,7 @@ async function route(request, env) {
         u.username AS seller_name,u.public_id AS seller_public_id,u.is_verified AS seller_verified
       FROM resale_listings r JOIN users u ON u.id=r.seller_id
       WHERE r.item_id=? AND r.status='ACTIVE' AND u.is_banned=0
+         AND EXISTS (SELECT 1 FROM items eligible WHERE eligible.id=r.item_id AND (eligible.is_limited=1 OR eligible.is_offsale=1 OR (eligible.stock_limit>0 AND eligible.stock_sold>=eligible.stock_limit)))
         AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
         AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
       ORDER BY r.price ASC,r.created_at ASC`).bind(item.id).all();
@@ -926,9 +927,10 @@ async function route(request, env) {
     const price = Number(data?.price);
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId)) return fail("Choose a valid item.");
     if (!Number.isSafeInteger(price)||price<1||price>1000000) return fail("Price must be between 1 and 1,000,000 P$.");
-    const item = await env.DB.prepare("SELECT i.id,i.name,i.is_limited,i.is_offsale FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.item_id=?").bind(user.id,itemId).first();
+    const item = await env.DB.prepare("SELECT i.id,i.name,i.price,i.currency,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.item_id=?").bind(user.id,itemId).first();
     if (!item) return fail("This item is not in your inventory.",404);
-    if (Number(item.is_limited)!==1&&Number(item.is_offsale)!==1) return fail("Only Limited and Off Sale items can be sold by players.",403);
+    const soldOut = Number(item.stock_limit)>0 && Number(item.stock_sold)>=Number(item.stock_limit);
+    if (Number(item.is_limited)!==1&&Number(item.is_offsale)!==1&&!soldOut) return fail("Only Limited, Off Sale, or sold-out items can be resold.",403);
     const locked = await env.DB.prepare("SELECT 1 AS locked FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId).first();
     if (locked) return fail("This item is reserved in a pending trade. Cancel that trade before listing it.",409);
     const listingId=id();
@@ -939,17 +941,15 @@ async function route(request, env) {
           WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?)
             AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)
             AND NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE')
-            AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1))`)
+            AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1 OR (stock_limit>0 AND stock_sold>=stock_limit)))`)
           .bind(listingId,itemId,user.id,price,user.id,itemId,user.id,itemId,user.id,itemId,itemId),
-        env.DB.prepare("UPDATE items SET price=?,currency='P$' WHERE id=? AND changes()=1").bind(price,itemId)
       ]);
       if (!results?.[0]?.meta?.changes) return fail("This item is already listed, reserved in a trade, or no longer eligible.",409);
-      if (!results?.[1]?.meta?.changes) throw new Error("The listing price could not be synchronized with the catalog item.");
     } catch (error) {
       console.error("[Sakura resale] Listing creation failed:",error);
       return fail("Could not create this listing. Refresh your inventory and try again.",409);
     }
-    return json({ok:true,listingId,price,itemPrice:price,currency:"P$"});
+    return json({ok:true,listingId,price,itemPrice:Number(item.price||0),currency:item.currency||"P$"});
   }
 
   const resaleListingMatch = path.match(/^\/api\/resale\/listings\/([A-Za-z0-9-]+)$/);
@@ -968,7 +968,7 @@ async function route(request, env) {
     const listing = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,i.name,s.username AS seller_name
       FROM resale_listings r JOIN items i ON i.id=r.item_id
       JOIN users s ON s.id=r.seller_id
-      WHERE r.id=? AND r.status='ACTIVE' AND s.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1)`)
+      WHERE r.id=? AND r.status='ACTIVE' AND s.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit))`)
       .bind(resaleBuyMatch[1]).first();
     if (!listing) return fail("This listing is no longer available.",404);
     if (listing.seller_id===user.id) return fail("You cannot buy your own listing.",403);
@@ -979,7 +979,7 @@ async function route(request, env) {
       const results = await env.DB.batch([
         env.DB.prepare(`UPDATE resale_listings SET status='SOLD',buyer_id=?,sold_at=datetime('now')
           WHERE id=? AND status='ACTIVE' AND seller_id<>?
-            AND EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=resale_listings.seller_id AND v.item_id=resale_listings.item_id AND (i.is_limited=1 OR i.is_offsale=1))
+            AND EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=resale_listings.seller_id AND v.item_id=resale_listings.item_id AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit)))
             AND EXISTS (SELECT 1 FROM users b WHERE b.id=? AND b.balance>=resale_listings.price)
             AND EXISTS (SELECT 1 FROM users s WHERE s.id=resale_listings.seller_id AND s.is_banned=0)
             AND NOT EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=resale_listings.item_id)
@@ -1076,7 +1076,15 @@ async function route(request, env) {
 
   const profileIdMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})$/);
   if (request.method === "GET" && profileIdMatch) {
-    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(rap_item.price),0) FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id WHERE rap_inventory.user_id=u.id AND rap_item.is_limited=1 AND COALESCE(rap_item.is_offsale,0)=0 AND COALESCE(rap_item.base_currency,rap_item.currency,'P$')='P$') AS total_rap
+    const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description,(SELECT COALESCE(SUM(CASE
+          WHEN rap_item.is_limited=1 AND COALESCE(rap_item.is_offsale,0)=0 AND rap_item.rap_currency='P$' AND rap_item.rap_value>0
+          THEN MIN(rap_item.rap_value*2,COALESCE(
+            (SELECT CAST(ROUND(AVG(recent_sales.price)) AS INTEGER)
+             FROM (SELECT r.price FROM resale_listings r WHERE r.item_id=rap_item.id AND r.status='SOLD' ORDER BY r.sold_at DESC LIMIT 10) recent_sales),
+            rap_item.rap_value))
+          ELSE 0 END),0)
+        FROM inventory rap_inventory JOIN items rap_item ON rap_item.id=rap_inventory.item_id
+        WHERE rap_inventory.user_id=u.id) AS total_rap
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.public_id=? AND u.is_banned=0`).bind(Number(profileIdMatch[1])).first();
     if (!profile) return fail("User not found.",404);
     const [count,badgeRows] = await Promise.all([
