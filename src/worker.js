@@ -1605,8 +1605,10 @@ async function route(request, env) {
     if (typeof data?.password !== "string" || data.password.length < 12 || data.password.length > 128) {
       return fail("New owner password must be 12–128 characters.");
     }
-    const owner = await env.DB.prepare("SELECT id FROM users WHERE username='PekoraAdmin' COLLATE NOCASE AND role='OWNER'").first();
-    if (!owner) return fail("PekoraAdmin OWNER account was not found.",404);
+    // Recover the active OWNER by role, not by a hard-coded username.
+    // The one-time owner transfer can promote "Admin" and remove "PekoraAdmin".
+    const owner = await env.DB.prepare("SELECT id,username FROM users WHERE role='OWNER' ORDER BY CASE WHEN username='Admin' COLLATE NOCASE THEN 0 ELSE 1 END, created_at ASC LIMIT 1").first();
+    if (!owner) return fail("No OWNER account was found.",404);
     const activeUser = await currentUser(request,env);
     const clearCurrentCookie = activeUser?.id === owner.id;
     const salt = randomToken();
@@ -1617,7 +1619,7 @@ async function route(request, env) {
     ]);
     await clearRateLimit(env,key);
     return json(
-      {ok:true,message:"PekoraAdmin password reset. All previous sessions were signed out."},
+      {ok:true,message:owner.username+" password reset. All previous sessions were signed out.",username:owner.username},
       200,
       clearCurrentCookie?{"set-cookie":cookie("pekora_session","",0)}:{}
     );
