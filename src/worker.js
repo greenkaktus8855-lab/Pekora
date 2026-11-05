@@ -1345,9 +1345,13 @@ async function route(request, env) {
     }
     if (!rendererResponse.ok) {
       const detail=(await rendererResponse.text()).slice(0,500);
-      const safeDetail=detail.replace(/(secret|token|authorization)(\\s*[:=]\\s*)[^,\\s"]+/gi,"$1$2[redacted]");
-      console.error("[Sakura avatar] Renderer returned an error:",rendererResponse.status,safeDetail);
-      return new Response("OpenPekora renderer returned HTTP "+rendererResponse.status+": "+(safeDetail || "No additional renderer details."),{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store","x-sakura-renderer-status":String(rendererResponse.status)}});
+      const safeDetail=detail.replace(/(secret|token|authorization)(\s*[:=]\s*)[^,\s"]+/gi,"$1$2[redacted]");
+      const responseType=String(rendererResponse.headers.get("content-type")||"").toLowerCase();
+      const authHint=rendererResponse.status===401 && responseType.includes("application/json")
+        ? " The 401 came back as JSON, not the plain-text response from Sakura's shared-secret check. Check Cloudflare Access service-token authentication or another proxy in front of the Renderer."
+        : "";
+      console.error("[Sakura avatar] Renderer returned an error:",rendererResponse.status,responseType,safeDetail);
+      return new Response("OpenPekora renderer returned HTTP "+rendererResponse.status+": "+(safeDetail || "No additional renderer details.")+authHint,{status:502,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store","x-sakura-renderer-status":String(rendererResponse.status)}});
     }
     let rendererPayload;
     try { rendererPayload=await rendererResponse.json(); }
