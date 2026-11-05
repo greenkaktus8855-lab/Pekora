@@ -340,7 +340,7 @@ async function showItem(itemId,updateHistory=true){
  if(!resaleSnapshot){try{resaleSnapshot=await api("/api/resale/item/"+encodeURIComponent(item.id))}catch{resaleSnapshot={listings:[]}}}
  if(!isActiveView(view))return;
  const isOwned=ownedItemIds.has(item.id),isOffsale=Number(item.is_offsale)===1,stock=itemStockState(item);
- const resaleEligible=Number(item.is_limited)===1||isOffsale;
+ const resaleEligible=Number(item.is_limited)===1||isOffsale||stock.soldOut;
  const resaleListings=Array.isArray(resaleSnapshot.listings)?resaleSnapshot.listings:[];
  const myListing=me?resaleListings.find(listing=>listing.seller_id===me.id):null;
  const otherListings=resaleListings.filter(listing=>!me||listing.seller_id!==me.id);
@@ -360,12 +360,12 @@ async function showItem(itemId,updateHistory=true){
   const price=Number(new FormData(form).get("price"));
   button.disabled=true;message.textContent="Creating listing...";
   try{
-   const result=await api("/api/resale/listings",{method:"POST",body:JSON.stringify({itemId:item.id,price})});
-   const updatedItem={...item,price:Number(result.itemPrice??result.price??price),currency:"P$"};
-   const cachedIndex=items.findIndex(entry=>entry.id===item.id);
-   if(cachedIndex>=0)items[cachedIndex]=updatedItem;
-   else items.push(updatedItem);
-   item=updatedItem;
+   const listingResult=await api("/api/resale/listings",{method:"POST",body:JSON.stringify({itemId:item.id,price})});
+   
+   
+   
+   
+   
    toast("Item listed for sale");
    await showItem(item.id,false);
   }catch(error){message.textContent=error.message;button.disabled=false}
@@ -600,7 +600,8 @@ async function ownerRecoveryPage(){
 
 async function logout(){try{await api("/api/logout",{method:"POST"});setUser(null);page("home")}catch(e){toast(e.message)}}
 function inventoryItemCard(item){
- const eligible=Number(item.is_limited)===1||Number(item.is_offsale)===1;
+ const soldOut=Number(item.stock_limit)>0&&Number(item.stock_sold)>=Number(item.stock_limit);
+  const eligible=Number(item.is_limited)===1||Number(item.is_offsale)===1||soldOut;
  const status=item.active_listing_id
   ?'<span class="inventory-listing-status">Listed · '+currencyMarkup(item.active_listing_price,"P$")+'</span>'
   :eligible?'<span class="inventory-resale-hint">Eligible for resale</span>':"";
