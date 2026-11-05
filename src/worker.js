@@ -258,7 +258,7 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("INSERT OR IGNORE INTO item_market_price_baselines (item_id,base_price,base_currency) SELECT i.id,i.price,COALESCE(i.currency,'P$') FROM items i WHERE EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=i.id AND r.status='ACTIVE')"),
         env.DB.prepare("UPDATE items SET price=COALESCE((SELECT MIN(r.price) FROM resale_listings r WHERE r.item_id=items.id AND r.status='ACTIVE'),(SELECT b.base_price FROM item_market_price_baselines b WHERE b.item_id=items.id)), currency=CASE WHEN EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=items.id AND r.status='ACTIVE') THEN 'P$' ELSE COALESCE((SELECT b.base_currency FROM item_market_price_baselines b WHERE b.item_id=items.id),items.currency) END WHERE id IN (SELECT item_id FROM item_market_price_baselines)")
       ]);
-      // Resale asking prices no longer overwrite the shared catalog price.
+      // Active Player Marketplace asking prices are reflected in the shared catalog.
       const creatorSubmissionColumns = await env.DB.prepare("PRAGMA table_info(creator_submissions)").all();
       if (!(creatorSubmissionColumns.results || []).some(column => column.name === "price")) {
         await env.DB.prepare("ALTER TABLE creator_submissions ADD COLUMN price INTEGER NOT NULL DEFAULT 50 CHECK(price>=0 AND price<=1000000)").run();
@@ -566,6 +566,7 @@ async function syncItemMarketPrice(env,itemId) {
     return {price:Number(active.market_price),currency:"P$"};
   }
   await env.DB.prepare("UPDATE items SET price=?,currency=? WHERE id=?").bind(Number(baseline.base_price),String(baseline.base_currency||"P$"),itemId).run();
+  await env.DB.prepare("DELETE FROM item_market_price_baselines WHERE item_id=?").bind(itemId).run();
   return {price:Number(baseline.base_price),currency:String(baseline.base_currency||"P$")};
 }
 const AUDIT_SAFE_BODY_KEYS=Object.freeze(["action","reason","amount","currency","price","badgeKey","publicId","membershipType","groupId","is_active","name","title","itemId","role"]);
