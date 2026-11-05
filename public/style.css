@@ -1387,3 +1387,29 @@ body{color:#f0eaf8!important}
 .price-chart-gridline{stroke:#40374a}
 .price-chart-axis-label,.price-chart-date{fill:#b9adc8}
 .price-chart-point{fill:#a64dff;stroke:#e0c8ff;stroke-width:2}
+
+/* Admin Panel creation tools */
+.asset-quick-create{display:grid;gap:14px;margin:0 0 18px;padding:18px;border:1px solid #453755;border-radius:10px;background:#191622;color:#f2eff8}
+.asset-quick-create-heading h2,.asset-review-heading h2{margin:0 0 6px;color:#f6efff;font-size:20px}
+.asset-quick-create-heading p,.asset-review-heading p{margin:0;color:#aaa2b8;line-height:1.5}
+.asset-quick-create-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.asset-quick-create-form label{display:grid;gap:6px;color:#e8e0f0;font-size:13px;font-weight:700}
+.asset-quick-create-form label>span{display:inline;color:#aaa2b8;font-weight:400}
+.asset-quick-create-form input,.asset-quick-create-form select,.asset-quick-create-form textarea{width:100%;min-width:0;padding:10px 11px;border:1px solid #514461;border-radius:7px;background:#100e17;color:#f5f0fa;font:inherit}
+.asset-quick-create-form input:focus,.asset-quick-create-form select:focus,.asset-quick-create-form textarea:focus{outline:2px solid #8e65bd;outline-offset:1px}
+.asset-quick-create-wide,.asset-quick-create-actions{grid-column:1/-1}
+.asset-quick-create-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+.asset-quick-create-actions span{color:#bfb4cc;font-size:12px}
+.asset-quick-create-actions button:disabled{opacity:.6;cursor:wait}
+.asset-review-section{margin-top:8px}
+.asset-review-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 13px}
+.asset-review-count{padding:5px 9px;border:1px solid #514064;border-radius:999px;color:#cfc3de;font-size:11px;font-weight:700}
+@media(max-width:700px){
+ .asset-quick-create{padding:14px}
+ .asset-quick-create-form{grid-template-columns:1fr}
+ .asset-quick-create-wide,.asset-quick-create-actions{grid-column:1}
+ .asset-quick-create-actions{align-items:stretch;flex-direction:column}
+ .asset-quick-create-actions button{width:100%}
+ .asset-review-heading{align-items:flex-start;flex-direction:column}
+}
+
