@@ -118,9 +118,8 @@ try {
 }
 
 $npm = Get-Command "npm.cmd" -ErrorAction SilentlyContinue
-if (-not $npm) { $npm = Get-Command "npm" -ErrorAction SilentlyContinue }
 if (-not $npm) {
-    Show-Notice "Node.js and npm are not installed on this computer. Install the current Node.js LTS version first, then open this launcher again." "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Error)
+    Show-Notice "npm.cmd was not found. Install or repair Node.js so npm.cmd is available, then open this launcher again." "Sakura Renderer" ([System.Windows.Forms.MessageBoxIcon]::Error)
     exit
 }
 
