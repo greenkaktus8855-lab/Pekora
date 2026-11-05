@@ -172,6 +172,19 @@ let siteSettingsPromise;
 async function ensureSiteSettings(env) {
   if (!siteSettingsPromise) {
     siteSettingsPromise = (async () => {
+      // A previous interrupted resale-table rename can leave triggers whose
+      // SQL still points at the temporary legacy table. Remove only those
+      // stale triggers before the normal schema setup recreates valid ones.
+      const staleResaleTriggers = await env.DB.prepare(
+        "SELECT name FROM sqlite_master WHERE type='trigger' AND sql LIKE '%resale_listings_legacy_price_cap%'"
+      ).all();
+      for (const row of staleResaleTriggers.results || []) {
+        const triggerName = String(row.name || "").replace(/"/g, '""');
+        if (triggerName) {
+          await env.DB.prepare(`DROP TRIGGER IF EXISTS "${triggerName}"`).run();
+        }
+      }
+
       await env.DB.batch([
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS user_memberships (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, membership_type TEXT NOT NULL DEFAULT 'None' CHECK(membership_type IN ('None','BuildersClub','TurboBuildersClub','OutrageousBuildersClub','Premium')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))"),
