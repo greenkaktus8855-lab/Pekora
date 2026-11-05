@@ -6,7 +6,7 @@ if ([string]::IsNullOrWhiteSpace($logDir)) {
     $logDir = Join-Path $env:LOCALAPPDATA "SakuraRenderer\logs"
 }
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-$startupLog = Join-Path $logDir "rcc-startup.log"
+$startupLog = Join-Path $logDir "rcc-script-transcript.log"
 $probeLog = Join-Path $logDir "rcc-soap-probe.log"
 [System.IO.File]::WriteAllText($probeLog, "SOAP check has not run yet.", [System.Text.UTF8Encoding]::new($false))
 
