@@ -43,7 +43,19 @@ function Set-ConfigValue($Object, [string]$Name, $Value) {
     if ($Object.PSObject.Properties[$Name]) { $Object.$Name = $Value }
     else { $Object | Add-Member -MemberType NoteProperty -Name $Name -Value $Value }
 }
-Set-ConfigValue $config "BaseUrl" "https://sakura.mopcblox.online/"
+$platformBaseUrl = [string]$env:SAKURA_PLATFORM_URL
+if ([string]::IsNullOrWhiteSpace($platformBaseUrl)) {
+    $platformBaseUrl = "https://sakura.green-kaktus8855.workers.dev/"
+}
+try { $platformUri = [Uri]$platformBaseUrl }
+catch { throw "SAKURA_PLATFORM_URL is not a valid URL: $platformBaseUrl" }
+if (-not $platformUri.IsAbsoluteUri -or $platformUri.Scheme -ne "https" -or
+    $platformUri.AbsolutePath -ne "/" -or $platformUri.Query -or $platformUri.Fragment) {
+    throw "SAKURA_PLATFORM_URL must be an HTTPS site origin, for example https://sakura.green-kaktus8855.workers.dev/"
+}
+$platformBaseUrl = $platformUri.GetLeftPart([System.UriPartial]::Authority) + "/"
+Set-ConfigValue $config "BaseUrl" $platformBaseUrl
+Write-Host "Renderer avatar API base URL: $platformBaseUrl"
 Set-ConfigValue $config "RCCUrl" "http://127.0.0.1"
 $singleRccPort = @($ports)
 Set-ConfigValue $config.Ports.RCC "All" $singleRccPort
