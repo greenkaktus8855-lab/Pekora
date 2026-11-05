@@ -40,7 +40,7 @@ async function currentUser(request, env) {
   if (!token) return null;
   const tokenHash = await digest(token);
   const row = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.tix_balance,u.created_at,u.is_banned,u.public_id,u.is_verified,
-      EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=u.id AND ub.badge_key='ASSET_MODERATOR') AS is_asset_moderator
+      EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=u.id AND ub.badge_key IN ('ASSET_MODERATOR','ADMINISTRATOR')) AS is_asset_moderator
     FROM sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=? AND s.expires_at > datetime('now')`).bind(tokenHash).first();
   if (!row || row.is_banned) return null;
@@ -1695,7 +1695,7 @@ async function route(request, env) {
     const label=badgeKey==="VERIFIED"?"Verified":USER_BADGE_LABELS[badgeKey];
     await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,action==="grant_badge"?"BADGE_GRANTED":"BADGE_REVOKED",label).run();
     const [user,badges]=await Promise.all([
-      env.DB.prepare("SELECT id,username,public_id,role,is_verified,EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=users.id AND ub.badge_key='ASSET_MODERATOR') AS is_asset_moderator FROM users WHERE id=?").bind(targetId).first(),
+      env.DB.prepare("SELECT id,username,public_id,role,is_verified,EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=users.id AND ub.badge_key IN ('ASSET_MODERATOR','ADMINISTRATOR')) AS is_asset_moderator FROM users WHERE id=?").bind(targetId).first(),
       env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(targetId).all()
     ]);
     return json({ok:true,user:{...user,badges:(badges.results||[]).map(row=>row.badge_key)}});
