@@ -104,16 +104,17 @@ $env:PEKORA_RENDERER_SECRET = $secret
 $secret = $null
 $secureSecret = $null
 
+$npmCmd = (Get-Command "npm.cmd" -ErrorAction Stop).Source
 Push-Location $rendererDir
 try {
     Write-Host "Building OpenPekora Renderer..."
-    & npm run build
+    & $npmCmd run build
     if ($LASTEXITCODE -ne 0) { throw "Renderer build failed with exit code $LASTEXITCODE." }
 
     Write-Host ""
     Write-Host "Starting secured Renderer on port $port."
     Write-Host "Keep this PowerShell window open. RCCService should stay local-only."
-    & npm start
+    & $npmCmd start
     if ($LASTEXITCODE -ne 0) { throw "Renderer exited with code $LASTEXITCODE." }
 } finally {
     Pop-Location
