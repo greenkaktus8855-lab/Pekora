@@ -1059,6 +1059,7 @@ async function route(request, env) {
     const locked = await env.DB.prepare("SELECT 1 AS locked FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId).first();
     if (locked) return fail("This item is reserved in a pending trade. Cancel that trade before listing it.",409);
     const listingId=id();
+    let marketPrice;
     try {
 
       const results = await env.DB.batch([
@@ -1066,7 +1067,7 @@ async function route(request, env) {
         env.DB.prepare("INSERT INTO resale_listings (id,item_id,seller_id,price,currency) SELECT ?,?,?,?,'P$' WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?) AND NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE') AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1 OR (stock_limit>0 AND stock_sold>=stock_limit)))").bind(listingId,itemId,user.id,price,user.id,itemId,user.id,itemId,user.id,itemId,itemId)
       ]);
       if (!results?.[1]?.meta?.changes) return fail("This item is already listed, reserved in a trade, or no longer eligible.",409);
-      const marketPrice = await syncItemMarketPrice(env,itemId);
+      marketPrice = await syncItemMarketPrice(env,itemId);
     } catch (error) {
       console.error("[Sakura resale] Listing creation failed:",error);
       return fail("Could not create this listing. Refresh your inventory and try again.",409);
