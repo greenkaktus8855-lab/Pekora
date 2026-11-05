@@ -321,8 +321,8 @@ async function ensureSiteSettings(env) {
             WHEN EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=items.id) THEN 'UNKNOWN'
             ELSE COALESCE(currency,'P$') END`),
           env.DB.prepare(`UPDATE items SET
-            price=COALESCE((SELECT p.price FROM purchases p WHERE p.item_id=items.id ORDER BY p.purchased_at ASC LIMIT 1),0),
-            currency=COALESCE((SELECT p.currency FROM purchases p WHERE p.item_id=items.id ORDER BY p.purchased_at ASC LIMIT 1),'P$')
+            price=CASE WHEN rap_value>0 THEN rap_value ELSE 0 END,
+            currency=CASE WHEN rap_currency IN ('P$','Tix') THEN rap_currency ELSE COALESCE(currency,'P$') END
             WHERE EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=items.id)`),
           env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('rap_baseline_2026_11_05','done')")
         ]);
