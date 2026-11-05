@@ -242,7 +242,7 @@ async function ensureSiteSettings(env) {
 
         // New databases are created above with the expanded price range. Do not
         // rename/rebuild that already-correct table as if it still had the old cap.
-        const hasOldResalePriceCap = /price\\s*<=\\s*1000000\\b/i.test(activeResaleSql);
+        const hasOldResalePriceCap = /price\s*<=\s*1000000\b/i.test(activeResaleSql);
 
         if (legacyResaleSchema) {
           // Recover safely if an earlier migration attempt left the legacy table behind.
