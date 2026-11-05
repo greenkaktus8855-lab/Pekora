@@ -118,11 +118,11 @@ function renderSidebar(active="home"){
  ];
  sidebar.innerHTML='<div class="sidebar-card">'+
   '<a class="side-user" href="/#profile?id='+encodeURIComponent(me.publicId||"")+'" data-page="profile"><span class="side-avatar">'+avatar()+'</span><span><span class="side-username">'+esc(me.username)+(me.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</span><span class="side-role">Account</span></span></a>'+
-  '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span></a>').join("")+
+  '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="/#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span></a>').join("")+
   '<div class="side-separator"></div>'+
-  '<a href="#promocodes" data-page="promocodes" class="side-promo-button '+(active==="promocodes"?"active":"")+'">Promo Codes</a>'+
+  '<a href="/#promocodes" data-page="promocodes" class="side-promo-button '+(active==="promocodes"?"active":"")+'">Promo Codes</a>'+
   '<a class="side-discord-button" href="https://discord.gg/PxVWav9R2R" target="_blank" rel="noopener noreferrer">Discord Server</a>'+
-  (me.role==="OWNER"?'<a href="#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':(me.isAssetModerator?'<a href="#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Asset Panel</span></a>':''))+
+  (me.role==="OWNER"?'<a href="/#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':(me.isAssetModerator?'<a href="/#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Asset Panel</span></a>':''))+
   '</nav></div>';
 }
 
@@ -190,19 +190,19 @@ function home(){
  const view=beginView();
  renderSidebar("home");
  if(!me){
-  app.innerHTML='<div class="op-guest"><h1>Welcome to Sakura</h1><p>Join the community and explore the catalog.</p><a class="button" href="#login" data-page="login">Login</a><a class="button" href="#register" data-page="register">Sign Up</a></div>';
+  app.innerHTML='<div class="op-guest"><h1>Welcome to Sakura</h1><p>Join the community and explore the catalog.</p><a class="button" href="/#login" data-page="login">Login</a><a class="button" href="/#register" data-page="register">Sign Up</a></div>';
   return;
  }
  const name=esc(me.username);
  app.innerHTML='<div class="sakura-home-shell"><div id="accountWarnings"></div>'+
   '<div class="sakura-home-card">'+
-   '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="#profile" data-page="profile">'+avatar(me.username)+'</a><div class="sakura-welcome-copy"><h1><a href="#profile" data-page="profile">Hello, '+name+'!</a></h1><div class="home-balances">'+currencyMarkup(me.balance,"P$","balance-chip")+currencyMarkup(me.tixBalance,"Tix","balance-chip")+'</div></div></div>'+
-   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
+   '<div class="op-home-header"><a id="homeAvatar" class="op-home-avatar" href="/#profile" data-page="profile">'+avatar(me.username)+'</a><div class="sakura-welcome-copy"><h1><a href="/#profile" data-page="profile">Hello, '+name+'!</a></h1><div class="home-balances">'+currencyMarkup(me.balance,"P$","balance-chip")+currencyMarkup(me.tixBalance,"Tix","balance-chip")+'</div></div></div>'+
+   '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Friends (<span id="homeFriendCount">0</span>)</h3><a href="/#friends" data-page="friends">See All</a></div><div id="homeFriends" class="op-section-content"><div class="op-empty">Loading friends...</div></div></section>'+
    '<div class="sakura-home-columns">'+
-    '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Favorites</h3><a href="#catalog" data-page="catalog">See All</a></div><div id="homeFavorites" class="sakura-empty-panel">Your favorite items will appear here.</div></section>'+
+    '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Favorites</h3><a href="/#catalog" data-page="catalog">See All</a></div><div id="homeFavorites" class="sakura-empty-panel">Your favorite items will appear here.</div></section>'+
    '</div>'+
    '<div class="sakura-home-columns sakura-home-bottom">'+
-    '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Feed</h3><a href="#friends" data-page="friends">See All</a></div><div id="homeFeed" class="sakura-feed-panel">No posts yet.</div></section>'+
+    '<section class="op-dashboard-section"><div class="op-section-heading"><h3>My Feed</h3><a href="/#friends" data-page="friends">See All</a></div><div id="homeFeed" class="sakura-feed-panel">No posts yet.</div></section>'+
     '<section class="op-dashboard-section"><div class="op-section-heading"><h3>Blog News</h3></div><div class="sakura-feed-panel sakura-blog-empty">No news found.</div></section>'+
    '</div>'+
   '</div></div>';
@@ -253,7 +253,7 @@ function itemCreatorMarkup(item){
  if(!item?.creator_name)return "";
  const creator=esc(item.creator_name);
  const link=item.creator_public_id
-  ? '<a href="#profile?id='+encodeURIComponent(item.creator_public_id)+'" data-profile="'+creator+'">'+creator+'</a>'
+  ? '<a href="/#profile?id='+encodeURIComponent(item.creator_public_id)+'" data-profile="'+creator+'">'+creator+'</a>'
   : '<span>'+creator+'</span>';
  return '<div class="item-creator muted">Created by '+link+'</div>';
 }
@@ -262,6 +262,11 @@ function itemPriceHistoryMarkup(item,history){
  const soldOut=Number(item.stock_limit)>0&&Number(item.stock_sold)>=Number(item.stock_limit);
  const eligible=Number(item.is_limited)===1||Number(item.is_offsale)===1||soldOut;
  if(!eligible)return "";
+ const currentPrice=Number(item.price||0);
+ const currentCurrency=String(item.currency||"P$");
+ const currentPriceStat=currentPrice>0
+  ?'<div class="item-price-history-stat item-price-history-stat-current"><span>Current catalog price</span><b>'+currentPrice.toLocaleString()+' '+esc(currentCurrency)+'</b></div>'
+  :'';
  const records=(Array.isArray(history)?history:[])
   .filter(entry=>Number(entry.price)>0&&Number.isFinite(Number(entry.price))&&entry.sold_at)
   .map(entry=>{
@@ -273,7 +278,7 @@ function itemPriceHistoryMarkup(item,history){
   .sort((a,b)=>a.date-b.date);
  if(records.length<2){
   const count=records.length;
-  return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Limited item · completed P$ sales</p></div></div><div class="item-price-history-empty">'+(count?'Only one completed sale is recorded. The line chart appears after another sale.':'No completed sales are recorded yet. The line chart will appear as soon as this item has at least two completed sales.')+'</div></section>';
+  return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Completed sales · P$ only. Current catalog price is shown separately.</p></div></div><div class="item-price-history-empty">'+(count?'Only one completed sale is recorded. The line chart appears after another sale.':'No completed sales are recorded yet. The line chart will appear as soon as this item has at least two completed sales.')+'</div>'+(currentPriceStat?'<div class="item-price-history-stats">'+currentPriceStat+'</div>':'')+'</section>';
  }
  const width=760,height=280,left=66,right=22,top=20,bottom=48;
  const values=records.map(entry=>entry.price);
@@ -294,7 +299,13 @@ function itemPriceHistoryMarkup(item,history){
  }).join('');
  const dots=points.map(point=>'<circle cx="'+point.x.toFixed(1)+'" cy="'+point.y.toFixed(1)+'" r="4" class="price-chart-point"><title>'+point.entry.price.toLocaleString()+' P$ · '+point.entry.date.toLocaleDateString()+' · '+esc(point.entry.source)+'</title></circle>').join('');
  const startDate=records[0].date.toLocaleDateString(),endDate=records[records.length-1].date.toLocaleDateString();
- return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Completed sales · P$</p></div><strong>'+records.length.toLocaleString()+' sales</strong></div><div class="item-price-chart-wrap"><svg class="item-price-chart" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Price history line chart for '+esc(item.name)+'">'+grid+'<path d="'+area+'" class="price-chart-area"/><path d="'+path+'" class="price-chart-line"/>'+dots+'<text x="'+left+'" y="'+(height-14)+'" class="price-chart-date">'+startDate+'</text><text x="'+(width-right)+'" y="'+(height-14)+'" text-anchor="end" class="price-chart-date">'+endDate+'</text></svg></div><div class="item-price-history-foot"><span>Lowest: <b>'+minValue.toLocaleString()+' P$</b></span><span>Highest: <b>'+maxValue.toLocaleString()+' P$</b></span><span>Latest: <b>'+records[records.length-1].price.toLocaleString()+' P$</b></span></div></section>';
+ const stats='<div class="item-price-history-stats">'+
+  '<div class="item-price-history-stat"><span>Lowest completed sale</span><b>'+minValue.toLocaleString()+' P$</b></div>'+
+  '<div class="item-price-history-stat"><span>Highest completed sale</span><b>'+maxValue.toLocaleString()+' P$</b></div>'+
+  '<div class="item-price-history-stat"><span>Latest completed sale</span><b>'+records[records.length-1].price.toLocaleString()+' P$</b></div>'+
+  currentPriceStat+
+  '</div>';
+ return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Completed sale prices only · P$. Current catalog price is separate.</p></div><strong>'+records.length.toLocaleString()+' sales</strong></div><div class="item-price-chart-wrap"><svg class="item-price-chart" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Completed sale price history chart for '+esc(item.name)+'">'+grid+'<path d="'+area+'" class="price-chart-area"/><path d="'+path+'" class="price-chart-line"/>'+dots+'<text x="'+left+'" y="'+(height-14)+'" class="price-chart-date">'+startDate+'</text><text x="'+(width-right)+'" y="'+(height-14)+'" text-anchor="end" class="price-chart-date">'+endDate+'</text></svg></div>'+stats+'</section>';
 }
 
 async function showItem(itemId,updateHistory=true){
@@ -335,7 +346,7 @@ async function showItem(itemId,updateHistory=true){
   }
  }
  if(!isActiveView(view))return;
- if(!item){app.innerHTML='<div class="empty">Item not found. <a href="#catalog" data-page="catalog">Back to Catalog</a></div>';return}
+ if(!item){app.innerHTML='<div class="empty">Item not found. <a href="/#catalog" data-page="catalog">Back to Catalog</a></div>';return}
  if(!resaleSnapshot){try{resaleSnapshot=await api("/api/resale/item/"+encodeURIComponent(item.id))}catch{resaleSnapshot={listings:[]}}}
  if(!isActiveView(view))return;
  const ownedCount=ownedItemCount(item.id),isOwned=ownedCount>0,isAtLimit=Number(item.is_limited)===1&&ownedCount>=10,isOffsale=Number(item.is_offsale)===1,stock=itemStockState(item);
@@ -343,11 +354,11 @@ async function showItem(itemId,updateHistory=true){
  const resaleListings=Array.isArray(resaleSnapshot.listings)?resaleSnapshot.listings:[];
  const myListing=me?resaleListings.find(listing=>listing.seller_id===me.id):null;
  const otherListings=resaleListings.filter(listing=>!me||listing.seller_id!==me.id);
- const sellerMarkup=listing=>'<a href="#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'+(Number(listing.seller_verified)===1?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified seller">':'');
+ const sellerMarkup=listing=>'<a href="/#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'+(Number(listing.seller_verified)===1?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified seller">':'');
  const listingRows=otherListings.length?otherListings.map(listing=>'<article class="resale-offer-row"><div class="resale-offer-seller"><strong>'+sellerMarkup(listing)+'</strong><span class="muted">Seller</span></div><strong class="resale-offer-price">'+currencyMarkup(listing.price,"P$")+'</strong><button class="primary resale-buy-button" type="button" data-resale-buy="'+esc(listing.id)+'" data-item-id="'+esc(item.id)+'" '+(isAtLimit?'disabled':'')+'>'+(!me?'Log in to buy':isAtLimit?'Limit reached':isOwned?'Buy ('+ownedCount+'/10)':'Buy')+'</button></article>').join(""):'<p class="muted">No player listings for this item yet.</p>';
  const ownListingMarkup=myListing?'<div class="resale-own-listing"><div><strong>Your listing is active</strong><p class="muted">Asking price: '+currencyMarkup(myListing.price,"P$")+'</p></div><button class="button secondary" type="button" id="cancelResaleListing" data-listing-id="'+esc(myListing.id)+'">Remove listing</button></div>':(me&&isOwned&&resaleEligible?'<form id="createResaleListing" class="resale-create-form"><h3>Sell your copy</h3><p class="muted">Set your own price. Your item stays in your inventory until another player buys it.</p><label>Price in P$ <input type="number" name="price" min="1" max="1000000" step="1" value="1" required></label><button class="primary" type="submit">List for sale</button><span id="resaleCreateMessage" class="muted" role="status"></span></form>':"");
- const resalePanel=resaleEligible?'<section class="resale-section"><div class="resale-section-heading"><div><h2>Player Marketplace</h2><p class="muted">Limited, Off Sale, and sold-out items can be resold by players.</p></div><a href="#resale" data-page="resale">Open market</a></div>'+ownListingMarkup+'<div class="resale-offer-list">'+listingRows+'</div></section>':"";
- app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
+ const resalePanel=resaleEligible?'<section class="resale-section"><div class="resale-section-heading"><div><h2>Player Marketplace</h2><p class="muted">Limited, Off Sale, and sold-out items can be resold by players.</p></div><a href="/#resale" data-page="resale">Open market</a></div>'+ownListingMarkup+'<div class="resale-offer-list">'+listingRows+'</div></section>':"";
+ app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="/#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
   '<div class="item-detail-info"><h1>'+esc(item.name)+'</h1><div class="muted">'+esc(item.category)+'</div>'+itemCreatorMarkup(item)+'<p>'+esc(item.description||"No description available.")+'</p><div class="item-detail-price">'+currencyMarkup(item.price,item.currency||"P$")+'</div>'+(isOffsale?'<p class="offsale-notice">OFF SALE · This item is not available to purchase.</p>':"")+(stock.finite?'<div class="item-detail-stock" id="itemDetailStock">'+esc(itemStockText(item))+'</div>':"")+(isAtLimit?'<button class="button secondary" id="detailBuy" type="button" disabled>Limit reached (10/10)</button>':isOffsale?'<button class="button secondary" id="detailBuy" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" id="detailBuy" type="button" disabled>Sold Out</button>':me&&!ownershipLoaded?'<button class="button secondary" id="detailBuy" type="button" disabled>Inventory check unavailable</button>':'<button class="primary" id="detailBuy" type="button">Buy</button>')+'<button class="button secondary" id="copyItemLink" type="button">Copy item link</button></div>'+
   '</div></div>'+resalePanel+itemPriceHistoryMarkup(item,resaleSnapshot.history||[]);
@@ -406,10 +417,10 @@ async function catalog(){
      '<aside class="catalog-navigation"><div class="divider-right">'+
       '<div class="catalog-browse-title"><p>Browse by</p><h2>Category</h2></div>'+
       '<nav id="catalogCategories" class="catalog-categories">'+
-       '<a href="#" class="active" data-category="All">All Items</a>'+
-       '<a href="#" data-category="Hats">Hats</a><a href="#" data-category="Hair">Hair</a>'+
-       '<a href="#" data-category="Faces">Faces</a><a href="#" data-category="Shirts">Shirts</a>'+
-       '<a href="#" data-category="Pants">Pants</a><a href="#" data-category="Accessories">Accessories</a>'+
+       '<a href="/#" class="active" data-category="All">All Items</a>'+
+       '<a href="/#" data-category="Hats">Hats</a><a href="/#" data-category="Hair">Hair</a>'+
+       '<a href="/#" data-category="Faces">Faces</a><a href="/#" data-category="Shirts">Shirts</a>'+
+       '<a href="/#" data-category="Pants">Pants</a><a href="/#" data-category="Accessories">Accessories</a>'+
       '</nav>'+
       '<div class="catalog-legend"><strong>About</strong><p>Items purchased here belong to your Sakura account.</p></div>'+
      '</div></aside>'+
@@ -484,7 +495,7 @@ function drawCatalog(category,q){
  count.textContent=list.length+" items";
  el.innerHTML=list.length?list.map(x=>{
   const stock=itemStockState(x);
-  return '<article class="item-card"><a class="item-image" href="#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+itemBadgeMarkup(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div>'+(stock.finite?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(ownedItemCount(x.id)>0&&(!Number(x.is_limited)||ownedItemCount(x.id)>=10)?'<button class="button secondary" type="button" disabled>'+(Number(x.is_limited)===1?'Limit reached (10/10)':'Owned')+'</button>':Number(x.is_offsale)===1?'<button class="button secondary offsale-button" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" type="button" disabled>Sold Out</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>';
+  return '<article class="item-card"><a class="item-image" href="/#" data-item-view="'+esc(x.id)+'" aria-label="View '+esc(x.name)+'">'+itemPreview(x)+itemBadgeMarkup(x)+'</a><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+'<div class="catalog-asset-kind">'+(x.category==="Accessories"?(x.model_url?"Interactive 3D model":"3D model not uploaded"):"Catalog item")+'</div>'+(stock.finite?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(ownedItemCount(x.id)>0&&(!Number(x.is_limited)||ownedItemCount(x.id)>=10)?'<button class="button secondary" type="button" disabled>'+(Number(x.is_limited)===1?'Limit reached (10/10)':'Owned')+'</button>':Number(x.is_offsale)===1?'<button class="button secondary offsale-button" type="button" disabled>Off Sale</button>':stock.soldOut?'<button class="button secondary" type="button" disabled>Sold Out</button>':!ownershipLoaded?'<button class="button secondary" type="button" disabled>Checking inventory...</button>':'<button class="button" data-buy="'+esc(x.id)+'">Buy</button>')+'</article>';
  }).join(""):'<div class="empty">No items found.</div>';
  el.querySelectorAll("[data-buy]").forEach(b=>b.addEventListener("click",()=>buy(b.dataset.buy)));
 
@@ -547,13 +558,13 @@ async function buyResaleListing(listingId,itemId,button){
 async function resaleMarketPage(){
  const view=beginView();
  renderSidebar("resale");
- app.innerHTML='<div class="resale-market-page"><div class="resale-market-heading"><div><h1 class="page-title">Resale Market</h1><p class="muted">Limited, Off Sale, and sold-out items listed by Sakura players.</p></div><a class="button secondary" href="#inventory" data-page="inventory">My Inventory</a></div><div id="resaleMarketGrid" class="resale-market-list">Loading listings...</div></div>';
+ app.innerHTML='<div class="resale-market-page"><div class="resale-market-heading"><div><h1 class="page-title">Resale Market</h1><p class="muted">Limited, Off Sale, and sold-out items listed by Sakura players.</p></div><a class="button secondary" href="/#inventory" data-page="inventory">My Inventory</a></div><div id="resaleMarketGrid" class="resale-market-list">Loading listings...</div></div>';
  const host=document.getElementById("resaleMarketGrid");
  try{
   const data=await api("/api/resale/listings");
   if(!isActiveView(view)||!host?.isConnected)return;
   const listings=data.listings||[];
-  host.innerHTML=listings.length?listings.map(listing=>'<article class="resale-market-card"><a class="resale-market-image" href="/item/'+encodeURIComponent(listing.item_id)+'" data-item-view="'+esc(listing.item_id)+'">'+itemPreview(listing)+itemBadgeMarkup(listing)+'</a><div class="resale-market-details"><h2><a href="/item/'+encodeURIComponent(listing.item_id)+'" data-item-view="'+esc(listing.item_id)+'">'+esc(listing.name)+'</a></h2><span class="muted">'+esc(listing.category)+' · '+(Number(listing.is_limited)===1?'LIMITED':'OFF SALE')+'</span><div class="resale-market-seller">Seller: <a href="#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'+(Number(listing.seller_verified)===1?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified seller">':'')+'</div><strong class="resale-market-price">'+currencyMarkup(listing.price,"P$")+'</strong></div><button class="primary resale-buy-button" type="button" data-resale-buy="'+esc(listing.id)+'" data-item-id="'+esc(listing.item_id)+'" '+''+'>'+(!me?'Log in to buy':'Buy')+'</button></article>').join(""):'<div class="empty">There are no player listings yet.</div>';
+  host.innerHTML=listings.length?listings.map(listing=>'<article class="resale-market-card"><a class="resale-market-image" href="/item/'+encodeURIComponent(listing.item_id)+'" data-item-view="'+esc(listing.item_id)+'">'+itemPreview(listing)+itemBadgeMarkup(listing)+'</a><div class="resale-market-details"><h2><a href="/item/'+encodeURIComponent(listing.item_id)+'" data-item-view="'+esc(listing.item_id)+'">'+esc(listing.name)+'</a></h2><span class="muted">'+esc(listing.category)+' · '+(Number(listing.is_limited)===1?'LIMITED':'OFF SALE')+'</span><div class="resale-market-seller">Seller: <a href="/#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'+(Number(listing.seller_verified)===1?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified seller">':'')+'</div><strong class="resale-market-price">'+currencyMarkup(listing.price,"P$")+'</strong></div><button class="primary resale-buy-button" type="button" data-resale-buy="'+esc(listing.id)+'" data-item-id="'+esc(listing.item_id)+'" '+''+'>'+(!me?'Log in to buy':'Buy')+'</button></article>').join(""):'<div class="empty">There are no player listings yet.</div>';
   host.querySelectorAll("[data-resale-buy]").forEach(button=>button.addEventListener("click",()=>buyResaleListing(button.dataset.resaleBuy,button.dataset.itemId,button)));
  }catch(error){if(host?.isConnected)host.textContent=error.message}
 }
@@ -562,7 +573,7 @@ function auth(kind){
  const view=beginView();
  renderSidebar("");
  const reg=kind==="register";
- app.innerHTML='<div class="form"><h2>'+(reg?"Create your Sakura account":"Log in to Sakura")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="'+(reg?"3":"1")+'" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="8" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error" role="status" aria-live="polite"></div></form><p class="muted">'+(reg?'Already have an account? <a href="#login" data-page="login">Log in</a>':'New to Sakura? <a href="#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="#owner-recovery" data-page="owner-recovery">Recover OWNER account</a></p>')+'</div>';
+ app.innerHTML='<div class="form"><h2>'+(reg?"Create your Sakura account":"Log in to Sakura")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="'+(reg?"3":"1")+'" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="8" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error" role="status" aria-live="polite"></div></form><p class="muted">'+(reg?'Already have an account? <a href="/#login" data-page="login">Log in</a>':'New to Sakura? <a href="/#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="/#owner-recovery" data-page="owner-recovery">Recover OWNER account</a></p>')+'</div>';
  const form=document.getElementById("authForm");
  form.addEventListener("submit",async e=>{
   e.preventDefault();
@@ -580,7 +591,7 @@ function auth(kind){
   }catch(err){
    if(isActiveView(view)&&error){
     if(!reg&&String(err.message).startsWith("This account is banned")){
-     error.innerHTML=esc(err.message)+'<p><a href="#banned?username='+encodeURIComponent(String(values.get("username")||""))+'" data-banned-account="'+esc(String(values.get("username")||""))+'">View ban details</a></p>';
+     error.innerHTML=esc(err.message)+'<p><a href="/#banned?username='+encodeURIComponent(String(values.get("username")||""))+'" data-banned-account="'+esc(String(values.get("username")||""))+'">View ban details</a></p>';
     }else error.textContent=err.message;
    }
   }finally{
@@ -592,7 +603,7 @@ function auth(kind){
 async function ownerRecoveryPage(){
  const view=beginView();
  renderSidebar("");
- app.innerHTML='<div class="form"><h2>Recover Sakura OWNER account</h2><p class="muted">Use the Worker secret OWNER_BOOTSTRAP_SECRET from your Cloudflare settings. This resets the active OWNER account password and signs out previous sessions.</p><form id="ownerRecoveryForm"><label>Worker recovery secret<input name="secret" type="password" maxlength="512" required autocomplete="off"></label><label>New password<input name="password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><label>Confirm new password<input name="confirmPassword" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><button class="primary" type="submit">Reset owner password</button><div id="ownerRecoveryMessage" class="error" role="status"></div></form><p class="muted"><a href="#login" data-page="login">Back to login</a></p></div>';
+ app.innerHTML='<div class="form"><h2>Recover Sakura OWNER account</h2><p class="muted">Use the Worker secret OWNER_BOOTSTRAP_SECRET from your Cloudflare settings. This resets the active OWNER account password and signs out previous sessions.</p><form id="ownerRecoveryForm"><label>Worker recovery secret<input name="secret" type="password" maxlength="512" required autocomplete="off"></label><label>New password<input name="password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><label>Confirm new password<input name="confirmPassword" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><button class="primary" type="submit">Reset owner password</button><div id="ownerRecoveryMessage" class="error" role="status"></div></form><p class="muted"><a href="/#login" data-page="login">Back to login</a></p></div>';
  document.getElementById("ownerRecoveryForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const form=e.currentTarget,values=new FormData(form),secret=String(values.get("secret")||""),password=String(values.get("password")||""),confirmPassword=String(values.get("confirmPassword")||""),message=document.getElementById("ownerRecoveryMessage");
@@ -623,14 +634,14 @@ function inventoryItemCard(item){
 async function inventory(){
  const view=beginView();
  renderSidebar("inventory");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your inventory.</div>';return}
+ if(!me){app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> to view your inventory.</div>';return}
  app.innerHTML='<h1 class="page-title">Inventory</h1><p class="inventory-sell-intro">Select an item to view its details and available actions.</p><div id="inventoryGrid" class="item-grid">Loading...</div>';
  const grid=document.getElementById("inventoryGrid");
  try{
   const d=await api("/api/inventory");
   if(!isActiveView(view)||!grid?.isConnected)return;
   const ownedItems=Array.isArray(d.items)?d.items:[];
-  grid.innerHTML=ownedItems.length?ownedItems.map(inventoryItemCard).join(""):'<div class="empty">Your inventory is empty. <a href="#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+  grid.innerHTML=ownedItems.length?ownedItems.map(inventoryItemCard).join(""):'<div class="empty">Your inventory is empty. <a href="/#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
  }catch(error){if(isActiveView(view)&&grid?.isConnected)grid.textContent=error.message}
 }
 
@@ -647,7 +658,7 @@ async function bannedAccountPage(identifier){
   const parsedDate=account.banned_at?new Date(String(account.banned_at).replace(" ","T")+"Z"):null;
   const bannedDate=parsedDate&&!Number.isNaN(parsedDate.valueOf())?parsedDate.toLocaleString():"Date unavailable";
   const joinedDate=account.created_at?new Date(account.created_at).toLocaleDateString():"Unknown";
-  app.innerHTML='<div class="banned-account-page"><a href="#users" data-page="users" class="item-back-link">‹ Back to People</a>'+
+  app.innerHTML='<div class="banned-account-page"><a href="/#users" data-page="users" class="item-back-link">‹ Back to People</a>'+
    '<section class="banned-account-card"><div class="ban-status-label">BANNED ACCOUNT</div>'+
    '<div class="banned-account-heading"><div class="banned-account-avatar">'+avatar(account.username)+'</div><div><h1>'+esc(account.username)+'</h1><p class="muted">User ID: '+esc(account.public_id)+' · '+esc(account.role||"USER")+'</p><span class="ban-pill">BANNED</span></div></div>'+
    '<div class="ban-detail-row"><strong>Status</strong><span>Account banned from Sakura</span></div>'+
@@ -656,7 +667,7 @@ async function bannedAccountPage(identifier){
    '<div class="ban-detail-row"><strong>Joined Sakura</strong><span>'+esc(joinedDate)+'</span></div>'+
    '<p class="muted">This account is currently banned. Its profile and inventory are unavailable.</p></section></div>';
  }catch(error){
-  if(isActiveView(view))app.innerHTML='<div class="banned-account-page"><section class="banned-account-card"><h1>Banned account not found</h1><p>'+esc(error.message)+'</p><a href="#users" data-page="users">Search People</a></section></div>';
+  if(isActiveView(view))app.innerHTML='<div class="banned-account-page"><section class="banned-account-card"><h1>Banned account not found</h1><p>'+esc(error.message)+'</p><a href="/#users" data-page="users">Search People</a></section></div>';
  }
 }
 
@@ -683,7 +694,7 @@ async function profile(identifier=me?.username,byId=false){
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
-    '<a class="button secondary op-profile-rap-link" href="#rap" data-page="rap">RAP Leaderboard</a>'+
+    '<a class="button secondary op-profile-rap-link" href="/#rap" data-page="rap">RAP Leaderboard</a>'+
     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
    '</div></div>'+
    '<section class="op-profile-section"><h2>Inventory</h2>'+
@@ -715,8 +726,8 @@ async function loadProfileFriendAction(username){
 async function currencyPage(){
  const view=beginView();
  renderSidebar("currency");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to view your Sakura balances.</div>';return}
- app.innerHTML='<div class="currency-page"><h1 class="page-title">Sakura Currency</h1><section class="info-panel currency-balance-panel"><h2>Your balances</h2><div class="currency-balances">'+currencyMarkup(me.balance,"P$","currency-large")+currencyMarkup(me.tixBalance,"Tix","currency-large")+'</div><p class="muted">P$ and Tix are virtual Sakura currencies used only on this website. They have no real-world monetary value and cannot be withdrawn.</p></section><section class="owner-section"><h2>Recent purchases</h2><div id="currencyHistory" class="currency-history">Loading purchase history...</div></section><a class="button" href="#catalog" data-page="catalog">Browse Catalog</a></div>';
+ if(!me){app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> to view your Sakura balances.</div>';return}
+ app.innerHTML='<div class="currency-page"><h1 class="page-title">Sakura Currency</h1><section class="info-panel currency-balance-panel"><h2>Your balances</h2><div class="currency-balances">'+currencyMarkup(me.balance,"P$","currency-large")+currencyMarkup(me.tixBalance,"Tix","currency-large")+'</div><p class="muted">P$ and Tix are virtual Sakura currencies used only on this website. They have no real-world monetary value and cannot be withdrawn.</p></section><section class="owner-section"><h2>Recent purchases</h2><div id="currencyHistory" class="currency-history">Loading purchase history...</div></section><a class="button" href="/#catalog" data-page="catalog">Browse Catalog</a></div>';
  try{
   const d=await api("/api/currency/history");
   const host=document.getElementById("currencyHistory");
@@ -733,7 +744,7 @@ async function membershipPage(){
  const view=beginView();
  renderSidebar("membership");
  if(!me){
-  app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your membership.</div>';
+  app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> to manage your membership.</div>';
   return;
  }
  app.innerHTML='<div class="membership-original-container container mt-4"><div class="row"><div class="col-12 col-lg-6 offset-lg-3"><div class="membership-openpekora-card card card-body bg-dark text-light"><h2>Builders Club Membership</h2><p class="muted">Loading membership...</p></div></div></div></div>';
@@ -789,7 +800,7 @@ async function promocodesPage(){
  const view=beginView();
  renderSidebar("promocodes");
  if(!me){
-  app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to redeem promo codes.</div>';
+  app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> to redeem promo codes.</div>';
   return;
  }
  app.innerHTML='<div class="promocodes-page"><h1 class="page-title">Promo Codes</h1><p class="muted">Enter a code to claim its Sakura currency or item rewards.</p>'+
@@ -835,7 +846,7 @@ async function promocodesPage(){
 async function tradesPage(){
  const view=beginView();
  renderSidebar("trades");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to trade items.</div>';return}
+ if(!me){app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> to trade items.</div>';return}
  app.innerHTML='<div class="trades-page"><h1 class="page-title">Trades</h1><section class="owner-section"><h2>Create a trade</h2><p class="muted">Choose items from your inventory and optionally items from another player. Leave their side empty to send a gift. Players can receive duplicates. Items are reserved while the offer is pending. Trades exchange items only and do not use real money.</p>'+
  '<form id="tradeTargetForm" class="trade-target-form"><label>Player username<input name="username" minlength="1" maxlength="20" required placeholder="Username"></label><button class="button" type="submit">Load inventories</button></form><div id="tradeBuilder" class="trade-builder"></div><div id="tradeMessage" class="muted"></div></section>'+
  '<section class="owner-section"><h2>Your trade offers</h2><div id="tradeList" class="trade-list">Loading trades...</div></section></div>';
@@ -911,7 +922,7 @@ async function groupsPage(){
  const view=beginView();
  renderSidebar("groups");
  app.innerHTML='<div class="groups-page"><h1 class="page-title">Groups</h1>'+
-  (me?'<section class="owner-section"><h2>Create a group</h2><p class="muted">Creating a group costs '+currencyMarkup(100,"P$")+'</p><form id="groupCreateForm" class="group-create-form"><label>Group name<input name="name" minlength="3" maxlength="32" required placeholder="Your group name"></label><label>Description<textarea name="description" maxlength="300" rows="2" placeholder="What is this group about?"></textarea></label><button class="primary" type="submit">Create group · '+currencyMarkup(100,"P$")+'</button><span id="groupCreateMessage" class="muted"></span></form></section>':'<section class="owner-section"><p>Please <a href="#login" data-page="login">log in</a> to create or join groups.</p></section>')+
+  (me?'<section class="owner-section"><h2>Create a group</h2><p class="muted">Creating a group costs '+currencyMarkup(100,"P$")+'</p><form id="groupCreateForm" class="group-create-form"><label>Group name<input name="name" minlength="3" maxlength="32" required placeholder="Your group name"></label><label>Description<textarea name="description" maxlength="300" rows="2" placeholder="What is this group about?"></textarea></label><button class="primary" type="submit">Create group · '+currencyMarkup(100,"P$")+'</button><span id="groupCreateMessage" class="muted"></span></form></section>':'<section class="owner-section"><p>Please <a href="/#login" data-page="login">log in</a> to create or join groups.</p></section>')+
   '<section class="owner-section"><h2>All Groups</h2><div id="groupsList" class="groups-list">Loading groups...</div></section></div>';
  const host=document.getElementById("groupsList");
  async function loadGroups(){
@@ -919,7 +930,7 @@ async function groupsPage(){
    const data=await api("/api/groups");
    if(!isActiveView(view)||!host?.isConnected)return;
    const groups=data.groups||[];
-   host.innerHTML=groups.length?groups.map(group=>'<article class="group-card"><div class="group-card-mark">'+(group.avatar_url?'<img src="'+esc(group.avatar_url)+'" alt="">':esc(String(group.name||"?").slice(0,1).toUpperCase()))+'</div><div class="group-card-info"><h3><a href="#group?id='+encodeURIComponent(group.id)+'" data-group-view="'+esc(group.id)+'">'+esc(group.name)+'</a>'+(Number(group.is_verified)===1?' <img class="verified-badge group-verified-badge" src="/verified.svg" alt="Verified group" title="Verified group">':'')+'</h3><p>'+esc(group.description||"No description.")+'</p><span class="muted">Owner: '+esc(group.owner_name)+' · '+Number(group.member_count||0).toLocaleString()+' members</span></div>'+(me?(Number(group.is_member)===1?'<button class="button secondary" type="button" disabled>Joined</button>':'<button class="button" type="button" data-join-group="'+esc(group.id)+'">Join</button>'):'')+'</article>').join(""):'<div class="empty">No groups yet. Be the first to create one.</div>';
+   host.innerHTML=groups.length?groups.map(group=>'<article class="group-card"><div class="group-card-mark">'+(group.avatar_url?'<img src="'+esc(group.avatar_url)+'" alt="">':esc(String(group.name||"?").slice(0,1).toUpperCase()))+'</div><div class="group-card-info"><h3><a href="/#group?id='+encodeURIComponent(group.id)+'" data-group-view="'+esc(group.id)+'">'+esc(group.name)+'</a>'+(Number(group.is_verified)===1?' <img class="verified-badge group-verified-badge" src="/verified.svg" alt="Verified group" title="Verified group">':'')+'</h3><p>'+esc(group.description||"No description.")+'</p><span class="muted">Owner: '+esc(group.owner_name)+' · '+Number(group.member_count||0).toLocaleString()+' members</span></div>'+(me?(Number(group.is_member)===1?'<button class="button secondary" type="button" disabled>Joined</button>':'<button class="button" type="button" data-join-group="'+esc(group.id)+'">Join</button>'):'')+'</article>').join(""):'<div class="empty">No groups yet. Be the first to create one.</div>';
   }catch(error){if(host?.isConnected)host.textContent=error.message}
  }
  host?.addEventListener("click",async event=>{
@@ -963,9 +974,9 @@ async function groupPage(groupId){
   const verifiedMark=Number(group.is_verified)===1?' <img class="verified-badge group-verified-badge" src="/verified.svg" alt="Verified group" title="Verified group">':'';
   const owner=Number(group.is_owner)===1;
   const member=Number(group.is_member)===1;
-  const memberList=members.length?members.map(person=>'<article class="group-member"><div class="people-avatar">'+avatar(person.username)+'</div><div class="people-user-info"><strong><a href="#profile?username='+encodeURIComponent(person.username)+'" data-profile="'+esc(person.username)+'">'+esc(person.username)+'</a>'+(person.group_role==="OWNER"?' <span class="group-owner-tag">OWNER</span>':'')+'</strong><span>'+esc(person.account_role||"USER")+' · Joined '+esc(new Date(person.joined_at+"Z").toLocaleDateString())+'</span></div></article>').join(""):'<div class="empty">No members yet.</div>';
-  app.innerHTML='<div class="groups-page"><a href="#groups" data-page="groups" class="item-back-link">‹ Back to Groups</a>'+
-   '<section class="group-detail-card"><div class="group-detail-heading"><div class="group-detail-avatar">'+mark+'</div><div><h1>'+esc(group.name)+verifiedMark+'</h1><p class="muted">Owner: <a href="#profile?username='+encodeURIComponent(group.owner_name)+'" data-profile="'+esc(group.owner_name)+'">'+esc(group.owner_name)+'</a> · '+Number(group.member_count||0).toLocaleString()+' members</p><span class="muted">Created '+esc(new Date(group.created_at+"Z").toLocaleDateString())+'</span></div></div>'+
+  const memberList=members.length?members.map(person=>'<article class="group-member"><div class="people-avatar">'+avatar(person.username)+'</div><div class="people-user-info"><strong><a href="/#profile?username='+encodeURIComponent(person.username)+'" data-profile="'+esc(person.username)+'">'+esc(person.username)+'</a>'+(person.group_role==="OWNER"?' <span class="group-owner-tag">OWNER</span>':'')+'</strong><span>'+esc(person.account_role||"USER")+' · Joined '+esc(new Date(person.joined_at+"Z").toLocaleDateString())+'</span></div></article>').join(""):'<div class="empty">No members yet.</div>';
+  app.innerHTML='<div class="groups-page"><a href="/#groups" data-page="groups" class="item-back-link">‹ Back to Groups</a>'+
+   '<section class="group-detail-card"><div class="group-detail-heading"><div class="group-detail-avatar">'+mark+'</div><div><h1>'+esc(group.name)+verifiedMark+'</h1><p class="muted">Owner: <a href="/#profile?username='+encodeURIComponent(group.owner_name)+'" data-profile="'+esc(group.owner_name)+'">'+esc(group.owner_name)+'</a> · '+Number(group.member_count||0).toLocaleString()+' members</p><span class="muted">Created '+esc(new Date(group.created_at+"Z").toLocaleDateString())+'</span></div></div>'+
    '<p class="group-detail-description">'+esc(group.description||"No description.")+'</p>'+
    (owner?'<form id="groupSettingsForm" class="group-create-form group-settings-form"><h2>Group settings</h2><label>Group name<input name="name" minlength="3" maxlength="32" required value="'+esc(group.name)+'"></label><label>Description<textarea name="description" maxlength="300" rows="3">'+esc(group.description||"")+'</textarea></label><div class="group-avatar-upload"><label for="groupAvatarFile">Group image</label><div class="group-avatar-upload-row"><div class="group-avatar-preview" id="groupAvatarPreview">'+mark+'</div><div class="group-avatar-file-controls"><input id="groupAvatarFile" name="avatar_file" type="file" accept="image/png,image/jpeg,image/webp"><span class="muted">PNG, JPG or WebP · up to 2 MB</span>'+(group.avatar_url?'<button class="button secondary" id="removeGroupAvatarBtn" type="button">Remove image</button>':'')+'</div></div></div><button class="primary" type="submit">Save settings</button><button class="button danger-button" id="deleteGroupBtn" type="button">Delete group</button><span id="groupSettingsMessage" class="muted"></span></form>':
     (me?(member?'<button class="button secondary" id="leaveGroupBtn" type="button">Leave group</button>':'<button class="primary" id="joinGroupBtn" type="button">Join group</button>'):'<p class="muted">Log in to join this group.</p>'))+
@@ -1051,14 +1062,14 @@ async function groupPage(groupId){
    });
   });
  }catch(error){
-  if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(error.message)+' <a href="#groups" data-page="groups">Back to Groups</a></div>';
+  if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(error.message)+' <a href="/#groups" data-page="groups">Back to Groups</a></div>';
  }
 }
 
 async function settings(){
  const view=beginView();
  renderSidebar("settings");
- if(!me){app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> first.</div>';return}
+ if(!me){app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> first.</div>';return}
  const username=me.username;
  app.innerHTML='<div class="empty">Loading settings...</div>';
  let description="",loadError="";
@@ -1081,7 +1092,7 @@ async function loadFriendsList(view=activeView){
    const actionLabel=kind==="accept"?"Accept":title==="Sent Requests"?"Cancel request":"Remove friend";
    const rows=list.map(u=>'<article class="people-user friend-list-row">'+
     '<div class="people-avatar">'+avatar(u.username)+'</div>'+
-    '<div class="people-user-info"><strong><a href="#profile?username='+encodeURIComponent(u.username)+'" data-profile="'+esc(u.username)+'">'+esc(u.username)+'</a>'+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</strong>'+
+    '<div class="people-user-info"><strong><a href="/#profile?username='+encodeURIComponent(u.username)+'" data-profile="'+esc(u.username)+'">'+esc(u.username)+'</a>'+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</strong>'+
     '<span>'+esc(u.role||"USER")+'</span></div>'+
     '<button class="button '+(kind==="accept"?"":"secondary")+'" type="button" data-friend-action="'+kind+'" data-friend-name="'+esc(u.username)+'">'+actionLabel+'</button>'+
    '</article>').join("");
@@ -1111,7 +1122,7 @@ async function friends(){
  const view=beginView();
  renderSidebar("friends");
  if(!me){
-  app.innerHTML='<div class="empty">Please <a href="#login" data-page="login">log in</a> to manage your friends.</div>';
+  app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> to manage your friends.</div>';
   return;
  }
  app.innerHTML='<div class="friends-page"><h1 class="page-title">Friends</h1><p class="page-subtitle">Manage friend requests and view your Sakura friends.</p><div id="friendsContent"><div class="op-profile-empty">Loading friends...</div></div></div>';
@@ -1120,7 +1131,7 @@ async function friends(){
 function users(){
  const view=beginView();
  renderSidebar("users");
- app.innerHTML='<div class="rap-people-heading"><div><h1 class="page-title">People</h1><p class="page-subtitle">Search the Sakura community by username or User ID and open user profiles.</p></div><a class="button secondary" href="#rap" data-page="rap">RAP Leaderboard</a></div><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type a username or numeric User ID to find a player.</div><div id="userResults" class="people-results"></div>';
+ app.innerHTML='<div class="rap-people-heading"><div><h1 class="page-title">People</h1><p class="page-subtitle">Search the Sakura community by username or User ID and open user profiles.</p></div><a class="button secondary" href="/#rap" data-page="rap">RAP Leaderboard</a></div><form id="peopleSearchForm" class="people-search"><input id="userSearch" class="search-input" placeholder="Username or User ID..." minlength="1" maxlength="32" autocomplete="off"><button class="button" type="submit">Search</button></form><div id="peopleHint" class="notice">Type a username or numeric User ID to find a player.</div><div id="userResults" class="people-results"></div>';
  const form=document.getElementById("peopleSearchForm");
  const input=document.getElementById("userSearch");
  const results=document.getElementById("userResults");
@@ -1164,7 +1175,7 @@ function users(){
 async function rapLeaderboardPage(){
  const view=beginView();
  renderSidebar("users");
- app.innerHTML='<div class="rap-leaderboard-page"><div class="rap-leaderboard-heading"><div><h1 class="page-title">Top 10 RAP</h1><p class="page-subtitle">Players ranked by the current P$ value of every item in their inventory.</p></div><a class="button secondary" href="#users" data-page="users">People</a></div><div id="rapLeaderboardState" class="notice">Loading leaderboard...</div></div>';
+ app.innerHTML='<div class="rap-leaderboard-page"><div class="rap-leaderboard-heading"><div><h1 class="page-title">Top 10 RAP</h1><p class="page-subtitle">Players ranked by the current P$ value of every item in their inventory.</p></div><a class="button secondary" href="/#users" data-page="users">People</a></div><div id="rapLeaderboardState" class="notice">Loading leaderboard...</div></div>';
  const host=document.getElementById("rapLeaderboardState");
  try{
   const data=await api("/api/rap-leaderboard");
@@ -1204,7 +1215,7 @@ async function createPage(){
  const view=beginView();
  renderSidebar("create");
  if(!me){
-  app.innerHTML='<div class="creator-create-page"><h1 class="page-title">Create</h1><section class="creator-create-card"><h2>Sign in to create clothing</h2><p class="muted">Sign in to submit a Shirt or Pants item for review.</p><a class="primary" href="#login" data-page="login">Log in</a></section></div>';
+  app.innerHTML='<div class="creator-create-page"><h1 class="page-title">Create</h1><section class="creator-create-card"><h2>Sign in to create clothing</h2><p class="muted">Sign in to submit a Shirt or Pants item for review.</p><a class="primary" href="/#login" data-page="login">Log in</a></section></div>';
   return;
  }
  app.innerHTML='<div class="creator-create-page">'+
@@ -1383,11 +1394,11 @@ async function assetModeratorPage(){
     const assetId=Number(item.asset_id||0);
     const preview=assetId>0?"https://www.roblox.com/asset-thumbnail/image?assetId="+assetId+"&width=420&height=420&format=png":"";
     const original=String(item.roblox_url||"");
-    cards.push('<article class="asset-submission-card"><div class="asset-submission-kind">Clothing · '+(item.category==="Pants"?"Pants":"Shirt")+'</div><div class="asset-submission-layout"><div class="asset-submission-preview">'+(preview?'<img src="'+esc(preview)+'" alt="Clothing preview" loading="lazy">':'<div class="asset-preview-missing">No preview available</div>')+'</div><div class="asset-submission-details"><h3>'+esc(item.name)+'</h3><p class="muted">Submitted by <a href="#profile?username='+encodeURIComponent(item.username)+'" data-profile="'+esc(item.username)+'">'+esc(item.username)+'</a></p><p>'+esc(item.description||"No description provided.")+'</p><p class="asset-submission-meta">'+Number(item.price||0).toLocaleString()+' P$ · '+esc(new Date(item.created_at+"Z").toLocaleString())+'</p>'+(original?'<a class="asset-external-link" href="'+esc(original)+'" target="_blank" rel="noopener noreferrer">Открыть оригинал в Roblox</a>':'')+(preview?'<a class="asset-external-link" href="'+esc(preview)+'" target="_blank" rel="noopener noreferrer">Открыть картинку предпросмотра</a>':'')+'<div class="asset-review-actions"><button class="primary" type="button" data-asset-review="clothing" data-asset-id="'+esc(item.id)+'" data-asset-action="approve">Одобрить</button><button class="button danger-button" type="button" data-asset-review="clothing" data-asset-id="'+esc(item.id)+'" data-asset-action="reject">Отклонить</button></div></div></div></article>');
+    cards.push('<article class="asset-submission-card"><div class="asset-submission-kind">Clothing · '+(item.category==="Pants"?"Pants":"Shirt")+'</div><div class="asset-submission-layout"><div class="asset-submission-preview">'+(preview?'<img src="'+esc(preview)+'" alt="Clothing preview" loading="lazy">':'<div class="asset-preview-missing">No preview available</div>')+'</div><div class="asset-submission-details"><h3>'+esc(item.name)+'</h3><p class="muted">Submitted by <a href="/#profile?username='+encodeURIComponent(item.username)+'" data-profile="'+esc(item.username)+'">'+esc(item.username)+'</a></p><p>'+esc(item.description||"No description provided.")+'</p><p class="asset-submission-meta">'+Number(item.price||0).toLocaleString()+' P$ · '+esc(new Date(item.created_at+"Z").toLocaleString())+'</p>'+(original?'<a class="asset-external-link" href="'+esc(original)+'" target="_blank" rel="noopener noreferrer">Открыть оригинал в Roblox</a>':'')+(preview?'<a class="asset-external-link" href="'+esc(preview)+'" target="_blank" rel="noopener noreferrer">Открыть картинку предпросмотра</a>':'')+'<div class="asset-review-actions"><button class="primary" type="button" data-asset-review="clothing" data-asset-id="'+esc(item.id)+'" data-asset-action="approve">Одобрить</button><button class="button danger-button" type="button" data-asset-review="clothing" data-asset-id="'+esc(item.id)+'" data-asset-action="reject">Отклонить</button></div></div></div></article>');
    }
    for(const item of models){
     const preview=String(item.image_url||"");
-    cards.push('<article class="asset-submission-card"><div class="asset-submission-kind">3D Model · Accessory</div><div class="asset-submission-layout"><div class="asset-submission-preview asset-model-preview">'+(preview?'<img src="'+esc(preview)+'" alt="Model preview" loading="lazy">':'')+'<model-viewer src="'+esc(item.model_url)+'" alt="'+esc(item.name)+'" camera-controls auto-rotate rotation-per-second="20deg" shadow-intensity="1" exposure="1" loading="lazy" reveal="auto"></model-viewer></div><div class="asset-submission-details"><h3>'+esc(item.name)+'</h3><p class="muted">Submitted by <a href="#profile?username='+encodeURIComponent(item.username)+'" data-profile="'+esc(item.username)+'">'+esc(item.username)+'</a></p><p>'+esc(item.description||"No description provided.")+'</p><p class="asset-submission-meta">'+Number(item.price||0).toLocaleString()+' P$ · '+esc(new Date(item.created_at+"Z").toLocaleString())+'</p><a class="asset-external-link" href="'+esc(item.model_url)+'" target="_blank" rel="noopener noreferrer">Открыть файл 3D-модели</a>'+(preview?'<a class="asset-external-link" href="'+esc(preview)+'" target="_blank" rel="noopener noreferrer">Открыть картинку предпросмотра</a>':'')+'<div class="asset-review-actions"><button class="primary" type="button" data-asset-review="model" data-asset-id="'+esc(item.id)+'" data-asset-action="approve">Одобрить</button><button class="button danger-button" type="button" data-asset-review="model" data-asset-id="'+esc(item.id)+'" data-asset-action="reject">Отклонить</button></div></div></div></article>');
+    cards.push('<article class="asset-submission-card"><div class="asset-submission-kind">3D Model · Accessory</div><div class="asset-submission-layout"><div class="asset-submission-preview asset-model-preview">'+(preview?'<img src="'+esc(preview)+'" alt="Model preview" loading="lazy">':'')+'<model-viewer src="'+esc(item.model_url)+'" alt="'+esc(item.name)+'" camera-controls auto-rotate rotation-per-second="20deg" shadow-intensity="1" exposure="1" loading="lazy" reveal="auto"></model-viewer></div><div class="asset-submission-details"><h3>'+esc(item.name)+'</h3><p class="muted">Submitted by <a href="/#profile?username='+encodeURIComponent(item.username)+'" data-profile="'+esc(item.username)+'">'+esc(item.username)+'</a></p><p>'+esc(item.description||"No description provided.")+'</p><p class="asset-submission-meta">'+Number(item.price||0).toLocaleString()+' P$ · '+esc(new Date(item.created_at+"Z").toLocaleString())+'</p><a class="asset-external-link" href="'+esc(item.model_url)+'" target="_blank" rel="noopener noreferrer">Открыть файл 3D-модели</a>'+(preview?'<a class="asset-external-link" href="'+esc(preview)+'" target="_blank" rel="noopener noreferrer">Открыть картинку предпросмотра</a>':'')+'<div class="asset-review-actions"><button class="primary" type="button" data-asset-review="model" data-asset-id="'+esc(item.id)+'" data-asset-action="approve">Одобрить</button><button class="button danger-button" type="button" data-asset-review="model" data-asset-id="'+esc(item.id)+'" data-asset-action="reject">Отклонить</button></div></div></div></article>');
    }
    host.innerHTML=cards.length?cards.join(""):'<div class="op-profile-empty">There are no pending asset submissions.</div>';
    host.querySelectorAll("[data-asset-review]").forEach(button=>button.addEventListener("click",async()=>{
@@ -1468,7 +1479,7 @@ async function owner(){
     const createdDate=Date.parse(/[zZ]$/.test(createdRaw)?createdRaw:createdRaw.replace(" ","T")+"Z");
     const createdLabel=Number.isFinite(createdDate)?new Date(createdDate).toLocaleString():"";
     const seller=listing.seller_name
-     ?'<a href="#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'
+     ?'<a href="/#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'
      :'Unknown seller';
     return '<article class="owner-resale-row"><div class="owner-resale-details"><strong>'+esc(listing.item_name||"Unknown item")+'</strong><span>Seller: '+seller+'</span><span>Price: '+Number(listing.price||0).toLocaleString()+' '+esc(listing.currency||"P$")+'</span>'+(createdLabel?'<time>'+esc(createdLabel)+'</time>':'')+'</div><button class="button danger-button" type="button" data-owner-remove-resale="'+esc(listing.id)+'">Remove from market</button></article>';
    }).join(""):'<p class="muted owner-resale-empty">There are no active resale listings.</p>';
@@ -1501,7 +1512,7 @@ async function owner(){
    ownerCreatorSubmissionsHost.innerHTML=submissions.length?submissions.map(submission=>
     '<article class="creator-review-row" data-creator-request="'+esc(submission.id)+'">'+
      '<div class="creator-review-details"><div class="creator-review-title"><h3>'+esc(submission.name)+'</h3><span class="creator-review-type">'+(submission.category==="Pants"?"Pants":"Shirt")+'</span></div>'+
-     '<p class="muted">Submitted by <a href="#profile?id='+encodeURIComponent(submission.creator_public_id||"")+'" data-profile="'+esc(submission.username)+'">'+esc(submission.username)+'</a></p>'+
+     '<p class="muted">Submitted by <a href="/#profile?id='+encodeURIComponent(submission.creator_public_id||"")+'" data-profile="'+esc(submission.username)+'">'+esc(submission.username)+'</a></p>'+
      (submission.description?'<p class="creator-review-description">'+esc(submission.description)+'</p>':'')+
      '<a class="creator-original-link" href="'+esc(submission.roblox_url)+'" target="_blank" rel="noopener noreferrer">Открыть оригинал в Roblox</a>'+
      '<p class="muted creator-review-date">Submitted '+new Date(submission.created_at+"Z").toLocaleString()+'</p></div>'+
@@ -1869,7 +1880,7 @@ function infoPage(type){
   privacy:{title:"Privacy",body:'<p>Sakura stores your username, a password hash, session information, profile description, virtual balance, inventory, friend requests and in-site catalog and purchase records so the service can work.</p><p>Passwords are not stored as plain text. Sign-in uses a secure session cookie. This build does not ask for an email address.</p><p>For abuse prevention, the service temporarily stores hashed network-address identifiers and attempt counters for sign-in, registration and owner recovery. Ten attempts in the 15-minute window trigger a 15-minute cooldown. Expired per-address counters reset when that address is used again, and stale rows are removed during Worker setup.</p><p>Do not reuse an important password and do not share your account credentials with anyone.</p>'}
  };
  const pageData=pages[type]||pages.about;
- app.innerHTML='<article class="info-page"><h1 class="page-title">'+pageData.title+'</h1>'+pageData.body+'<a class="button" href="#home" data-page="home">Back to Home</a></article>';
+ app.innerHTML='<article class="info-page"><h1 class="page-title">'+pageData.title+'</h1>'+pageData.body+'<a class="button" href="/#home" data-page="home">Back to Home</a></article>';
 }
 
 async function render(name){
