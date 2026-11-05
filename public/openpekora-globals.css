@@ -409,7 +409,7 @@ html div.container.big {
 }
 
 .inputTextStyle {
-    border: 1px solid #b8b8b8;
+    border:1px solid #51445f;
     color: #191919;
     font-weight: 300;
     font-size: 16px;
@@ -419,7 +419,7 @@ html div.container.big {
     -webkit-appearance: none;
     display: block;
     width: 100%;
-    background-color: #fff;
+    background-color: #211b2b;
     background-image: none;
     border-radius: 3px;
     outline: none;
