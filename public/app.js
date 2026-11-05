@@ -1451,6 +1451,45 @@ async function owner(){
   '</form><div id="ownerPromoList" class="owner-promocode-list">Loading promo codes...</div></section>'
  );
 
+ app.insertAdjacentHTML("beforeend",
+  '<section class="owner-section owner-resale-moderation"><div class="owner-resale-heading"><div><h2>Resale Market Moderation</h2><p class="muted">Remove active resale listings. The seller keeps the item and no currency is transferred.</p></div><button class="button secondary" id="ownerResaleRefresh" type="button">Refresh</button></div><div id="ownerResaleListings" class="owner-resale-list">Loading resale listings...</div></section>'
+ );
+
+ const ownerResaleListingsHost=document.getElementById("ownerResaleListings");
+ async function loadOwnerResaleListings(){
+  if(!ownerResaleListingsHost)return;
+  ownerResaleListingsHost.textContent="Loading resale listings...";
+  try{
+   const data=await api("/api/owner/resale-listings");
+   if(!isActiveView(view)||!ownerResaleListingsHost.isConnected)return;
+   const listings=Array.isArray(data.listings)?data.listings:[];
+   ownerResaleListingsHost.innerHTML=listings.length?listings.map(listing=>{
+    const createdRaw=String(listing.created_at||"");
+    const createdDate=Date.parse(/[zZ]$/.test(createdRaw)?createdRaw:createdRaw.replace(" ","T")+"Z");
+    const createdLabel=Number.isFinite(createdDate)?new Date(createdDate).toLocaleString():"";
+    const seller=listing.seller_name
+     ?'<a href="#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'
+     :'Unknown seller';
+    return '<article class="owner-resale-row"><div class="owner-resale-details"><strong>'+esc(listing.item_name||"Unknown item")+'</strong><span>Seller: '+seller+'</span><span>Price: '+Number(listing.price||0).toLocaleString()+' '+esc(listing.currency||"P$")+'</span>'+(createdLabel?'<time>'+esc(createdLabel)+'</time>':'')+'</div><button class="button danger-button" type="button" data-owner-remove-resale="'+esc(listing.id)+'">Remove from market</button></article>';
+   }).join(""):'<p class="muted owner-resale-empty">There are no active resale listings.</p>';
+   ownerResaleListingsHost.querySelectorAll("[data-owner-remove-resale]").forEach(button=>button.addEventListener("click",async()=>{
+    const listingId=button.dataset.ownerRemoveResale;
+    if(!confirm("Remove this listing from the Resale Market? The seller will keep the item and no currency will be transferred."))return;
+    button.disabled=true;button.textContent="Removing...";
+    try{
+     await api("/api/owner/resale-listings/"+encodeURIComponent(listingId),{method:"DELETE"});
+     if(!isActiveView(view))return;
+     toast("Listing removed from the Resale Market");
+     await loadOwnerResaleListings();
+    }catch(error){toast(error.message);button.disabled=false;button.textContent="Remove from market"}
+   }));
+  }catch(error){
+   if(isActiveView(view)&&ownerResaleListingsHost.isConnected)ownerResaleListingsHost.textContent="Could not load resale listings: "+error.message;
+  }
+ }
+ document.getElementById("ownerResaleRefresh")?.addEventListener("click",loadOwnerResaleListings);
+ loadOwnerResaleListings();
+
  const ownerCreatorSubmissionsHost=document.getElementById("ownerCreatorSubmissions");
  async function loadOwnerCreatorSubmissions(){
   if(!ownerCreatorSubmissionsHost)return;
