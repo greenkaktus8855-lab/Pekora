@@ -152,6 +152,16 @@ try {
     # implementation intentionally does not add an unverified SOAPAction header.
     $requestSource = [System.IO.File]::ReadAllText($requestPath)
     $requestSource = $requestSource.Replace([string][char]13 + [string][char]10, [string][char]10)
+    # A previous local run may have removed this import; RCCRequest still uses Config.RCCUrl.
+    $configImport = 'import Config from "./Config.js";'
+    if (-not $requestSource.Contains($configImport)) {
+        $soapImport = 'import {SOAP} from "./SOAP.js";'
+        if (-not $requestSource.Contains($soapImport)) {
+            throw "Request.ts is missing its SOAP import; cannot safely restore the Config import."
+        }
+        $requestSource = $requestSource.Replace($soapImport, $soapImport + [Environment]::NewLine + $configImport)
+        Write-Host "Restored the missing Config import in Request.ts."
+    }
     $standardSoapCall = 'const xml = SOAP("http://roblox.com/", jobExpiration, JSON.stringify(data));'
     $legacySoapCall = 'const xml = SOAP(Config.BaseUrl, jobExpiration, JSON.stringify(data));'
     if ($requestSource.Contains($legacySoapCall)) {
