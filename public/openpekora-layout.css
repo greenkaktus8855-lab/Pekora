@@ -2,7 +2,7 @@
    Component dimensions and navigation styling are adapted from Blue7366/OpenPekora
    frontend/components/navbar, navSidebar, myDashboard and footer (MIT). */
 :root{--op-blue:#6b2eb5;--op-primary:#a64dff;--op-success:#02b757;--op-text:#191919;--op-muted:#757575;--op-white:#fff;--op-bg:#e3e3e3}
-html,body{margin:0;min-height:100%;background:#211b2b;color:#f0eaf8;font-family:'Source Sans Pro',Arial,sans-serif;font-size:14px}
+html,body{margin:0;min-height:100%;background:#14111a;color:#f0eaf8;font-family:'Source Sans Pro',Arial,sans-serif;font-size:14px}
 body{padding-top:0}
 .navbar-wrapper-main{height:52px;margin-bottom:40px}
 .op-navbar{position:fixed;z-index:1000;top:0;left:0;width:100%;min-height:46px;background:var(--op-blue);padding:0;box-shadow:0 3px 3px -3px rgba(25,25,25,.3)}
