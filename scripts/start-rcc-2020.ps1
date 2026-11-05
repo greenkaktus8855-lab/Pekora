@@ -173,7 +173,9 @@ $newCatch = @'
 $requestSource = $requestSource.Substring(0, $catchStart) + $newCatch.TrimEnd() + $requestSource.Substring($catchEnd + $catchMarker.Length - 3)
 
 # The RCC Job structure requires a category; category 1 is used for thumbnail jobs.
-$jobPlaceholder = '
+$jobPlaceholder = [string][char]36 + "{jobExpiration}"
+$oldJobFields = "            <ns1:expirationInSeconds>" + $jobPlaceholder + "</ns1:expirationInSeconds>" + $lf + "            <ns1:cores>1</ns1:cores>" + $lf
+$newJobFields = "            <ns1:expirationInSeconds>" + $jobPlaceholder + "</ns1:expirationInSeconds>" + $lf + "            <ns1:category>1</ns1:category>" + $lf + "            <ns1:cores>1</ns1:cores>" + $lf
 if ($soapSource.Contains($oldJobFields)) {
     $soapSource = $soapSource.Replace($oldJobFields, $newJobFields)
 } elseif (-not $soapSource.Contains("<ns1:category>1</ns1:category>")) {
