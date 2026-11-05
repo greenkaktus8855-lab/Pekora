@@ -273,7 +273,7 @@ function itemPriceHistoryMarkup(item,history){
   .sort((a,b)=>a.date-b.date);
  if(records.length<2){
   const count=records.length;
-  return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Completed P$ sales for this Limited / Off Sale item.</p></div></div><div class="item-price-history-empty">'+(count?'Only one completed sale is recorded. The price graph will appear after another sale.':'No completed P$ sales yet. The graph will appear after this item is sold.')+'</div></section>';
+  return '<section class="item-price-history"><div class="item-price-history-heading"><div><h2>Price History</h2><p class="muted">Limited item · completed P$ sales</p></div></div><div class="item-price-history-empty">'+(count?'Only one completed sale is recorded. The line chart appears after another sale.':'No completed sales are recorded yet. The line chart will appear as soon as this item has at least two completed sales.')+'</div></section>';
  }
  const width=760,height=280,left=66,right=22,top=20,bottom=48;
  const values=records.map(entry=>entry.price);
