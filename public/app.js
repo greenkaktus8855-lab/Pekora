@@ -611,7 +611,7 @@ function inventoryItemCard(item){
  return '<article class="item-card inventory-item-card">'+
   '<a class="item-image" href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+itemPreview(item)+itemBadgeMarkup(item)+'</a>'+
   '<h3><a href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+esc(item.name)+'</a></h3>'+
-  '<div class="muted">'+esc(item.category)+'</div>'+status+
+  '<div class="muted">'+esc(item.category)+'</div>'+(Number(item.quantity)>1?'<div class="muted">Quantity: '+Number(item.quantity)+'</div>':"")+status+
   '</article>';
 }
 async function inventory(){
