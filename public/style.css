@@ -1375,3 +1375,15 @@ body{color:#f0eaf8!important}
  .owner-resale-row{align-items:stretch;flex-direction:column}
  .owner-resale-row .danger-button{width:100%}
 }
+
+
+/* Clear separation of historical completed sales and current catalog price */
+.item-price-history-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-top:14px}
+.item-price-history-stat{display:grid;gap:5px;min-width:0;padding:11px 13px;border:1px solid #40354c;border-radius:8px;background:#292334}
+.item-price-history-stat span{font-size:12px;line-height:1.35;color:#b9adc8}
+.item-price-history-stat b{font-size:16px;line-height:1.3;color:#f0eaf8;overflow-wrap:anywhere}
+.item-price-history-stat-current{border-color:#72509a;background:#30243d}
+.item-price-history-stat-current b{color:#d9b8ff}
+.price-chart-gridline{stroke:#40374a}
+.price-chart-axis-label,.price-chart-date{fill:#b9adc8}
+.price-chart-point{fill:#a64dff;stroke:#e0c8ff;stroke-width:2}
