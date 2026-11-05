@@ -1,0 +1,39 @@
+name: Build Sakura Player
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "client/SakuraPlayer/**"
+      - ".github/workflows/build-sakura-player.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish Windows x64 launcher
+        shell: pwsh
+        run: dotnet publish client/SakuraPlayer/SakuraPlayer.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output publish/SakuraPlayer
+
+      - name: Package launcher
+        shell: pwsh
+        run: Compress-Archive -Path publish/SakuraPlayer/* -DestinationPath SakuraPlayer-win-x64.zip
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SakuraPlayer-win-x64
+          path: SakuraPlayer-win-x64.zip
+          retention-days: 14
