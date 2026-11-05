@@ -567,27 +567,37 @@ function auth(kind){
  const view=beginView();
  renderSidebar("");
  const reg=kind==="register";
- app.innerHTML='<div class="form"><h2>'+(reg?"Create your Sakura account":"Log in to Sakura")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="'+(reg?"3":"1")+'" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="8" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error"></div></form><p class="muted">'+(reg?'Already have an account? <a href="#login" data-page="login">Log in</a>':'New to Sakura? <a href="#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="#owner-recovery" data-page="owner-recovery">Recover PekoraAdmin account</a></p>')+'</div>';
- document.getElementById("authForm").addEventListener("submit",async e=>{
-  e.preventDefault();const f=new FormData(e.target);
+ app.innerHTML='<div class="form"><h2>'+(reg?"Create your Sakura account":"Log in to Sakura")+'</h2><form id="authForm"><label>Username</label><input name="username" required minlength="'+(reg?"3":"1")+'" maxlength="20" autocomplete="username"><label>Password</label><input name="password" type="password" required minlength="8" maxlength="128" autocomplete="'+(reg?"new-password":"current-password")+'"><button class="primary" type="submit">'+(reg?"Sign up":"Log in")+'</button><div id="authError" class="error" role="status" aria-live="polite"></div></form><p class="muted">'+(reg?'Already have an account? <a href="#login" data-page="login">Log in</a>':'New to Sakura? <a href="#register" data-page="register">Sign up</a>')+'</p>'+(reg?'':'<p class="muted"><a href="#owner-recovery" data-page="owner-recovery">Recover OWNER account</a></p>')+'</div>';
+ const form=document.getElementById("authForm");
+ form.addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(form.dataset.submitting==="1")return;
+  form.dataset.submitting="1";
+  const submit=form.querySelector('button[type="submit"]');
+  const error=document.getElementById("authError");
+  const values=new FormData(form);
+  submit.disabled=true;
+  error.textContent=reg?"Creating account...":"Signing in...";
   try{
-   const d=await api(reg?"/api/register":"/api/login",{method:"POST",body:JSON.stringify({username:f.get("username"),password:f.get("password")})});
+   const d=await api(reg?"/api/register":"/api/login",{method:"POST",body:JSON.stringify({username:values.get("username"),password:values.get("password")})});
    setUser(d.user);
    if(isActiveView(view))page("home");
   }catch(err){
-   const error=document.getElementById("authError");
    if(isActiveView(view)&&error){
     if(!reg&&String(err.message).startsWith("This account is banned")){
-     error.innerHTML=esc(err.message)+'<p><a href="#banned?username='+encodeURIComponent(String(f.get("username")||""))+'" data-banned-account="'+esc(String(f.get("username")||""))+'">View ban details</a></p>';
+     error.innerHTML=esc(err.message)+'<p><a href="#banned?username='+encodeURIComponent(String(values.get("username")||""))+'" data-banned-account="'+esc(String(values.get("username")||""))+'">View ban details</a></p>';
     }else error.textContent=err.message;
    }
+  }finally{
+   form.dataset.submitting="0";
+   if(submit.isConnected)submit.disabled=false;
   }
  });
 }
 async function ownerRecoveryPage(){
  const view=beginView();
  renderSidebar("");
- app.innerHTML='<div class="form"><h2>Recover Sakura OWNER account</h2><p class="muted">Use the Worker secret OWNER_BOOTSTRAP_SECRET from your Cloudflare settings. This resets the PekoraAdmin password and signs out previous sessions.</p><form id="ownerRecoveryForm"><label>Worker recovery secret<input name="secret" type="password" maxlength="512" required autocomplete="off"></label><label>New password<input name="password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><label>Confirm new password<input name="confirmPassword" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><button class="primary" type="submit">Reset owner password</button><div id="ownerRecoveryMessage" class="error" role="status"></div></form><p class="muted"><a href="#login" data-page="login">Back to login</a></p></div>';
+ app.innerHTML='<div class="form"><h2>Recover Sakura OWNER account</h2><p class="muted">Use the Worker secret OWNER_BOOTSTRAP_SECRET from your Cloudflare settings. This resets the active OWNER account password and signs out previous sessions.</p><form id="ownerRecoveryForm"><label>Worker recovery secret<input name="secret" type="password" maxlength="512" required autocomplete="off"></label><label>New password<input name="password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><label>Confirm new password<input name="confirmPassword" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></label><button class="primary" type="submit">Reset owner password</button><div id="ownerRecoveryMessage" class="error" role="status"></div></form><p class="muted"><a href="#login" data-page="login">Back to login</a></p></div>';
  document.getElementById("ownerRecoveryForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const form=e.currentTarget,values=new FormData(form),secret=String(values.get("secret")||""),password=String(values.get("password")||""),confirmPassword=String(values.get("confirmPassword")||""),message=document.getElementById("ownerRecoveryMessage");
@@ -597,7 +607,7 @@ async function ownerRecoveryPage(){
    await api("/api/owner/recover",{method:"POST",body:JSON.stringify({secret,password})});
    if(me?.username?.toLowerCase()==="pekoraadmin")setUser(null);
    form.reset();
-   message.textContent="Password reset. Sign in as PekoraAdmin using the new password.";
+   message.textContent="Password reset. Sign in to the OWNER account using the new password.";
   }catch(error){message.textContent=error.message}
  });
 }
@@ -829,7 +839,7 @@ async function promocodesPage(){
 async function gamesPage(){
  const view=beginView();
  renderSidebar("games");
- app.innerHTML='<div class="games-page"><h1 class="page-title">Games</h1><p class="muted">Choose an experience and press Play to open Sakura Player.</p><div id="gamesGrid" class="games-grid">Loading games...</div></div>';
+ app.innerHTML='<div class="games-page"><h1 class="page-title">Games</h1><p class="muted">Choose an experience and press Play to open Sakura Player. Actual gameplay requires a compatible game runtime, which is not connected yet.</p><div id="gamesGrid" class="games-grid">Loading games...</div></div>';
  try{
   const data=await api("/api/games");
   if(!isActiveView(view))return;
