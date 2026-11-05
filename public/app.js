@@ -122,7 +122,7 @@ function renderSidebar(active="home"){
   '<div class="side-separator"></div>'+
   '<a href="/#promocodes" data-page="promocodes" class="side-promo-button '+(active==="promocodes"?"active":"")+'">Promo Codes</a>'+
   '<a class="side-discord-button" href="https://discord.gg/PxVWav9R2R" target="_blank" rel="noopener noreferrer">Discord Server</a>'+
-  (me.role==="OWNER"?'<a href="/#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':(me.isAssetModerator?'<a href="/#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Admin Panel</span></a>':''))+
+  (me.role==="OWNER"?'<a href="/#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a><a href="/#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Admin Panel</span></a>':(me.isAssetModerator?'<a href="/#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Admin Panel</span></a>':''))+
   '</nav></div>';
 }
 
