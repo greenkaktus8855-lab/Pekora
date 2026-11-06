@@ -1387,3 +1387,9 @@ body{color:#f0eaf8!important}
 .price-chart-gridline{stroke:#40374a}
 .price-chart-axis-label,.price-chart-date{fill:#b9adc8}
 .price-chart-point{fill:#a64dff;stroke:#e0c8ff;stroke-width:2}
+
+/* Direct sale from Inventory */
+.inventory-sell-button{display:block;width:100%;margin-top:12px;padding:9px 12px;border:1px solid #5f4b79;border-radius:7px;background:#2c2039;color:#eadbff;font:inherit;font-size:13px;font-weight:800;cursor:pointer;transition:background .15s ease,border-color .15s ease}
+.inventory-sell-button:hover:not(:disabled){background:#3b2a4b;border-color:#9873c2}
+.inventory-sell-button:disabled{opacity:.55;cursor:not-allowed}
+.inventory-trade-status{display:block;margin-top:8px;color:#d8b77c;font-size:12px}
