@@ -122,7 +122,8 @@ function renderSidebar(active="home"){
   '<div class="side-separator"></div>'+
   '<a href="/#promocodes" data-page="promocodes" class="side-promo-button '+(active==="promocodes"?"active":"")+'">Promo Codes</a>'+
   '<a class="side-discord-button" href="https://discord.gg/PxVWav9R2R" target="_blank" rel="noopener noreferrer">Discord Server</a>'+
-  (me.role==="OWNER"?'<a href="/#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':(me.isAssetModerator?'<a href="/#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Asset Panel</span></a>':''))+
+  (me.isAdministrator?'<a href="/#admin-panel" data-page="admin-panel" class="'+(active==="admin-panel"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Admin Panel</span></a>':'')+
+   (me.role==="OWNER"?'<a href="/#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':(me.isAssetModerator?'<a href="/#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Asset Panel</span></a>':''))+
   '</nav></div>';
 }
 
@@ -1375,6 +1376,72 @@ async function createPage(){
  });
 }
 
+async function adminPanel(){
+ const view=beginView();
+ renderSidebar("admin-panel");
+ if(!me||!me.isAdministrator){app.innerHTML='<div class="empty">Administrator badge required.</div>';return}
+ const categories=["Hats","Hair","Faces","Shirts","Pants"];
+ app.innerHTML='<div class="creator-create-page admin-panel-page">'+
+  '<div class="creator-create-heading"><div><h1 class="page-title">Admin Panel</h1><p class="page-subtitle">Submit new items for the Sakura catalog</p></div></div>'+
+  '<section class="creator-create-card"><h2>Add a catalog item</h2><p class="muted">Fill out the item details and attach its image. Your submission stays private until the Owner reviews and publishes it.</p>'+
+  '<form id="adminItemSubmissionForm" class="creator-create-form">'+
+   '<label>Item price<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label>'+
+   '<label>Currency<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label>'+
+   '<label>Category<select name="category">'+categories.map(category=>'<option value="'+category+'">'+category+'</option>').join("")+'</select></label>'+
+   '<label>Item name<input name="name" maxlength="80" required placeholder="Enter item name"></label>'+
+   '<label>Preview image URL<input name="image_url" type="url" maxlength="500" required placeholder="https://..."></label>'+
+   '<img id="adminItemImagePreview" class="creator-review-image-preview" alt="Item preview" hidden>'+
+   '<label>Description <span class="muted">(optional)</span><textarea name="description" maxlength="500" rows="3" placeholder="Describe the item"></textarea></label>'+
+   '<div class="creator-create-actions"><button class="primary" type="submit">Submit item for Owner review</button><span id="adminItemSubmissionMessage" class="muted" role="status"></span></div>'+
+  '</form></section>'+
+  '<section class="asset-tutorial admin-item-tutorial"><h2>HOW TO ADD AN ITEM — COMPLETE BEGINNER GUIDE</h2><p class="asset-tutorial-intro">Follow every step in order. You do not need to download the picture — you only need its direct image URL.</p>'+
+   '<article><h3>STEP 1 — SET THE ITEM DETAILS</h3><p>First, choose the price you want the item to have in Sakura. Select the currency (<strong>P$</strong> or <strong>Tix</strong>), choose the correct category, and enter the exact item name. Double-check the spelling before continuing.</p></article>'+
+   '<article><h3>STEP 2 — OPEN THE ROBLOX MARKETPLACE</h3><p>Open the <a href="https://www.roblox.com/catalog" target="_blank" rel="noopener noreferrer">Roblox Marketplace</a> in a new tab. Search for the exact item you want to add. Make sure you have selected the correct item, not a similar item with a different name or appearance.</p></article>'+
+   '<article><h3>STEP 3 — OPEN THE ITEM PAGE</h3><p>Click the item in the Marketplace search results. Its Roblox page will open. Wait until the item preview or avatar render has fully loaded. Check that the preview shows the item you selected.</p></article>'+
+   '<article><h3>STEP 4 — MAKE THE IMAGE EASIER TO SELECT</h3><p>In the preview area, look for the <strong>crossed-out eye icon</strong>. Click it to hide the avatar or overlay when that control is available. This can make the item preview easier to select. Do not copy the URL of the whole Roblox page.</p></article>'+
+   '<article><h3>STEP 5 — COPY THE IMAGE URL</h3><p>Move your mouse over the actual item image or render. Right-click the image and choose <strong>Copy image address</strong> (the wording may be slightly different in your browser). You should now have a direct image link copied to your clipboard.</p><p>If the menu does not show Copy image address, open the image itself in a separate tab first, then copy the address from the browser address bar.</p></article>'+
+   '<article><h3>STEP 6 — PASTE THE IMAGE URL INTO SAKURA</h3><p>Return to the Sakura Admin Panel. Paste the copied link into <strong>Preview image URL</strong>. The preview should load below the field. Check that it is the correct picture and that the link starts with <strong>https://</strong>.</p></article>'+
+   '<article><h3>STEP 7 — REVIEW AND SUBMIT</h3><p>Check the price, currency, category, name and picture one last time. Press <strong>Submit item for Owner review</strong>. Your request will be sent to the Owner. It will <strong>not</strong> appear in the public Catalog yet.</p></article>'+
+   '<article><h3>IMPORTANT — ONLY THE OWNER CAN PUBLISH</h3><p>Administrators can submit item details, but they cannot publish items directly. The Owner checks each submission and decides whether to publish or reject it. Once the Owner presses <strong>Publish</strong>, the item becomes public in the Sakura Catalog.</p></article>'+
+   '<article><h3>COMMON MISTAKES TO AVOID</h3><p>Do not paste the Roblox page URL instead of the image URL. Do not submit a broken link, a picture of a different item, or an image that you do not have permission to use. If the preview does not load, copy the image address again and check it before submitting.</p></article>'+
+  '</section></div>';
+ const form=document.getElementById("adminItemSubmissionForm");
+ const message=document.getElementById("adminItemSubmissionMessage");
+ const imageInput=form?.querySelector('input[name="image_url"]');
+ const preview=document.getElementById("adminItemImagePreview");
+ imageInput?.addEventListener("input",()=>{
+  try{
+   const value=new URL(imageInput.value.trim());
+   if(value.protocol!=="https:")throw new Error();
+   preview.src=value.href;preview.hidden=false;
+  }catch{preview.removeAttribute("src");preview.hidden=true;}
+ });
+ preview?.addEventListener("error",()=>{preview.hidden=true;});
+ form?.addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(!isActiveView(view))return;
+  const values=new FormData(form);
+  const payload={
+   price:Number(values.get("price")),
+   currency:String(values.get("currency")||"P$"),
+   category:String(values.get("category")||""),
+   name:String(values.get("name")||"").trim(),
+   image_url:String(values.get("image_url")||"").trim(),
+   description:String(values.get("description")||"").trim()
+  };
+  const submit=form.querySelector('button[type="submit"]');
+  submit.disabled=true;message.textContent="Sending your item to the Owner...";
+  try{
+   await api("/api/admin/item-submissions",{method:"POST",body:JSON.stringify(payload)});
+   if(!isActiveView(view))return;
+   form.reset();preview.removeAttribute("src");preview.hidden=true;
+   message.textContent="Submitted successfully. The item is waiting for the Owner's review and is not public yet.";
+   toast("Item submitted for Owner review");
+  }catch(error){message.textContent=error.message}
+  finally{submit.disabled=false}
+ });
+}
+
 async function assetModeratorPage(){
  const view=beginView();
  renderSidebar("asset-panel");
@@ -1453,6 +1520,7 @@ async function owner(){
  '<button class="primary" type="submit">Add Item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>'+
  '<section class="owner-section owner-creator-submissions"><h2>Clothing submissions</h2><p class="muted">Review player Shirts and Pants. The player’s suggested price is prefilled and can be changed before publishing.</p><div id="ownerCreatorSubmissions" class="owner-creator-submissions-list">Loading submissions...</div></section>'+
+ '<section class="owner-section owner-creator-submissions"><h2>Administrator item submissions</h2><p class="muted">Administrators can submit items, but only the Owner can publish them into the public Catalog.</p><div id="ownerAdminItemSubmissions" class="owner-creator-submissions-list">Loading admin submissions...</div></section>'+
  '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section owner-group-verification"><h2>Group Verification</h2><p class="muted">Give or remove the verified badge for Sakura groups. Only the site owner can change this.</p><div id="ownerGroups" class="owner-group-list">Loading groups...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Sakura currency, issue warnings, or issue permanent account and IP bans. An IP ban can also affect other people sharing the same public internet connection. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="1" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
  app.insertAdjacentHTML("beforeend",
   '<section class="owner-section owner-promocode-section"><h2>Promo Code Management</h2><p class="muted">Create codes that grant Sakura currency and one or more items from the catalog. Set a total claim limit and optional expiry date.</p>'+
@@ -1571,6 +1639,39 @@ async function owner(){
   }
  }
  loadOwnerCreatorSubmissions();
+ const ownerAdminItemSubmissionsHost=document.getElementById("ownerAdminItemSubmissions");
+ async function loadOwnerAdminItemSubmissions(){
+  if(!ownerAdminItemSubmissionsHost)return;
+  ownerAdminItemSubmissionsHost.textContent="Loading admin submissions...";
+  try{
+   const data=await api("/api/owner/admin-item-submissions");
+   if(!isActiveView(view)||!ownerAdminItemSubmissionsHost.isConnected)return;
+   const submissions=data.submissions||[];
+   ownerAdminItemSubmissionsHost.innerHTML=submissions.length?submissions.map(submission=>
+    '<article class="creator-review-row"><div class="creator-review-details"><div class="creator-review-title"><h3>'+esc(submission.name)+'</h3><span class="creator-review-type">'+esc(submission.category)+'</span></div>'+
+    '<p class="muted">Submitted by <a href="/#profile?username='+encodeURIComponent(submission.username||"")+'" data-profile="'+esc(submission.username||"")+'">'+esc(submission.username||"Unknown")+'</a></p>'+
+    '<p>'+esc(submission.description||"No description provided.")+'</p><p class="muted">'+Number(submission.price||0).toLocaleString()+' '+esc(submission.currency||"P$")+' · '+esc(new Date(submission.created_at+"Z").toLocaleString())+'</p>'+
+    '<a class="asset-external-link" href="'+esc(submission.image_url)+'" target="_blank" rel="noopener noreferrer">Open submitted image</a>'+
+    '<img class="creator-review-image-preview" src="'+esc(submission.image_url)+'" alt="Submitted item preview" loading="lazy">'+
+    '<div class="creator-review-actions"><button class="primary" type="button" data-admin-item-action="approve" data-admin-item-id="'+esc(submission.id)+'">Publish</button><button class="button secondary" type="button" data-admin-item-action="reject" data-admin-item-id="'+esc(submission.id)+'">Reject</button></div></div></article>'
+   ).join(""):'<div class="creator-submissions-empty">There are no administrator item submissions waiting for review.</div>';
+   ownerAdminItemSubmissionsHost.querySelectorAll("[data-admin-item-action]").forEach(button=>button.addEventListener("click",async()=>{
+    const action=button.dataset.adminItemAction,submissionId=button.dataset.adminItemId;
+    if(action==="approve"&&!confirm("Publish this item into the public Sakura Catalog?"))return;
+    if(action==="reject"&&!confirm("Reject this administrator item submission?"))return;
+    button.disabled=true;
+    try{
+     await api("/api/owner/admin-item-submissions/"+encodeURIComponent(submissionId),{method:"PATCH",body:JSON.stringify({action:action==="approve"?"approve":"reject"})});
+     if(!isActiveView(view))return;
+     toast(action==="approve"?"Item published in the public Catalog":"Item submission rejected");
+     await loadOwnerAdminItemSubmissions();
+    }catch(error){toast(error.message);button.disabled=false}
+   }));
+  }catch(error){
+   if(isActiveView(view)&&ownerAdminItemSubmissionsHost.isConnected)ownerAdminItemSubmissionsHost.textContent=error.message;
+  }
+ }
+ loadOwnerAdminItemSubmissions();
  const promoForm=document.getElementById("ownerPromoForm");
  const promoItemSelect=document.getElementById("ownerPromoItems");
  const promoList=document.getElementById("ownerPromoList");
@@ -1921,6 +2022,7 @@ async function render(name){
  else if(name==="trades")await tradesPage();
  else if(name==="settings")await settings();
  else if(name==="asset-panel")await assetModeratorPage();
+ else if(name==="admin-panel")await adminPanel();
  else if(name==="owner")await owner();
  else home();
 }
