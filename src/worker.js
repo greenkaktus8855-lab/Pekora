@@ -40,7 +40,8 @@ async function currentUser(request, env) {
   if (!token) return null;
   const tokenHash = await digest(token);
   const row = await env.DB.prepare(`SELECT u.id,u.username,u.role,u.balance,u.tix_balance,u.created_at,u.is_banned,u.public_id,u.is_verified,
-      EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=u.id AND ub.badge_key='ASSET_MODERATOR') AS is_asset_moderator
+      EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=u.id AND ub.badge_key='ASSET_MODERATOR') AS is_asset_moderator,
+      EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=u.id AND ub.badge_key='ADMINISTRATOR') AS is_administrator
     FROM sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=? AND s.expires_at > datetime('now')`).bind(tokenHash).first();
   if (!row || row.is_banned) return null;
@@ -87,7 +88,7 @@ async function body(request) {
     return null;
   }
 }
-const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:Number(u.balance||0), tixBalance:Number(u.tix_balance||0), createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified), isAssetModerator:Boolean(u.is_asset_moderator) });
+const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:Number(u.balance||0), tixBalance:Number(u.tix_balance||0), createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified), isAssetModerator:Boolean(u.is_asset_moderator), isAdministrator:Boolean(u.is_administrator) });
 const USER_BADGE_KEYS = Object.freeze(["ADMINISTRATOR","ASSET_MODERATOR","EARLY_SUPPORTER","CONTRIBUTOR","CREATOR","COMMUNITY_HELPER"]);
 const USER_BADGE_LABELS = Object.freeze({ADMINISTRATOR:"Administrator",ASSET_MODERATOR:"Asset Moderator",EARLY_SUPPORTER:"Early Supporter",CONTRIBUTOR:"Contributor",CREATOR:"Creator",COMMUNITY_HELPER:"Community Helper"});
 const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
@@ -217,6 +218,8 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_model_submissions_user ON model_submissions(user_id,created_at DESC)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_equipped_items_user ON equipped_items(user_id,category)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS creator_submissions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, username TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', category TEXT NOT NULL CHECK(category IN ('Shirts','Pants')), roblox_url TEXT NOT NULL, asset_id INTEGER NOT NULL CHECK(asset_id>0), status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')), image_url TEXT NOT NULL DEFAULT '', reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_item_id TEXT REFERENCES items(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), reviewed_at TEXT)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS admin_item_submissions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', category TEXT NOT NULL CHECK(category IN ('Hats','Hair','Faces','Shirts','Pants')), price INTEGER NOT NULL CHECK(price>=0 AND price<=1000000), currency TEXT NOT NULL DEFAULT 'P$' CHECK(currency IN ('P$','Tix')), image_url TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')), reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_item_id TEXT REFERENCES items(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), reviewed_at TEXT)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_admin_item_submissions_status ON admin_item_submissions(status,created_at)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_creator_submissions_user ON creator_submissions(user_id,created_at DESC)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_creator_submissions_status ON creator_submissions(status,created_at)"),
         env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_creator_submissions_active_asset ON creator_submissions(asset_id) WHERE status IN ('PENDING','APPROVED')"),
@@ -2190,6 +2193,39 @@ async function route(request, env) {
     return json({ok:true,status});
   }
 
+  if (path === "/api/admin/item-submissions") {
+    const actor = await requireUser(request,env);
+    if (!actor) return fail("Please sign in.",401);
+    if (!actor.is_administrator) return fail("Administrator badge required.",403);
+    if (request.method !== "POST") return fail("Only item submissions are available here.",405);
+    const data = await body(request);
+    if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Enter the item details.");
+    const name = String(data.name||"").trim();
+    const category = String(data.category||"");
+    const price = Number(data.price);
+    const currency = String(data.currency||"P$");
+    const description = String(data.description||"").trim();
+    const imageUrl = String(data.image_url||"").trim();
+    if (!name || name.length>80) return fail("Item name must be 1–80 characters.");
+    if (!["Hats","Hair","Faces","Shirts","Pants"].includes(category)) return fail("Choose a supported category.");
+    if (!Number.isSafeInteger(price) || price<0 || price>1000000) return fail("Price must be a whole number from 0 to 1,000,000.");
+    if (!["P$","Tix"].includes(currency)) return fail("Choose P$ or Tix.");
+    if (description.length>500) return fail("Description must be 500 characters or less.");
+    if (!imageUrl || imageUrl.length>500) return fail("Add a preview image URL (maximum 500 characters).");
+    try {
+      const image = new URL(imageUrl);
+      if (image.protocol!=="https:") throw new Error();
+    } catch {
+      return fail("Preview image URL must be a valid HTTPS link.");
+    }
+    const submissionId = id();
+    await env.DB.prepare("INSERT INTO admin_item_submissions (id,user_id,name,description,category,price,currency,image_url) VALUES (?,?,?,?,?,?,?,?)")
+      .bind(submissionId,actor.id,name,description,category,price,currency,imageUrl).run();
+    await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)")
+      .bind(id(),actor.id,actor.id,"ADMIN_ITEM_SUBMITTED",name+" · "+category).run();
+    return json({ok:true,id:submissionId,status:"PENDING"},201);
+  }
+
   if (path.startsWith("/api/asset-moderation/models")) {
     const actor=await requireUser(request,env);
     if(!actor)return fail("Please sign in.",401);
@@ -2293,6 +2329,43 @@ async function route(request, env) {
     if (!results?.[1]?.meta?.changes || !results?.[2]?.meta?.changes || !results?.[3]?.meta?.changes || !results?.[4]?.meta?.changes) {
       console.error("[Sakura creator] Approval did not create a catalog item:",JSON.stringify(results));
       return fail("The catalog item could not be created. The review transaction was not completed.",500);
+    }
+    return json({ok:true,status:"APPROVED",itemId});
+  }
+
+  if (path === "/api/owner/admin-item-submissions" || path.startsWith("/api/owner/admin-item-submissions/")) {
+    const actor = await requireUser(request,env);
+    if (!actor) return fail("Please sign in.",401);
+    if (actor.role!=="OWNER") return fail("Only the Owner can publish catalog items.",403);
+    if (path === "/api/owner/admin-item-submissions" && request.method==="GET") {
+      const rows = await env.DB.prepare("SELECT s.id,s.user_id,u.username,s.name,s.description,s.category,s.price,s.currency,s.image_url,s.created_at FROM admin_item_submissions s LEFT JOIN users u ON u.id=s.user_id WHERE s.status='PENDING' AND s.created_item_id IS NULL ORDER BY s.created_at ASC LIMIT 200").all();
+      return json({submissions:rows.results||[]});
+    }
+    const prefix = "/api/owner/admin-item-submissions/";
+    const submissionId = path.startsWith(prefix) ? path.slice(prefix.length) : "";
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(submissionId) || request.method!=="PATCH") return fail("Unsupported admin item review action.",405);
+    const data = await body(request);
+    const action = String(data?.action||"");
+    const pending = await env.DB.prepare("SELECT id,user_id,name,description,category,price,currency,image_url FROM admin_item_submissions WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(submissionId).first();
+    if (!pending) return fail("This item has already been reviewed or no longer exists.",409);
+    if (action==="reject") {
+      const result = await env.DB.prepare("UPDATE admin_item_submissions SET status='REJECTED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(actor.id,submissionId).run();
+      if (!result?.meta?.changes) return fail("This item has already been reviewed.",409);
+      await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,pending.user_id,"ADMIN_ITEM_REJECTED",pending.name).run();
+      return json({ok:true,status:"REJECTED"});
+    }
+    if (action!=="approve") return fail("Choose approve or reject.");
+    const itemId = id();
+    const results = await env.DB.batch([
+      env.DB.prepare("UPDATE admin_item_submissions SET status='APPROVED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(actor.id,submissionId),
+      env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) SELECT ?,name,description,category,price,currency,image_url,'',0,0,0,0,0,1,0 FROM admin_item_submissions WHERE id=? AND status='APPROVED' AND reviewed_by=? AND created_item_id IS NULL AND changes()=1").bind(itemId,submissionId,actor.id),
+      env.DB.prepare("UPDATE admin_item_submissions SET created_item_id=? WHERE id=? AND status='APPROVED' AND reviewed_by=? AND EXISTS (SELECT 1 FROM items WHERE id=?)").bind(itemId,submissionId,actor.id,itemId),
+      env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,pending.user_id,"ADMIN_ITEM_PUBLISHED",pending.name+" · "+pending.category)
+    ]);
+    if (!results?.[0]?.meta?.changes) return fail("This item has already been reviewed.",409);
+    if (!results?.[1]?.meta?.changes || !results?.[2]?.meta?.changes) {
+      console.error("[Sakura admin items] Publishing did not create the catalog item:",JSON.stringify(results));
+      return fail("The item could not be published. Please retry or inspect the Worker logs.",500);
     }
     return json({ok:true,status:"APPROVED",itemId});
   }
