@@ -299,16 +299,6 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("INSERT OR IGNORE INTO item_market_price_baselines (item_id,base_price,base_currency) SELECT i.id,i.price,COALESCE(i.currency,'P$') FROM items i WHERE EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=i.id AND r.status='ACTIVE')"),
         env.DB.prepare("UPDATE items SET price=COALESCE((SELECT MIN(r.price) FROM resale_listings r WHERE r.item_id=items.id AND r.status='ACTIVE'),(SELECT b.base_price FROM item_market_price_baselines b WHERE b.item_id=items.id)), currency=CASE WHEN EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=items.id AND r.status='ACTIVE') THEN 'P$' ELSE COALESCE((SELECT b.base_currency FROM item_market_price_baselines b WHERE b.item_id=items.id),items.currency) END WHERE id IN (SELECT item_id FROM item_market_price_baselines)")
       ]);
-      const resaleShutdown=await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='player_resale_disabled_2026_11_06_v1'").first();
-      if(!resaleShutdown){
-        await env.DB.batch([
-          env.DB.prepare("UPDATE items SET price=COALESCE((SELECT base_price FROM item_market_price_baselines b WHERE b.item_id=items.id),price),currency=COALESCE((SELECT base_currency FROM item_market_price_baselines b WHERE b.item_id=items.id),currency) WHERE EXISTS (SELECT 1 FROM item_market_price_baselines b WHERE b.item_id=items.id)"),
-          env.DB.prepare("UPDATE resale_listings SET status='CANCELLED' WHERE status='ACTIVE'"),
-          env.DB.prepare("DELETE FROM item_market_price_baselines"),
-          env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('player_resale_disabled_2026_11_06_v1','done')")
-        ]);
-        await env.DB.prepare("UPDATE items SET rap_value=CASE WHEN EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=items.id AND p.currency='P$') THEN COALESCE((SELECT CAST(ROUND(AVG(p.price)) AS INTEGER) FROM purchases p WHERE p.item_id=items.id AND p.currency='P$' AND p.rowid IN (SELECT recent.rowid FROM purchases recent WHERE recent.item_id=items.id AND recent.currency='P$' ORDER BY recent.purchased_at DESC LIMIT 10)),0) WHEN EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=items.id) THEN COALESCE((SELECT p.price FROM purchases p WHERE p.item_id=items.id ORDER BY p.purchased_at DESC LIMIT 1),0) ELSE MAX(COALESCE(items.price,0),0) END,rap_currency=CASE WHEN EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=items.id AND p.currency='P$') THEN 'P$' WHEN EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=items.id) THEN COALESCE((SELECT p.currency FROM purchases p WHERE p.item_id=items.id ORDER BY p.purchased_at DESC LIMIT 1),'P$') ELSE COALESCE(items.currency,'P$') END WHERE is_limited=1 AND is_offsale=0").run();
-      }
       // Active Player Marketplace asking prices are reflected in the shared catalog.
       const creatorSubmissionColumns = await env.DB.prepare("PRAGMA table_info(creator_submissions)").all();
       if (!(creatorSubmissionColumns.results || []).some(column => column.name === "price")) {
@@ -505,6 +495,36 @@ async function ensureSiteSettings(env) {
         ]);
         for (const row of affected.results || []) await syncItemMarketPrice(env,row.id);
       }
+
+      const resaleGuardrails = await env.DB.prepare("SELECT setting_value FROM site_settings WHERE setting_key='resale_market_guardrails_2026_11_06_v1'").first();
+      if (!resaleGuardrails) {
+        await env.DB.prepare(`UPDATE items
+          SET rap_value=CASE
+            WHEN EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=items.id AND p.currency='P$')
+              THEN COALESCE((SELECT CAST(ROUND(AVG(recent.price)) AS INTEGER) FROM (SELECT p.price FROM purchases p WHERE p.item_id=items.id AND p.currency='P$' ORDER BY p.purchased_at DESC LIMIT 10) recent),0)
+            ELSE COALESCE((SELECT b.base_price FROM item_market_price_baselines b WHERE b.item_id=items.id),price,0)
+          END,
+          rap_currency=CASE
+            WHEN EXISTS (SELECT 1 FROM purchases p WHERE p.item_id=items.id AND p.currency='P$') THEN 'P$'
+            ELSE COALESCE((SELECT b.base_currency FROM item_market_price_baselines b WHERE b.item_id=items.id),currency,'P$')
+          END
+          WHERE is_limited=1 AND is_offsale=0`).run();
+        await env.DB.prepare(`UPDATE resale_listings
+          SET status='CANCELLED'
+          WHERE status='ACTIVE'
+            AND price > 5 * COALESCE((
+              SELECT CASE
+                WHEN i.is_limited=1 AND i.is_offsale=0 AND i.rap_currency='P$' AND i.rap_value>0 THEN i.rap_value
+                ELSE b.base_price
+              END
+              FROM items i
+              LEFT JOIN item_market_price_baselines b ON b.item_id=i.id
+              WHERE i.id=resale_listings.item_id
+            ),(SELECT price FROM items WHERE id=resale_listings.item_id),1)`).run();
+        const resaleBaselines=await env.DB.prepare("SELECT item_id FROM item_market_price_baselines").all();
+        for(const row of resaleBaselines.results||[])await syncItemMarketPrice(env,row.item_id);
+        await env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('resale_market_guardrails_2026_11_06_v1','done')").run();
+      }
     })().catch(error => {
       // Do not cache a rejected setup promise forever after a transient D1 failure.
       siteSettingsPromise = undefined;
@@ -680,13 +700,28 @@ async function getProfileTotalRap(env,userId) {
   return Number(row?.total_rap||0);
 }
 
+function resaleListingPriceLimit(item,baseline=null) {
+  const rap=Number(item?.rap_value||0);
+  const isLimited=Number(item?.is_limited)===1&&Number(item?.is_offsale)!==1;
+  const referencePrice=isLimited&&item?.rap_currency==="P$"&&Number.isSafeInteger(rap)&&rap>0
+    ?rap
+    :Number(baseline?.base_price??item?.price??0);
+  const safeReference=Number.isSafeInteger(referencePrice)?Math.max(1,referencePrice):1;
+  return Math.min(Number.MAX_SAFE_INTEGER,safeReference*5);
+}
+
 async function syncItemMarketPrice(env,itemId) {
   const baseline=await env.DB.prepare("SELECT base_price,base_currency FROM item_market_price_baselines WHERE item_id=?").bind(itemId).first();
   if(!baseline)return null;
   const active=await env.DB.prepare("SELECT MIN(price) AS market_price FROM resale_listings WHERE item_id=? AND status='ACTIVE'").bind(itemId).first();
   if(active&&active.market_price!==null&&active.market_price!==undefined) {
-    await env.DB.prepare("UPDATE items SET price=?,currency='P$' WHERE id=?").bind(Number(active.market_price),itemId).run();
-    return {price:Number(active.market_price),currency:"P$"};
+    const basePrice=Number(baseline.base_price||0);
+    const lowestListingPrice=Number(active.market_price);
+    const effectivePrice=String(baseline.base_currency||"P$")==="P$"
+      ?Math.min(basePrice,lowestListingPrice)
+      :lowestListingPrice;
+    await env.DB.prepare("UPDATE items SET price=?,currency='P$' WHERE id=?").bind(effectivePrice,itemId).run();
+    return {price:effectivePrice,currency:"P$"};
   }
   await env.DB.prepare("UPDATE items SET price=?,currency=? WHERE id=?").bind(Number(baseline.base_price),String(baseline.base_currency||"P$"),itemId).run();
   await env.DB.prepare("DELETE FROM item_market_price_baselines WHERE item_id=?").bind(itemId).run();
@@ -1112,29 +1147,143 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/resale/listings") {
-    return json({listings:[]});
+    const rows = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,r.created_at,
+        i.name,i.description,i.category,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,
+        u.username AS seller_name,u.public_id AS seller_public_id,u.is_verified AS seller_verified
+      FROM resale_listings r
+      JOIN items i ON i.id=r.item_id
+      JOIN users u ON u.id=r.seller_id
+      WHERE r.status='ACTIVE' AND u.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit))
+        AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
+        AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
+      ORDER BY r.created_at DESC LIMIT 200`).all();
+    return json({listings:rows.results||[]});
   }
 
   const resaleItemMatch = path.match(/^\/api\/resale\/item\/([A-Za-z0-9_-]{1,80})$/);
   if (request.method === "GET" && resaleItemMatch) {
-    const item=await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,ic.creator_name,cu.public_id AS creator_public_id FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id WHERE i.id=?").bind(resaleItemMatch[1]).first();
-    if(!item)return fail("Item not found.",404);
-    const history=await env.DB.prepare("SELECT price,purchased_at AS sold_at,'Catalog sale' AS source FROM purchases WHERE item_id=? AND currency='P$' ORDER BY purchased_at ASC LIMIT 80").bind(item.id).all();
-    return json({item,listings:[],history:history.results||[]});
+    const item = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,ic.creator_name,cu.public_id AS creator_public_id FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id WHERE i.id=?").bind(resaleItemMatch[1]).first();
+    if (!item) return fail("Item not found.",404);
+    const baseline=await env.DB.prepare("SELECT base_price,base_currency FROM item_market_price_baselines WHERE item_id=?").bind(item.id).first();
+    const maxListingPrice=resaleListingPriceLimit(item,baseline);
+    const rows = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,r.created_at,
+        u.username AS seller_name,u.public_id AS seller_public_id,u.is_verified AS seller_verified
+      FROM resale_listings r JOIN users u ON u.id=r.seller_id
+      WHERE r.item_id=? AND r.status='ACTIVE' AND u.is_banned=0
+         AND EXISTS (SELECT 1 FROM items eligible WHERE eligible.id=r.item_id AND (eligible.is_limited=1 OR eligible.is_offsale=1 OR (eligible.stock_limit>0 AND eligible.stock_sold>=eligible.stock_limit)))
+        AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
+        AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
+      ORDER BY r.price ASC,r.created_at ASC`).bind(item.id).all();
+    const history = await env.DB.prepare(`
+      SELECT price,sold_at,source FROM (
+        SELECT price,sold_at,source FROM (
+          SELECT p.price,p.purchased_at AS sold_at,'Catalog sale' AS source
+          FROM purchases p
+          WHERE p.item_id=? AND p.currency='P$'
+          UNION ALL
+          SELECT r.price,r.sold_at AS sold_at,'Resale sale' AS source
+          FROM resale_listings r
+          WHERE r.item_id=? AND r.status='SOLD' AND r.currency='P$' AND r.sold_at IS NOT NULL
+        ) all_sales
+        ORDER BY sold_at DESC
+        LIMIT 80
+      ) recent_sales
+      ORDER BY sold_at ASC
+    `).bind(item.id,item.id).all();
+    return json({item,listings:rows.results||[],history:history.results||[],maxListingPrice});
   }
 
   if (request.method === "POST" && path === "/api/resale/listings") {
-    return fail("Player resale listings are temporarily disabled. Sell items directly from your Inventory.",410);
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const data = await body(request);
+    const itemId = String(data?.itemId||"");
+    const price = Number(data?.price);
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId)) return fail("Choose a valid item.");
+    if (!Number.isSafeInteger(price)||price<1||price>9007199254740991) return fail("Enter a valid whole-number price.");
+    const item = await env.DB.prepare("SELECT i.id,i.name,i.price,i.currency,i.is_limited,i.is_offsale,i.rap_value,i.rap_currency,i.stock_limit,i.stock_sold FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.item_id=?").bind(user.id,itemId).first();
+    if (!item) return fail("This item is not in your inventory.",404);
+    const baseline=await env.DB.prepare("SELECT base_price,base_currency FROM item_market_price_baselines WHERE item_id=?").bind(itemId).first();
+    const maxListingPrice=resaleListingPriceLimit(item,baseline);
+    if(price>maxListingPrice)return fail("Maximum listing price for this item is "+maxListingPrice.toLocaleString()+" P$ (5x current RAP).",400);
+    const soldOut = Number(item.stock_limit)>0 && Number(item.stock_sold)>=Number(item.stock_limit);
+    if (Number(item.is_limited)!==1&&Number(item.is_offsale)!==1&&!soldOut) return fail("Only Limited, Off Sale, or sold-out items can be resold.",403);
+    const locked = await env.DB.prepare("SELECT 1 AS locked FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId).first();
+    if (locked) return fail("This item is reserved in a pending trade. Cancel that trade before listing it.",409);
+    const listingId=id();
+    let marketPrice;
+    try {
+
+      const results = await env.DB.batch([
+        env.DB.prepare("INSERT OR IGNORE INTO item_market_price_baselines (item_id,base_price,base_currency) SELECT id,price,currency FROM items WHERE id=?").bind(itemId),
+        env.DB.prepare("INSERT INTO resale_listings (id,item_id,seller_id,price,currency) SELECT ?,?,?,?,'P$' WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?) AND NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE') AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1 OR (stock_limit>0 AND stock_sold>=stock_limit)))").bind(listingId,itemId,user.id,price,user.id,itemId,user.id,itemId,user.id,itemId,itemId)
+      ]);
+      if (!results?.[1]?.meta?.changes) return fail("This item is already listed, reserved in a trade, or no longer eligible.",409);
+      marketPrice = await syncItemMarketPrice(env,itemId);
+    } catch (error) {
+      console.error("[Sakura resale] Listing creation failed:",error);
+      return fail("Could not create this listing. Refresh your inventory and try again.",409);
+    }
+    return json({ok:true,listingId,price,itemPrice:Number(marketPrice?.price ?? item.price ?? 0),currency:marketPrice?.currency||item.currency||"P$"});
   }
 
-  const resaleListingMatch=path.match(/^\/api\/resale\/listings\/([A-Za-z0-9-]+)$/);
-  if(resaleListingMatch&&request.method==="DELETE"){
-    return fail("Player resale listings are temporarily disabled.",410);
+  const resaleListingMatch = path.match(/^\/api\/resale\/listings\/([A-Za-z0-9-]+)$/);
+  if (resaleListingMatch && request.method === "DELETE") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const result = await env.DB.prepare("UPDATE resale_listings SET status='CANCELLED' WHERE id=? AND seller_id=? AND status='ACTIVE'").bind(resaleListingMatch[1],user.id).run();
+    if (!result?.meta?.changes) return fail("Active listing not found.",404);
+    const cancelledListing = await env.DB.prepare("SELECT item_id FROM resale_listings WHERE id=?").bind(resaleListingMatch[1]).first();
+    if (cancelledListing?.item_id) await syncItemMarketPrice(env,cancelledListing.item_id);
+    return json({ok:true});
   }
 
-  const resaleBuyMatch=path.match(/^\/api\/resale\/listings\/([A-Za-z0-9-]+)\/buy$/);
-  if(resaleBuyMatch&&request.method==="POST"){
-    return fail("Player resale purchases are temporarily disabled.",410);
+  const resaleBuyMatch = path.match(/^\/api\/resale\/listings\/([A-Za-z0-9-]+)\/buy$/);
+  if (resaleBuyMatch && request.method === "POST") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const listing = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,i.name,i.is_limited,s.username AS seller_name
+      FROM resale_listings r JOIN items i ON i.id=r.item_id
+      JOIN users s ON s.id=r.seller_id
+      WHERE r.id=? AND r.status='ACTIVE' AND s.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit))`)
+      .bind(resaleBuyMatch[1]).first();
+    if (!listing) return fail("This listing is no longer available.",404);
+    if (listing.seller_id===user.id) return fail("You cannot buy your own listing.",403);
+    if (Number(user.balance||0)<Number(listing.price)) return fail("Not enough P$.",400);
+    const buyerOwned = await env.DB.prepare("SELECT quantity FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,listing.item_id).first();
+    if (Number(listing.is_limited)===1 && Number(buyerOwned?.quantity||0)>=1) return fail("You can own only one copy of this Limited item.",409);
+    if (Number(listing.is_limited)!==1 && Number(buyerOwned?.quantity||0)>=10) return fail("You can own a maximum of 10 copies of this item.",409);
+    const newInventoryId=id();
+    try {
+      const results = await env.DB.batch([
+        env.DB.prepare(`UPDATE resale_listings SET status='SOLD',buyer_id=?,sold_at=datetime('now')
+          WHERE id=? AND status='ACTIVE' AND seller_id<>?
+            AND EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=resale_listings.seller_id AND v.item_id=resale_listings.item_id AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit)))
+            AND EXISTS (SELECT 1 FROM users b WHERE b.id=? AND b.balance>=resale_listings.price)
+            AND EXISTS (SELECT 1 FROM users s WHERE s.id=resale_listings.seller_id AND s.is_banned=0)
+            AND COALESCE((SELECT quantity FROM inventory WHERE user_id=? AND item_id=resale_listings.item_id),0)<CASE WHEN EXISTS (SELECT 1 FROM items limited_item WHERE limited_item.id=resale_listings.item_id AND limited_item.is_limited=1) THEN 1 ELSE 10 END
+            AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=resale_listings.seller_id AND item_id=resale_listings.item_id)`)
+          .bind(user.id,listing.id,user.id,user.id,user.id),
+        env.DB.prepare("UPDATE users SET balance=balance-? WHERE id=? AND balance>=? AND changes()=1").bind(listing.price,user.id,listing.price),
+        env.DB.prepare("UPDATE users SET balance=balance+? WHERE id=? AND changes()=1").bind(listing.price,listing.seller_id),
+        env.DB.prepare("UPDATE inventory SET quantity=quantity-1 WHERE user_id=? AND item_id=? AND quantity>0 AND changes()=1").bind(listing.seller_id,listing.item_id),
+        env.DB.prepare("INSERT INTO inventory (id,user_id,item_id,quantity) SELECT ?,?,?,1 WHERE changes()=1 ON CONFLICT(user_id,item_id) DO UPDATE SET quantity=inventory.quantity+1").bind(newInventoryId,user.id,listing.item_id),
+        env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=? AND quantity<=0").bind(listing.seller_id,listing.item_id),
+        env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=? AND EXISTS (SELECT 1 FROM resale_listings WHERE id=? AND status='SOLD' AND buyer_id=?)").bind(listing.seller_id,listing.item_id,listing.id,user.id)
+      ]);
+      if (!results?.[0]?.meta?.changes) return fail("This listing was already sold or is no longer available.",409);
+      if (!results?.[1]?.meta?.changes||!results?.[2]?.meta?.changes||!results?.[3]?.meta?.changes||!results?.[4]?.meta?.changes) {
+        console.error("[Sakura resale] Incomplete resale transaction",listing.id);
+        return fail("Purchase could not be completed. Refresh and check your inventory.",409);
+      }
+    } catch (error) {
+      console.error("[Sakura resale] Purchase failed:",error);
+      return fail("Purchase could not be completed. No items or balance should have changed.",409);
+    }
+    await syncItemMarketPrice(env,listing.item_id);
+    await refreshItemRap(env,listing.item_id);
+    const updated = await env.DB.prepare("SELECT balance,tix_balance FROM users WHERE id=?").bind(user.id).first();
+    return json({ok:true,item:{id:listing.item_id,name:listing.name},price:Number(listing.price),currency:"P$",seller:listing.seller_id,sellerName:listing.seller_name,balance:Number(updated?.balance||0),tixBalance:Number(updated?.tix_balance||0)});
   }
 
   if (request.method === "POST" && path === "/api/purchase") {
@@ -1195,41 +1344,14 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/inventory") {
-    const user=await requireUser(request,env);
-    if(!user)return fail("Please sign in.",401);
-    const rows=await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,v.quantity,EXISTS(SELECT 1 FROM trade_locks t WHERE t.owner_id=v.user_id AND t.item_id=v.item_id) AS is_trade_locked,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.quantity>0 ORDER BY v.purchased_at DESC").bind(user.id).all();
-    return json({items:rows.results||[]});
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,v.quantity,r.id AS active_listing_id,r.price AS active_listing_price,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id LEFT JOIN resale_listings r ON r.item_id=i.id AND r.seller_id=v.user_id AND r.status='ACTIVE' WHERE v.user_id=? AND v.quantity>0 ORDER BY v.purchased_at DESC").bind(user.id).all();
+    return json({ items:rows.results || [] });
   }
 
-  if(request.method==="POST"&&path==="/api/inventory/sell"){
-    const user=await requireUser(request,env);
-    if(!user)return fail("Please sign in.",401);
-    const data=await body(request);
-    const itemId=String(data?.itemId||"");
-    if(!/^[A-Za-z0-9_-]{1,80}$/.test(itemId))return fail("Choose a valid inventory item.");
-    const item=await env.DB.prepare("SELECT i.id,i.name,i.price,COALESCE(i.currency,'P$') AS currency,v.quantity FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.item_id=? AND v.quantity>0").bind(user.id,itemId).first();
-    if(!item)return fail("This item is not in your inventory.",404);
-    const price=Number(item.price);
-    if(!Number.isSafeInteger(price)||price<0)return fail("This item has an invalid sale price.",409);
-    const currencyCode=item.currency==="Tix"?"Tix":"P$";
-    const walletColumn=currencyCode==="Tix"?"tix_balance":"balance";
-    const results=await env.DB.batch([
-      env.DB.prepare("UPDATE inventory SET quantity=quantity-1 WHERE user_id=? AND item_id=? AND quantity>0 AND EXISTS(SELECT 1 FROM items WHERE id=? AND price=? AND COALESCE(currency,'P$')=?) AND NOT EXISTS(SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?)").bind(user.id,itemId,itemId,price,currencyCode,user.id,itemId),
-      env.DB.prepare("UPDATE users SET "+walletColumn+"="+walletColumn+"+? WHERE id=? AND changes()=1").bind(price,user.id),
-      env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=? AND quantity<=0").bind(user.id,itemId),
-      env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=? AND NOT EXISTS(SELECT 1 FROM inventory WHERE user_id=? AND item_id=? AND quantity>0)").bind(user.id,itemId,user.id,itemId)
-    ]);
-    if(!results?.[0]?.meta?.changes){
-      const locked=await env.DB.prepare("SELECT 1 AS locked FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId).first();
-      if(locked)return fail("This item is reserved in a pending trade. Cancel that trade before selling it.",409);
-      return fail("The item or its price changed. Refresh your Inventory and try again.",409);
-    }
-    if(!results?.[1]?.meta?.changes){
-      console.error("[Sakura inventory] Sale payout was not applied:",itemId);
-      return fail("The sale could not be completed. Refresh your Inventory and check your balance.",409);
-    }
-    const updated=await env.DB.prepare("SELECT balance,tix_balance FROM users WHERE id=?").bind(user.id).first();
-    return json({ok:true,item:{id:item.id,name:item.name},price,currency:currencyCode,balance:Number(updated?.balance||0),tixBalance:Number(updated?.tix_balance||0)});
+  if (request.method === "POST" && path === "/api/inventory/sell") {
+    return fail("Direct inventory selling is disabled. Create a player resale listing instead.",410);
   }
 
   const profileIdInventoryMatch = path.match(/^\/api\/profile\/id\/(\d{1,12})\/inventory$/);
