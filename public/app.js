@@ -1382,28 +1382,28 @@ async function adminPanel(){
  if(!me||!me.isAdministrator){app.innerHTML='<div class="empty">Administrator badge required.</div>';return}
  const categories=["Hats","Hair","Faces","Shirts","Pants"];
  app.innerHTML='<div class="creator-create-page admin-panel-page">'+
-  '<div class="creator-create-heading"><div><h1 class="page-title">Admin Panel</h1><p class="page-subtitle">Submit new items for the Sakura catalog</p></div></div>'+
-  '<section class="creator-create-card"><h2>Add a catalog item</h2><p class="muted">Fill out the item details and attach its image. Your submission stays private until the Owner reviews and publishes it.</p>'+
+  '<div class="creator-create-heading"><div><h1 class="page-title">Панель администратора</h1><p class="page-subtitle">Отправка новых предметов в каталог Sakura</p></div></div>'+
+  '<section class="creator-create-card"><h2>Добавить предмет</h2><p class="muted">Заполни информацию о предмете и добавь его картинку. До проверки владельцем предмет не появится в общем каталоге.</p>'+
   '<form id="adminItemSubmissionForm" class="creator-create-form">'+
-   '<label>Item price<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label>'+
-   '<label>Currency<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label>'+
-   '<label>Category<select name="category">'+categories.map(category=>'<option value="'+category+'">'+category+'</option>').join("")+'</select></label>'+
-   '<label>Item name<input name="name" maxlength="80" required placeholder="Enter item name"></label>'+
-   '<label>Preview image URL<input name="image_url" type="url" maxlength="500" required placeholder="https://..."></label>'+
-   '<img id="adminItemImagePreview" class="creator-review-image-preview" alt="Item preview" hidden>'+
-   '<label>Description <span class="muted">(optional)</span><textarea name="description" maxlength="500" rows="3" placeholder="Describe the item"></textarea></label>'+
-   '<div class="creator-create-actions"><button class="primary" type="submit">Submit item for Owner review</button><span id="adminItemSubmissionMessage" class="muted" role="status"></span></div>'+
+   '<label>Цена предмета в Sakura<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label>'+
+   '<label>Валюта<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label>'+
+   '<label>Категория<select name="category">'+categories.map(category=>'<option value="'+category+'">'+category+'</option>').join("")+'</select></label>'+
+   '<label>Название предмета<input name="name" maxlength="80" required placeholder="Enter item name"></label>'+
+   '<label>Ссылка на картинку предмета<input name="image_url" type="url" maxlength="500" required placeholder="https://..."></label>'+
+   '<img id="adminItemImagePreview" class="creator-review-image-preview" alt="Предпросмотр предмета" hidden>'+
+   '<label>Описание <span class="muted">(необязательно)</span><textarea name="description" maxlength="500" rows="3" placeholder="Опиши предмет"></textarea></label>'+
+   '<div class="creator-create-actions"><button class="primary" type="submit">Отправить владельцу на проверку</button><span id="adminItemSubmissionMessage" class="muted" role="status"></span></div>'+
   '</form></section>'+
-  '<section class="asset-tutorial admin-item-tutorial"><h2>HOW TO ADD AN ITEM — COMPLETE BEGINNER GUIDE</h2><p class="asset-tutorial-intro">Follow every step in order. You do not need to download the picture — you only need its direct image URL.</p>'+
-   '<article><h3>STEP 1 — SET THE ITEM DETAILS</h3><p>First, choose the price you want the item to have in Sakura. Select the currency (<strong>P$</strong> or <strong>Tix</strong>), choose the correct category, and enter the exact item name. Double-check the spelling before continuing.</p></article>'+
-   '<article><h3>STEP 2 — OPEN THE ROBLOX MARKETPLACE</h3><p>Open the <a href="https://www.roblox.com/catalog" target="_blank" rel="noopener noreferrer">Roblox Marketplace</a> in a new tab. Search for the exact item you want to add. Make sure you have selected the correct item, not a similar item with a different name or appearance.</p></article>'+
-   '<article><h3>STEP 3 — OPEN THE ITEM PAGE</h3><p>Click the item in the Marketplace search results. Its Roblox page will open. Wait until the item preview or avatar render has fully loaded. Check that the preview shows the item you selected.</p></article>'+
-   '<article><h3>STEP 4 — MAKE THE IMAGE EASIER TO SELECT</h3><p>In the preview area, look for the <strong>crossed-out eye icon</strong>. Click it to hide the avatar or overlay when that control is available. This can make the item preview easier to select. Do not copy the URL of the whole Roblox page.</p></article>'+
-   '<article><h3>STEP 5 — COPY THE IMAGE URL</h3><p>Move your mouse over the actual item image or render. Right-click the image and choose <strong>Copy image address</strong> (the wording may be slightly different in your browser). You should now have a direct image link copied to your clipboard.</p><p>If the menu does not show Copy image address, open the image itself in a separate tab first, then copy the address from the browser address bar.</p></article>'+
-   '<article><h3>STEP 6 — PASTE THE IMAGE URL INTO SAKURA</h3><p>Return to the Sakura Admin Panel. Paste the copied link into <strong>Preview image URL</strong>. The preview should load below the field. Check that it is the correct picture and that the link starts with <strong>https://</strong>.</p></article>'+
-   '<article><h3>STEP 7 — REVIEW AND SUBMIT</h3><p>Check the price, currency, category, name and picture one last time. Press <strong>Submit item for Owner review</strong>. Your request will be sent to the Owner. It will <strong>not</strong> appear in the public Catalog yet.</p></article>'+
-   '<article><h3>IMPORTANT — ONLY THE OWNER CAN PUBLISH</h3><p>Administrators can submit item details, but they cannot publish items directly. The Owner checks each submission and decides whether to publish or reject it. Once the Owner presses <strong>Publish</strong>, the item becomes public in the Sakura Catalog.</p></article>'+
-   '<article><h3>COMMON MISTAKES TO AVOID</h3><p>Do not paste the Roblox page URL instead of the image URL. Do not submit a broken link, a picture of a different item, or an image that you do not have permission to use. If the preview does not load, copy the image address again and check it before submitting.</p></article>'+
+  '<section class="asset-tutorial admin-item-tutorial"><h2>КАК ДОБАВИТЬ ПРЕДМЕТ — ПОЛНЫЙ ГАЙД ДЛЯ НОВИЧКОВ</h2><p class="asset-tutorial-intro">Выполняй шаги по порядку. Скачивать картинку не нужно — понадобится только прямая ссылка на изображение.</p>'+
+   '<article><h3>ШАГ 1 — ЗАПОЛНИ ИНФОРМАЦИЮ О ПРЕДМЕТЕ</h3><p>Сначала укажи цену предмета в Sakura. Выбери валюту (<strong>P$</strong> или <strong>Tix</strong>), затем категорию и точное название предмета. Проверь название, чтобы не было ошибок.</p></article>'+
+   '<article><h3>ШАГ 2 — ОТКРОЙ МАРКЕТПЛЕЙС ROBLOX</h3><p>Открой <a href="https://www.roblox.com/catalog" target="_blank" rel="noopener noreferrer">маркетплейс Roblox</a> в новой вкладке. Найди предмет, который хочешь добавить в Sakura. Убедись, что выбрал именно его, а не похожую вещь.</p></article>'+
+   '<article><h3>ШАГ 3 — ОТКРОЙ СТРАНИЦУ ПРЕДМЕТА</h3><p>Нажми на найденный предмет. Откроется его страница в Roblox. Подожди, пока полностью загрузится предпросмотр или рендер аватара. Проверь, что на изображении показан именно нужный предмет.</p></article>'+
+   '<article><h3>ШАГ 4 — ПОДГОТОВЬ ИЗОБРАЖЕНИЕ</h3><p>В окне рендера найди значок <strong>перечёркнутого глаза</strong> и нажми на него, чтобы скрыть аватар, если эта кнопка доступна. Так будет проще выбрать картинку самого предмета. Не копируй ссылку на всю страницу Roblox.</p></article>'+
+   '<article><h3>ШАГ 5 — СКОПИРУЙ ССЫЛКУ НА КАРТИНКУ</h3><p>Наведи курсор прямо на картинку предмета и нажми <strong>правой кнопкой мыши</strong>. В появившемся меню выбери <strong>«Копировать адрес изображения»</strong>. Ссылка на картинку скопируется в буфер обмена.</p><p>Если такого пункта нет, открой само изображение в новой вкладке. Затем скопируй адрес из адресной строки браузера.</p></article>'+
+   '<article><h3>ШАГ 6 — ВСТАВЬ ССЫЛКУ В SAKURA</h3><p>Вернись в панель администратора Sakura. Вставь скопированную ссылку в поле <strong>«Ссылка на картинку предмета»</strong>. Ниже должен появиться предпросмотр. Проверь, что картинка правильная, а ссылка начинается с <strong>https://</strong>.</p></article>'+
+   '<article><h3>ШАГ 7 — ПРОВЕРЬ И ОТПРАВЬ</h3><p>Ещё раз проверь цену, валюту, категорию, название и картинку. Нажми <strong>«Отправить владельцу на проверку»</strong>. Заявка отправится владельцу, но предмет <strong>пока не появится</strong> в публичном каталоге.</p></article>'+
+   '<article><h3>ВАЖНО — ПУБЛИКОВАТЬ МОЖЕТ ТОЛЬКО ВЛАДЕЛЕЦ</h3><p>Администраторы могут только отправлять предметы на проверку. Самостоятельно публиковать их нельзя. Владелец проверяет каждую заявку и решает, одобрить её или отклонить. Только после нажатия владельцем кнопки <strong>«Опубликовать»</strong> предмет появится в общем каталоге Sakura.</p></article>'+
+   '<article><h3>ЧАСТЫЕ ОШИБКИ</h3><p>Не вставляй ссылку на страницу Roblox вместо ссылки на картинку. Не отправляй нерабочую ссылку, изображение другого предмета или картинку, которую нельзя использовать. Если предпросмотр не загрузился, скопируй адрес изображения заново и проверь его.</p></article>'+
   '</section></div>';
  const form=document.getElementById("adminItemSubmissionForm");
  const message=document.getElementById("adminItemSubmissionMessage");
@@ -1430,13 +1430,13 @@ async function adminPanel(){
    description:String(values.get("description")||"").trim()
   };
   const submit=form.querySelector('button[type="submit"]');
-  submit.disabled=true;message.textContent="Sending your item to the Owner...";
+  submit.disabled=true;message.textContent="Отправляем предмет владельцу...";
   try{
    await api("/api/admin/item-submissions",{method:"POST",body:JSON.stringify(payload)});
    if(!isActiveView(view))return;
    form.reset();preview.removeAttribute("src");preview.hidden=true;
-   message.textContent="Submitted successfully. The item is waiting for the Owner's review and is not public yet.";
-   toast("Item submitted for Owner review");
+   message.textContent="Предмет отправлен! Теперь он ожидает проверки владельцем и пока не виден в общем каталоге.";
+   toast("Предмет отправлен владельцу на проверку");
   }catch(error){message.textContent=error.message}
   finally{submit.disabled=false}
  });
