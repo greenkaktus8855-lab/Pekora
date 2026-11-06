@@ -204,7 +204,8 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS user_ip_addresses (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, ip_hash TEXT NOT NULL, last_seen_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_user_ip_addresses_hash ON user_ip_addresses(ip_hash)"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS banned_ip_addresses (ip_hash TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id) ON DELETE SET NULL, ban_reason TEXT NOT NULL DEFAULT '', banned_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS banned_ip_addresses (ip_hash TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, ban_reason TEXT NOT NULL DEFAULT '', banned_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(ip_hash,user_id))"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_banned_ip_addresses_hash ON banned_ip_addresses(ip_hash)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_files (id TEXT PRIMARY KEY, model_data BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS equipped_items (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, category TEXT NOT NULL, equipped_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,item_id))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_render_cache (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, source_hash TEXT NOT NULL, thumbnail_data BLOB NOT NULL, rendered_at TEXT NOT NULL DEFAULT (datetime('now')))"),
@@ -1843,7 +1844,7 @@ async function route(request, env) {
       ]);
     } else if (action === "unban_ip") {
       await env.DB.batch([
-        env.DB.prepare("DELETE FROM banned_ip_addresses WHERE ip_hash IN (SELECT ip_hash FROM user_ip_addresses WHERE user_id=?)").bind(targetId),
+        env.DB.prepare("DELETE FROM banned_ip_addresses WHERE user_id=?").bind(targetId),
         env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"IP_UNBAN","Permanent IP ban removed by owner")
       ]);
     } else if (action === "ban" || action === "unban") {
