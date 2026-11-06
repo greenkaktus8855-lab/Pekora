@@ -976,7 +976,7 @@ async function route(request, env) {
     if (!data || typeof data.username !== "string" || !/^[A-Za-z0-9_]{1,20}$/.test(data.username.trim()) || typeof data.password !== "string" || data.password.length < 8 || data.password.length > 128) return fail("Enter a valid username and a password of 8–128 characters.");
     const key = await rateLimitKey(request,"login");
     if (await isRateLimited(env,key)) return json({error:"Too many sign-in attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
-    const user = await env.DB.prepare("SELECT * FROM users WHERE username=? COLLATE NOCASE").bind(data.username.trim()).first();
+    const user = await env.DB.prepare("SELECT u.*,EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=u.id AND ub.badge_key='ASSET_MODERATOR') AS is_asset_moderator,EXISTS(SELECT 1 FROM user_badges ub WHERE ub.user_id=u.id AND ub.badge_key='ADMINISTRATOR') AS is_administrator FROM users u WHERE u.username=? COLLATE NOCASE").bind(data.username.trim()).first();
     const candidateHash = await passwordHash(data.password,user?.password_salt||DUMMY_PASSWORD_SALT);
     const passwordMatches = constantTimeEqual(candidateHash,user?.password_hash||"");
     if (!user || !passwordMatches) {
