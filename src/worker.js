@@ -44,6 +44,11 @@ async function currentUser(request, env) {
     FROM sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=? AND s.expires_at > datetime('now')`).bind(tokenHash).first();
   if (!row || row.is_banned) return null;
+  const ipHash = await requestIpHash(request);
+  if (ipHash) {
+    try { await rememberUserIp(env,row.id,ipHash); }
+    catch (error) { console.error("[Sakura security] Could not record account IP:",error); }
+  }
   return row;
 }
 async function requireUser(request, env) {
@@ -197,6 +202,9 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_membership_rewards_date ON membership_daily_rewards(reward_date)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS discord_limited_announcements (item_id TEXT PRIMARY KEY, announced_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS auth_rate_limits (rate_key TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, window_started_at INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS user_ip_addresses (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, ip_hash TEXT NOT NULL, last_seen_at TEXT NOT NULL DEFAULT (datetime('now')))"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_user_ip_addresses_hash ON user_ip_addresses(ip_hash)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS banned_ip_addresses (ip_hash TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id) ON DELETE SET NULL, ban_reason TEXT NOT NULL DEFAULT '', banned_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_files (id TEXT PRIMARY KEY, model_data BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS equipped_items (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, category TEXT NOT NULL, equipped_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,item_id))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_render_cache (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, source_hash TEXT NOT NULL, thumbnail_data BLOB NOT NULL, rendered_at TEXT NOT NULL DEFAULT (datetime('now')))"),
@@ -537,6 +545,26 @@ async function ensureSiteSettings(env) {
 async function rateLimitKey(request, purpose) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   return digest(purpose + ":" + ip);
+}
+async function requestIpHash(request) {
+  const ip = String(request.headers.get("CF-Connecting-IP") || "").trim().toLowerCase();
+  if (!ip || ip === "unknown" || ip.length > 100) return null;
+  return digest("sakura-permanent-ip-ban-v1:" + ip);
+}
+async function isIpBanned(env, ipHash) {
+  if (!ipHash) return false;
+  const row = await env.DB.prepare("SELECT 1 AS blocked FROM banned_ip_addresses WHERE ip_hash=?").bind(ipHash).first();
+  return Boolean(row?.blocked);
+}
+async function rememberUserIp(env, userId, ipHash) {
+  if (!ipHash) return;
+  await ensureSiteSettings(env);
+  await env.DB.prepare(`INSERT INTO user_ip_addresses (user_id,ip_hash,last_seen_at)
+    VALUES (?,?,datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET
+      ip_hash=excluded.ip_hash,
+      last_seen_at=datetime('now')
+    WHERE user_ip_addresses.ip_hash<>excluded.ip_hash`).bind(userId,ipHash).run();
 }
 async function isRateLimited(env, key) {
   const now = Math.floor(Date.now() / 1000);
@@ -889,6 +917,16 @@ async function route(request, env) {
     }
   }
 
+  if (path !== "/api/health" && path !== "/api/logout") {
+    const ipHash = await requestIpHash(request);
+    if (await isIpBanned(env,ipHash)) {
+      const sessionUser = await currentUser(request,env);
+      if (sessionUser?.role !== "OWNER") {
+        return json({error:"This network is permanently blocked from Sakura following a moderation decision.",ipBanned:true},403);
+      }
+    }
+  }
+
   if (request.method === "POST" && path === "/api/register") {
     const key = await rateLimitKey(request,"register");
     if (await isRateLimited(env,key)) return json({error:"Too many registration attempts. Try again in 15 minutes."},429,{"retry-after":"900"});
@@ -908,13 +946,16 @@ async function route(request, env) {
     const hash = await passwordHash(data.password, salt);
     const userId = id();
     const token = randomToken();
+    const registrationIpHash = await requestIpHash(request);
     try {
-      await env.DB.batch([
+      const registrationStatements = [
         env.DB.prepare("INSERT INTO users (id,username,password_hash,password_salt,balance,public_id) VALUES (?,?,?,?,100,(SELECT COALESCE(MAX(public_id),0)+1 FROM users))").bind(userId, username, hash, salt),
         env.DB.prepare("INSERT INTO profiles (user_id) VALUES (?)").bind(userId),
         env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token), userId),
         env.DB.prepare("INSERT OR IGNORE INTO group_members (group_id,user_id,role) SELECT ?,?,'MEMBER' WHERE EXISTS (SELECT 1 FROM sakura_groups WHERE id=?)").bind(OFFICIAL_SAKURA_GROUP_ID, userId, OFFICIAL_SAKURA_GROUP_ID)
-      ]);
+      ];
+      if (registrationIpHash) registrationStatements.push(env.DB.prepare("INSERT INTO user_ip_addresses (user_id,ip_hash) VALUES (?,?)").bind(userId,registrationIpHash));
+      await env.DB.batch(registrationStatements);
     } catch (error) {
       const existing = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first().catch(() => null);
       if (existing) return registrationFailure("That username is already taken.",409);
@@ -945,6 +986,8 @@ async function route(request, env) {
       return json({error:"This account is banned from Sakura. Reason: "+reason+" · Banned on: "+bannedAt,banned:true,banReason:reason,bannedAt},403);
     }
     await clearRateLimit(env,key);
+    const loginIpHash = await requestIpHash(request);
+    if (loginIpHash) await rememberUserIp(env,user.id,loginIpHash);
     const token = randomToken();
     await env.DB.prepare("INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,datetime('now','+30 days'))").bind(await digest(token), user.id).run();
     return json({ user:publicUser(user) }, 200, { "set-cookie":cookie("pekora_session",token,60*60*24*30) });
@@ -1750,7 +1793,10 @@ async function route(request, env) {
     const userMatch = path.match(/^\/api\/owner\/users\/([A-Za-z0-9-]+)$/);
     if (!userMatch) return fail("User not found.",404);
     const targetId = userMatch[1];
-    const target = await env.DB.prepare("SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified,banned_at,ban_reason FROM users WHERE id=?").bind(targetId).first();
+    const target = await env.DB.prepare(`SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified,banned_at,ban_reason,
+      EXISTS(SELECT 1 FROM user_ip_addresses ua WHERE ua.user_id=users.id) AS has_recorded_ip,
+      EXISTS(SELECT 1 FROM user_ip_addresses ua JOIN banned_ip_addresses bi ON bi.ip_hash=ua.ip_hash WHERE ua.user_id=users.id) AS is_ip_banned
+      FROM users WHERE id=?`).bind(targetId).first();
     if (!target) return fail("User not found.",404);
 
     if (request.method === "GET") {
@@ -1795,10 +1841,17 @@ async function route(request, env) {
         env.DB.prepare("INSERT INTO moderation_warnings (id,user_id,moderator_id,reason) VALUES (?,?,?,?)").bind(id(),targetId,actor.id,details),
         env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"WARNING",details)
       ]);
+    } else if (action === "unban_ip") {
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM banned_ip_addresses WHERE ip_hash IN (SELECT ip_hash FROM user_ip_addresses WHERE user_id=?)").bind(targetId),
+        env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"IP_UNBAN","Permanent IP ban removed by owner")
+      ]);
     } else if (action === "ban" || action === "unban") {
       if (action === "ban" && details.length < 3) return fail("Enter a ban reason (at least 3 characters).");
       await env.DB.batch([
         env.DB.prepare("UPDATE users SET is_banned=?,banned_at=CASE WHEN ?=1 THEN datetime('now') ELSE NULL END,ban_reason=CASE WHEN ?=1 THEN ? ELSE '' END WHERE id=?").bind(action==="ban"?1:0,action==="ban"?1:0,action==="ban"?1:0,details,targetId),
+        ...(action==="ban"?[env.DB.prepare("INSERT OR IGNORE INTO banned_ip_addresses (ip_hash,user_id,ban_reason,banned_by) SELECT ip_hash,user_id,?,? FROM user_ip_addresses WHERE user_id=?").bind(details,actor.id,targetId)]:[]),
+        ...(action==="ban"?[env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) SELECT ?,?,?,?,? WHERE EXISTS (SELECT 1 FROM user_ip_addresses WHERE user_id=?)").bind(id(),actor.id,targetId,"IP_BAN","Permanent IP ban issued together with the account ban",targetId)]:[]),
         ...(action==="ban"?[env.DB.prepare("INSERT OR REPLACE INTO banned_session_notices (token_hash,user_id,expires_at) SELECT token_hash,user_id,expires_at FROM sessions WHERE user_id=?").bind(targetId)]:[]),
         ...(action==="ban"?[env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(targetId)]:[]),
         ...(action==="unban"?[env.DB.prepare("DELETE FROM banned_session_notices WHERE user_id=?").bind(targetId),env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(targetId)]:[]),
