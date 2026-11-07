@@ -2,7 +2,7 @@ const app=document.getElementById("app");
 const accountArea=document.getElementById("accountArea");
 const currency=document.getElementById("currency");
 const sidebar=document.getElementById("sidebar");
-let me=null,items=[],catalogSort="newest",ownedItemIds=new Set(),ownedItemCounts=new Map(),ownershipLoaded=true,ownershipUserId=null,pendingPurchases=new Set(),detectedBannedAccount=null;
+let me=null,items=[],catalogSort="newest",ownedItemIds=new Set(),ownedItemCounts=new Map(),ownershipLoaded=true,ownershipUserId=null,pendingPurchases=new Set(),detectedBannedAccount=null,friendRequestCount=0;
 function setOwnedInventory(list){ownedItemCounts=new Map((list||[]).map(item=>[item.id,Number(item.quantity||1)]));ownedItemIds=new Set([...ownedItemCounts.entries()].filter(([,quantity])=>quantity>0).map(([id])=>id));}
 function ownedItemCount(itemId){return Number(ownedItemCounts.get(itemId)||0);}
 function canBuyItem(item){const count=ownedItemCount(item.id);return Number(item.is_limited)===1?count<10:count===0;}
@@ -118,13 +118,31 @@ function renderSidebar(active="home"){
  ];
  sidebar.innerHTML='<div class="sidebar-card">'+
   '<a class="side-user" href="/#profile?id='+encodeURIComponent(me.publicId||"")+'" data-page="profile"><span class="side-avatar">'+avatar()+'</span><span><span class="side-username">'+esc(me.username)+(me.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</span><span class="side-role">Account</span></span></a>'+
-  '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="/#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span></a>').join("")+
+  '<nav class="side-nav">'+links.map(([id,ico,label])=>'<a href="/#'+id+'" data-page="'+id+'" class="'+(active===id?'active':'')+'"><span class="side-icon '+ico+'"></span><span>'+label+'</span>'+(id==="friends"?'<span class="side-nav-count" id="friendRequestBadge" hidden></span>':'')+'</a>').join("")+
   '<div class="side-separator"></div>'+
   '<a href="/#promocodes" data-page="promocodes" class="side-promo-button '+(active==="promocodes"?"active":"")+'">Promo Codes</a>'+
   '<a class="side-discord-button" href="https://discord.gg/PxVWav9R2R" target="_blank" rel="noopener noreferrer">Discord Server</a>'+
   (me.isAdministrator?'<a href="/#admin-panel" data-page="admin-panel" class="'+(active==="admin-panel"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Admin Panel</span></a>':'')+
    (me.role==="OWNER"?'<a href="/#owner" data-page="owner" class="'+(active==="owner"?"active":"")+'"><span class="side-icon icon-nav-settings"></span><span>Owner Panel</span></a>':(me.isAssetModerator?'<a href="/#asset-panel" data-page="asset-panel" class="'+(active==="asset-panel"?"active":"")+'"><span class="side-icon icon-nav-inventory"></span><span>Asset Panel</span></a>':''))+
   '</nav></div>';
+ refreshFriendRequestCount();
+}
+
+function setFriendRequestCount(count){
+ friendRequestCount=Math.max(0,Math.floor(Number(count)||0));
+ const badge=document.getElementById("friendRequestBadge");
+ if(!badge)return;
+ badge.textContent=friendRequestCount>99?"99+":String(friendRequestCount);
+ badge.hidden=friendRequestCount===0;
+ if(friendRequestCount>0)badge.setAttribute("aria-label",friendRequestCount+" pending friend requests");
+ else badge.removeAttribute("aria-label");
+}
+async function refreshFriendRequestCount(){
+ if(!me){setFriendRequestCount(0);return}
+ try{
+  const data=await api("/api/friends");
+  setFriendRequestCount(Array.isArray(data.incoming)?data.incoming.length:0);
+ }catch{}
 }
 
 function setUser(user){
@@ -1094,6 +1112,7 @@ async function loadFriendsList(view=activeView){
  const host=document.getElementById("friendsContent");if(!host)return;
  try{
   const d=await api("/api/friends");
+  setFriendRequestCount(Array.isArray(d.incoming)?d.incoming.length:0);
   if(!isActiveView(view)||!host.isConnected)return;
   const section=(title,list,kind)=>{
    const actionLabel=kind==="accept"?"Accept":title==="Sent Requests"?"Cancel request":"Remove friend";
@@ -2035,6 +2054,7 @@ async function render(name){
 })();
 window.setInterval(async()=>{
  if(!me)return;
+ refreshFriendRequestCount();
  try{
   const response=await fetch("/api/me",{credentials:"same-origin"});
   const state=await response.json();
