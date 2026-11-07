@@ -196,6 +196,8 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS user_memberships (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, membership_type TEXT NOT NULL DEFAULT 'None' CHECK(membership_type IN ('None','BuildersClub','TurboBuildersClub','OutrageousBuildersClub','Premium')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS membership_daily_rewards (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, reward_date TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0), created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,reward_date))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS daily_tix_rewards (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, reward_date TEXT NOT NULL, amount INTEGER NOT NULL DEFAULT 5 CHECK(amount=5), created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,reward_date))"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_daily_tix_rewards_date ON daily_tix_rewards(reward_date)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS promo_codes (code TEXT PRIMARY KEY COLLATE NOCASE, reward_amount INTEGER NOT NULL DEFAULT 0 CHECK(reward_amount>=0), reward_currency TEXT NOT NULL DEFAULT 'P$' CHECK(reward_currency IN ('P$','Tix')), max_uses INTEGER CHECK(max_uses IS NULL OR max_uses>0), expires_at TEXT, is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)), created_by TEXT REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS promo_code_items (code TEXT NOT NULL REFERENCES promo_codes(code) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, PRIMARY KEY(code,item_id))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS promo_code_claims (code TEXT NOT NULL REFERENCES promo_codes(code) ON DELETE CASCADE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, claim_id TEXT NOT NULL UNIQUE, claimed_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(code,user_id))"),
@@ -692,6 +694,20 @@ async function runDailyMembershipPayout(controller,env) {
   if (part("hour") !== "00" || part("minute") !== "00") return;
   const rewardDate = part("year")+"-"+part("month")+"-"+part("day");
   await ensureSiteSettings(env);
+
+  // Every non-banned account receives 5 Tix once per Kyiv calendar day.
+  // A separate ledger prevents collisions with paid membership rewards.
+  const accounts = await env.DB.prepare("SELECT id FROM users WHERE is_banned=0 ORDER BY id").all();
+  let tixAwarded = 0;
+  for (const account of accounts.results || []) {
+    const result = await env.DB.batch([
+      env.DB.prepare("INSERT INTO daily_tix_rewards (user_id,reward_date,amount) SELECT id,?,5 FROM users WHERE id=? AND is_banned=0 ON CONFLICT(user_id,reward_date) DO NOTHING").bind(rewardDate,account.id),
+      env.DB.prepare("UPDATE users SET tix_balance=tix_balance+5 WHERE id=? AND is_banned=0 AND changes()=1").bind(account.id)
+    ]);
+    if (Number(result?.[0]?.meta?.changes || 0) === 1) tixAwarded++;
+  }
+  console.log("[Sakura Tix] Daily reward completed",JSON.stringify({rewardDate,tixAwarded,accounts:(accounts.results || []).length}));
+
   const members = await env.DB.prepare("SELECT m.user_id,m.membership_type FROM user_memberships m JOIN users u ON u.id=m.user_id WHERE m.membership_type<>'None' AND u.is_banned=0 AND (m.membership_type NOT IN ('OutrageousBuildersClub','Premium') OR datetime(u.created_at)<datetime('now','-3 days')) ORDER BY m.user_id").all();
   let awarded = 0;
   for (const member of members.results || []) {
