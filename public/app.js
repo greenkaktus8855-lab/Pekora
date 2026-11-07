@@ -1120,7 +1120,9 @@ async function loadFriendsList(view=activeView){
     '<div class="people-avatar">'+avatar(u.username)+'</div>'+
     '<div class="people-user-info"><strong><a href="/#profile?username='+encodeURIComponent(u.username)+'" data-profile="'+esc(u.username)+'">'+esc(u.username)+'</a>'+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</strong>'+
     '<span>'+esc(u.role||"USER")+'</span></div>'+
-    '<button class="button '+(kind==="accept"?"":"secondary")+'" type="button" data-friend-action="'+kind+'" data-friend-name="'+esc(u.username)+'">'+actionLabel+'</button>'+
+    (kind==="accept"
+     ? '<span class="friend-action-buttons"><button class="button" type="button" data-friend-action="accept" data-friend-name="'+esc(u.username)+'">Accept</button><button class="button secondary" type="button" data-friend-action="decline" data-friend-name="'+esc(u.username)+'">Decline</button></span>'
+     : '<button class="button secondary" type="button" data-friend-action="'+kind+'" data-friend-name="'+esc(u.username)+'">'+actionLabel+'</button>')+
    '</article>').join("");
    return '<section class="friends-section"><h2>'+title+' ('+list.length+')</h2>'+
     (rows||'<div class="op-profile-empty">Nothing here yet.</div>')+'</section>';
