@@ -1403,3 +1403,7 @@ body{color:#f0eaf8!important}
  font-size:11px;font-weight:700;line-height:18px;vertical-align:middle;
 }
 .side-nav .side-nav-count[hidden]{display:none}
+
+
+.friend-action-buttons{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto}
+@media(max-width:520px){.friend-action-buttons{flex-wrap:wrap;justify-content:flex-end}}
