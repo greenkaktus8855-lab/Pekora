@@ -749,9 +749,13 @@ async function getProfileTotalRap(env,userId) {
 }
 
 function resaleListingPriceLimit(item,baseline=null) {
-  // Keep a generous fixed ceiling for player listings. Asking prices do not
-  // affect RAP: Limited RAP is calculated only from catalog purchases.
-  return 1000000;
+  const rap=Number(item?.rap_value||0);
+  const isLimited=Number(item?.is_limited)===1&&Number(item?.is_offsale)!==1;
+  const referencePrice=isLimited&&item?.rap_currency==="P$"&&Number.isSafeInteger(rap)&&rap>0
+    ?rap
+    :Number(baseline?.base_price??item?.price??0);
+  const safeReference=Number.isSafeInteger(referencePrice)?Math.max(1,referencePrice):1;
+  return Math.min(Number.MAX_SAFE_INTEGER,safeReference*5);
 }
 
 async function syncItemMarketPrice(env,itemId) {
@@ -1212,7 +1216,7 @@ async function route(request, env) {
       FROM resale_listings r
       JOIN items i ON i.id=r.item_id
       JOIN users u ON u.id=r.seller_id
-      WHERE r.status='ACTIVE' AND u.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit))
+      WHERE r.status='ACTIVE' AND u.is_banned=0 AND (i.is_limited=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit))
         AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
         AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
       ORDER BY r.created_at DESC LIMIT 200`).all();
@@ -1229,7 +1233,7 @@ async function route(request, env) {
         u.username AS seller_name,u.public_id AS seller_public_id,u.is_verified AS seller_verified
       FROM resale_listings r JOIN users u ON u.id=r.seller_id
       WHERE r.item_id=? AND r.status='ACTIVE' AND u.is_banned=0
-         AND EXISTS (SELECT 1 FROM items eligible WHERE eligible.id=r.item_id AND (eligible.is_limited=1 OR eligible.is_offsale=1 OR (eligible.stock_limit>0 AND eligible.stock_sold>=eligible.stock_limit)))
+         AND EXISTS (SELECT 1 FROM items eligible WHERE eligible.id=r.item_id AND (eligible.is_limited=1 OR (eligible.stock_limit>0 AND eligible.stock_sold>=eligible.stock_limit)))
         AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=r.seller_id AND v.item_id=r.item_id)
         AND NOT EXISTS (SELECT 1 FROM trade_locks t WHERE t.owner_id=r.seller_id AND t.item_id=r.item_id)
       ORDER BY r.price ASC,r.created_at ASC`).bind(item.id).all();
@@ -1264,9 +1268,9 @@ async function route(request, env) {
     if (!item) return fail("This item is not in your inventory.",404);
     const baseline=await env.DB.prepare("SELECT base_price,base_currency FROM item_market_price_baselines WHERE item_id=?").bind(itemId).first();
     const maxListingPrice=resaleListingPriceLimit(item,baseline);
-    if(price>maxListingPrice)return fail("Maximum listing price for this item is "+maxListingPrice.toLocaleString()+" P$ (maximum allowed price).",400);
+    if(price>maxListingPrice)return fail("Maximum listing price for this item is "+maxListingPrice.toLocaleString()+" P$ (5x current RAP).",400);
     const soldOut = Number(item.stock_limit)>0 && Number(item.stock_sold)>=Number(item.stock_limit);
-    if (Number(item.is_limited)!==1&&Number(item.is_offsale)!==1&&!soldOut) return fail("Only Limited, Off Sale, or sold-out items can be resold.",403);
+    if (Number(item.is_limited)!==1&&!soldOut) return fail("Only Limited, Off Sale, or sold-out items can be resold.",403);
     const locked = await env.DB.prepare("SELECT 1 AS locked FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId).first();
     if (locked) return fail("This item is reserved in a pending trade. Cancel that trade before listing it.",409);
     const listingId=id();
@@ -1304,7 +1308,7 @@ async function route(request, env) {
     const listing = await env.DB.prepare(`SELECT r.id,r.item_id,r.seller_id,r.price,r.currency,i.name,i.is_limited,s.username AS seller_name
       FROM resale_listings r JOIN items i ON i.id=r.item_id
       JOIN users s ON s.id=r.seller_id
-      WHERE r.id=? AND r.status='ACTIVE' AND s.is_banned=0 AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit))`)
+      WHERE r.id=? AND r.status='ACTIVE' AND s.is_banned=0 AND (i.is_limited=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit))`)
       .bind(resaleBuyMatch[1]).first();
     if (!listing) return fail("This listing is no longer available.",404);
     if (listing.seller_id===user.id) return fail("You cannot buy your own listing.",403);
@@ -1317,7 +1321,7 @@ async function route(request, env) {
       const results = await env.DB.batch([
         env.DB.prepare(`UPDATE resale_listings SET status='SOLD',buyer_id=?,sold_at=datetime('now')
           WHERE id=? AND status='ACTIVE' AND seller_id<>?
-            AND EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=resale_listings.seller_id AND v.item_id=resale_listings.item_id AND (i.is_limited=1 OR i.is_offsale=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit)))
+            AND EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=resale_listings.seller_id AND v.item_id=resale_listings.item_id AND (i.is_limited=1 OR (i.stock_limit>0 AND i.stock_sold>=i.stock_limit)))
             AND EXISTS (SELECT 1 FROM users b WHERE b.id=? AND b.balance>=resale_listings.price)
             AND EXISTS (SELECT 1 FROM users s WHERE s.id=resale_listings.seller_id AND s.is_banned=0)
             AND COALESCE((SELECT quantity FROM inventory WHERE user_id=? AND item_id=resale_listings.item_id),0)<CASE WHEN EXISTS (SELECT 1 FROM items limited_item WHERE limited_item.id=resale_listings.item_id AND limited_item.is_limited=1) THEN 1 ELSE 10 END
@@ -2150,7 +2154,7 @@ async function route(request, env) {
     const checkOwned=async(ownerId,ids)=>{
       if(!ids.length)return true;
       const marks=ids.map(()=>"?").join(",");
-      const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND (i.is_limited=1 OR i.is_offsale=1) AND NOT EXISTS (SELECT 1 FROM resale_listings rl WHERE rl.item_id=v.item_id AND rl.seller_id=v.user_id AND rl.status='ACTIVE') AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
+      const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND (i.is_limited=1) AND NOT EXISTS (SELECT 1 FROM resale_listings rl WHERE rl.item_id=v.item_id AND rl.seller_id=v.user_id AND rl.status='ACTIVE') AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
       return (rows.results||[]).length===ids.length;
     };
     if(!(await checkOwned(user.id,offered)))return fail("You can only offer Limited or Off Sale items that are in your inventory.",409);
@@ -2181,7 +2185,7 @@ async function route(request, env) {
       const owned=async(ownerId,ids)=>{
         if(!ids.length)return true;
         const marks=ids.map(()=>"?").join(",");
-        const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND (i.is_limited=1 OR i.is_offsale=1) AND NOT EXISTS (SELECT 1 FROM resale_listings rl WHERE rl.item_id=v.item_id AND rl.seller_id=v.user_id AND rl.status='ACTIVE') AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
+        const rows=await env.DB.prepare(`SELECT v.item_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND (i.is_limited=1) AND NOT EXISTS (SELECT 1 FROM resale_listings rl WHERE rl.item_id=v.item_id AND rl.seller_id=v.user_id AND rl.status='ACTIVE') AND v.item_id IN (${marks})`).bind(ownerId,...ids).all();
         return (rows.results||[]).length===ids.length;
       };
       if(!(await owned(trade.sender_id,offered))||!(await owned(trade.recipient_id,requested)))return fail("Only Limited or Off Sale items can be traded. This offer is no longer valid; cancel it and create a new trade.",409);
@@ -2218,6 +2222,7 @@ async function route(request, env) {
     const currency = String(data.currency||"P$");
     const description = String(data.description||"").trim();
     const imageUrl = String(data.image_url||"").trim();
+    const isLimited = data.is_limited===true || data.is_limited===1 || data.is_limited==="1";
     if (!name || name.length>80) return fail("Item name must be 1–80 characters.");
     if (!["Hats","Hair","Faces","Shirts","Pants"].includes(category)) return fail("Choose a supported category.");
     if (!Number.isSafeInteger(price) || price<0 || price>1000000) return fail("Price must be a whole number from 0 to 1,000,000.");
@@ -2231,8 +2236,8 @@ async function route(request, env) {
       return fail("Preview image URL must be a valid HTTPS link.");
     }
     const submissionId = id();
-    await env.DB.prepare("INSERT INTO admin_item_submissions (id,user_id,name,description,category,price,currency,image_url) VALUES (?,?,?,?,?,?,?,?)")
-      .bind(submissionId,actor.id,name,description,category,price,currency,imageUrl).run();
+    await env.DB.prepare("INSERT INTO admin_item_submissions (id,user_id,name,description,category,price,currency,image_url,is_limited) VALUES (?,?,?,?,?,?,?,?,?)")
+      .bind(submissionId,actor.id,name,description,category,price,currency,imageUrl,isLimited?1:0).run();
     await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)")
       .bind(id(),actor.id,actor.id,"ADMIN_ITEM_SUBMITTED",name+" · "+category).run();
     return json({ok:true,id:submissionId,status:"PENDING"},201);
@@ -2350,7 +2355,7 @@ async function route(request, env) {
     if (!actor) return fail("Please sign in.",401);
     if (actor.role!=="OWNER") return fail("Only the Owner can publish catalog items.",403);
     if (path === "/api/owner/admin-item-submissions" && request.method==="GET") {
-      const rows = await env.DB.prepare("SELECT s.id,s.user_id,u.username,s.name,s.description,s.category,s.price,s.currency,s.image_url,s.created_at FROM admin_item_submissions s LEFT JOIN users u ON u.id=s.user_id WHERE s.status='PENDING' AND s.created_item_id IS NULL ORDER BY s.created_at ASC LIMIT 200").all();
+      const rows = await env.DB.prepare("SELECT s.id,s.user_id,u.username,s.name,s.description,s.category,s.price,s.currency,s.image_url,s.is_limited,s.created_at FROM admin_item_submissions s LEFT JOIN users u ON u.id=s.user_id WHERE s.status='PENDING' AND s.created_item_id IS NULL ORDER BY s.created_at ASC LIMIT 200").all();
       return json({submissions:rows.results||[]});
     }
     const prefix = "/api/owner/admin-item-submissions/";
@@ -2358,7 +2363,7 @@ async function route(request, env) {
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(submissionId) || request.method!=="PATCH") return fail("Unsupported admin item review action.",405);
     const data = await body(request);
     const action = String(data?.action||"");
-    const pending = await env.DB.prepare("SELECT id,user_id,name,description,category,price,currency,image_url FROM admin_item_submissions WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(submissionId).first();
+    const pending = await env.DB.prepare("SELECT id,user_id,name,description,category,price,currency,image_url,is_limited FROM admin_item_submissions WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(submissionId).first();
     if (!pending) return fail("This item has already been reviewed or no longer exists.",409);
     if (action==="reject") {
       const result = await env.DB.prepare("UPDATE admin_item_submissions SET status='REJECTED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(actor.id,submissionId).run();
@@ -2370,7 +2375,7 @@ async function route(request, env) {
     const itemId = id();
     const results = await env.DB.batch([
       env.DB.prepare("UPDATE admin_item_submissions SET status='APPROVED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(actor.id,submissionId),
-      env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) SELECT ?,name,description,category,price,currency,image_url,'',0,0,0,0,0,1,0 FROM admin_item_submissions WHERE id=? AND status='APPROVED' AND reviewed_by=? AND created_item_id IS NULL AND changes()=1").bind(itemId,submissionId,actor.id),
+      env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) SELECT ?,name,description,category,price,currency,image_url,'',0,0,is_limited,0,0,1,0 FROM admin_item_submissions WHERE id=? AND status='APPROVED' AND reviewed_by=? AND created_item_id IS NULL AND changes()=1").bind(itemId,submissionId,actor.id),
       env.DB.prepare("UPDATE admin_item_submissions SET created_item_id=? WHERE id=? AND status='APPROVED' AND reviewed_by=? AND EXISTS (SELECT 1 FROM items WHERE id=?)").bind(itemId,submissionId,actor.id,itemId),
       env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,pending.user_id,"ADMIN_ITEM_PUBLISHED",pending.name+" · "+pending.category)
     ]);
