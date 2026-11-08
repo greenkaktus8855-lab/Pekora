@@ -2223,6 +2223,8 @@ async function route(request, env) {
     const description = String(data.description||"").trim();
     const imageUrl = String(data.image_url||"").trim();
     const isLimited = data.is_limited===true || data.is_limited===1 || data.is_limited==="1";
+    const stockLimit = isLimited ? Number(data.stock_limit) : 0;
+    if (isLimited && (!Number.isSafeInteger(stockLimit) || stockLimit<1 || stockLimit>1000000)) return fail("Limited copy count must be a whole number from 1 to 1,000,000.");
     if (!name || name.length>80) return fail("Item name must be 1–80 characters.");
     if (!["Hats","Hair","Faces","Shirts","Pants"].includes(category)) return fail("Choose a supported category.");
     if (!Number.isSafeInteger(price) || price<0 || price>1000000) return fail("Price must be a whole number from 0 to 1,000,000.");
@@ -2236,8 +2238,8 @@ async function route(request, env) {
       return fail("Preview image URL must be a valid HTTPS link.");
     }
     const submissionId = id();
-    await env.DB.prepare("INSERT INTO admin_item_submissions (id,user_id,name,description,category,price,currency,image_url,is_limited) VALUES (?,?,?,?,?,?,?,?,?)")
-      .bind(submissionId,actor.id,name,description,category,price,currency,imageUrl,isLimited?1:0).run();
+    await env.DB.prepare("INSERT INTO admin_item_submissions (id,user_id,name,description,category,price,currency,image_url,is_limited,stock_limit) VALUES (?,?,?,?,?,?,?,?,?,?)")
+      .bind(submissionId,actor.id,name,description,category,price,currency,imageUrl,isLimited?1:0,stockLimit).run();
     await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)")
       .bind(id(),actor.id,actor.id,"ADMIN_ITEM_SUBMITTED",name+" · "+category).run();
     return json({ok:true,id:submissionId,status:"PENDING"},201);
@@ -2355,7 +2357,7 @@ async function route(request, env) {
     if (!actor) return fail("Please sign in.",401);
     if (actor.role!=="OWNER") return fail("Only the Owner can publish catalog items.",403);
     if (path === "/api/owner/admin-item-submissions" && request.method==="GET") {
-      const rows = await env.DB.prepare("SELECT s.id,s.user_id,u.username,s.name,s.description,s.category,s.price,s.currency,s.image_url,s.is_limited,s.created_at FROM admin_item_submissions s LEFT JOIN users u ON u.id=s.user_id WHERE s.status='PENDING' AND s.created_item_id IS NULL ORDER BY s.created_at ASC LIMIT 200").all();
+      const rows = await env.DB.prepare("SELECT s.id,s.user_id,u.username,s.name,s.description,s.category,s.price,s.currency,s.image_url,s.is_limited,s.stock_limit,s.created_at FROM admin_item_submissions s LEFT JOIN users u ON u.id=s.user_id WHERE s.status='PENDING' AND s.created_item_id IS NULL ORDER BY s.created_at ASC LIMIT 200").all();
       return json({submissions:rows.results||[]});
     }
     const prefix = "/api/owner/admin-item-submissions/";
@@ -2363,7 +2365,7 @@ async function route(request, env) {
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(submissionId) || request.method!=="PATCH") return fail("Unsupported admin item review action.",405);
     const data = await body(request);
     const action = String(data?.action||"");
-    const pending = await env.DB.prepare("SELECT id,user_id,name,description,category,price,currency,image_url,is_limited FROM admin_item_submissions WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(submissionId).first();
+    const pending = await env.DB.prepare("SELECT id,user_id,name,description,category,price,currency,image_url,is_limited,stock_limit FROM admin_item_submissions WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(submissionId).first();
     if (!pending) return fail("This item has already been reviewed or no longer exists.",409);
     if (action==="reject") {
       const result = await env.DB.prepare("UPDATE admin_item_submissions SET status='REJECTED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(actor.id,submissionId).run();
@@ -2375,7 +2377,7 @@ async function route(request, env) {
     const itemId = id();
     const results = await env.DB.batch([
       env.DB.prepare("UPDATE admin_item_submissions SET status='APPROVED',reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='PENDING' AND created_item_id IS NULL").bind(actor.id,submissionId),
-      env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) SELECT ?,name,description,category,price,currency,image_url,'',0,0,is_limited,0,0,1,0 FROM admin_item_submissions WHERE id=? AND status='APPROVED' AND reviewed_by=? AND created_item_id IS NULL AND changes()=1").bind(itemId,submissionId,actor.id),
+      env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) SELECT ?,name,description,category,price,currency,image_url,'',0,0,is_limited,stock_limit,0,1,0 FROM admin_item_submissions WHERE id=? AND status='APPROVED' AND reviewed_by=? AND created_item_id IS NULL AND changes()=1").bind(itemId,submissionId,actor.id),
       env.DB.prepare("UPDATE admin_item_submissions SET created_item_id=? WHERE id=? AND status='APPROVED' AND reviewed_by=? AND EXISTS (SELECT 1 FROM items WHERE id=?)").bind(itemId,submissionId,actor.id,itemId),
       env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,pending.user_id,"ADMIN_ITEM_PUBLISHED",pending.name+" · "+pending.category)
     ]);
