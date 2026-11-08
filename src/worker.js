@@ -1270,7 +1270,7 @@ async function route(request, env) {
     const maxListingPrice=resaleListingPriceLimit(item,baseline);
     if(price>maxListingPrice)return fail("Maximum listing price for this item is "+maxListingPrice.toLocaleString()+" P$ (5x current RAP).",400);
     const soldOut = Number(item.stock_limit)>0 && Number(item.stock_sold)>=Number(item.stock_limit);
-    if (Number(item.is_limited)!==1&&!soldOut) return fail("Only Limited, Off Sale, or sold-out items can be resold.",403);
+    if (Number(item.is_limited)!==1&&!soldOut) return fail("Only Limited or sold-out items can be resold.",403);
     const locked = await env.DB.prepare("SELECT 1 AS locked FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId).first();
     if (locked) return fail("This item is reserved in a pending trade. Cancel that trade before listing it.",409);
     const listingId=id();
@@ -1279,7 +1279,7 @@ async function route(request, env) {
 
       const results = await env.DB.batch([
         env.DB.prepare("INSERT OR IGNORE INTO item_market_price_baselines (item_id,base_price,base_currency) SELECT id,price,currency FROM items WHERE id=?").bind(itemId),
-        env.DB.prepare("INSERT INTO resale_listings (id,item_id,seller_id,price,currency) SELECT ?,?,?,?,'P$' WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?) AND NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE') AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR is_offsale=1 OR (stock_limit>0 AND stock_sold>=stock_limit)))").bind(listingId,itemId,user.id,price,user.id,itemId,user.id,itemId,user.id,itemId,itemId)
+        env.DB.prepare("INSERT INTO resale_listings (id,item_id,seller_id,price,currency) SELECT ?,?,?,?,'P$' WHERE EXISTS (SELECT 1 FROM inventory WHERE user_id=? AND item_id=?) AND NOT EXISTS (SELECT 1 FROM trade_locks WHERE owner_id=? AND item_id=?) AND NOT EXISTS (SELECT 1 FROM resale_listings WHERE seller_id=? AND item_id=? AND status='ACTIVE') AND EXISTS (SELECT 1 FROM items WHERE id=? AND (is_limited=1 OR (stock_limit>0 AND stock_sold>=stock_limit)))").bind(listingId,itemId,user.id,price,user.id,itemId,user.id,itemId,user.id,itemId,itemId)
       ]);
       if (!results?.[1]?.meta?.changes) return fail("This item is already listed, reserved in a trade, or no longer eligible.",409);
       marketPrice = await syncItemMarketPrice(env,itemId);
