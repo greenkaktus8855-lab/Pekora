@@ -375,13 +375,13 @@ async function showItem(itemId,updateHistory=true){
  }
  const maxResalePrice=Math.max(1,Math.floor(Number(resaleSnapshot?.maxListingPrice||1000000)));
  const ownedCount=ownedItemCount(item.id),isOwned=ownedCount>0,isAtLimit=Number(item.is_limited)===1&&ownedCount>=1,isOffsale=Number(item.is_offsale)===1,stock=itemStockState(item);
- const resaleEligible=Number(item.is_limited)===1||isOffsale||stock.soldOut;
+ const resaleEligible=Number(item.is_limited)===1||stock.soldOut;
  const resaleListings=Array.isArray(resaleSnapshot.listings)?resaleSnapshot.listings:[];
  const myListing=me?resaleListings.find(listing=>listing.seller_id===me.id):null;
  const otherListings=resaleListings.filter(listing=>!me||listing.seller_id!==me.id);
  const sellerMarkup=listing=>'<a href="/#profile?id='+encodeURIComponent(listing.seller_public_id||"")+'" data-profile="'+esc(listing.seller_name)+'">'+esc(listing.seller_name)+'</a>'+(Number(listing.seller_verified)===1?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified seller">':'');
  const listingRows=otherListings.length?otherListings.map(listing=>'<article class="resale-offer-row"><div class="resale-offer-seller"><strong>'+sellerMarkup(listing)+'</strong><span class="muted">Seller</span></div><strong class="resale-offer-price">'+currencyMarkup(listing.price,"P$")+'</strong><button class="primary resale-buy-button" type="button" data-resale-buy="'+esc(listing.id)+'" data-item-id="'+esc(item.id)+'" '+(isAtLimit?'disabled':'')+'>'+(!me?'Log in to buy':isAtLimit?'Limit reached':isOwned?'Buy ('+ownedCount+'/1)':'Buy')+'</button></article>').join(""):'<p class="muted">No player listings for this item yet.</p>';
- const ownListingMarkup=myListing?'<div class="resale-own-listing"><div><strong>Your listing is active</strong><p class="muted">Asking price: '+currencyMarkup(myListing.price,"P$")+'</p></div><button class="button secondary" type="button" id="cancelResaleListing" data-listing-id="'+esc(myListing.id)+'">Remove listing</button></div>':(me&&isOwned&&resaleEligible?'<form id="createResaleListing" class="resale-create-form"><h3>Sell your copy</h3><p class="muted">Set your own price. Your item stays in your inventory until another player buys it.</p><label>Price in P$ <input type="number" name="price" min="1" max="'+maxResalePrice+'" step="1" value="1" required></label><p class="muted">Maximum price: '+maxResalePrice.toLocaleString()+' P$ (maximum allowed price). Resale listings do not increase RAP; RAP is calculated from catalog purchases.</p><button class="primary" type="submit">List for sale</button><span id="resaleCreateMessage" class="muted" role="status"></span></form>':"");
+ const ownListingMarkup=myListing?'<div class="resale-own-listing"><div><strong>Your listing is active</strong><p class="muted">Asking price: '+currencyMarkup(myListing.price,"P$")+'</p></div><button class="button secondary" type="button" id="cancelResaleListing" data-listing-id="'+esc(myListing.id)+'">Remove listing</button></div>':(me&&isOwned&&resaleEligible?'<form id="createResaleListing" class="resale-create-form"><h3>Sell your copy</h3><p class="muted">Set your own price. Your item stays in your inventory until another player buys it.</p><label>Price in P$ <input type="number" name="price" min="1" max="'+maxResalePrice+'" step="1" value="1" required></label><p class="muted">Maximum price: '+maxResalePrice.toLocaleString()+' P$ (5x current RAP). Lower listings can reduce the item price, higher listings cannot raise it.</p><button class="primary" type="submit">List for sale</button><span id="resaleCreateMessage" class="muted" role="status"></span></form>':"");
  const resalePanel=resaleEligible?'<section class="resale-section"><div class="resale-section-heading"><div><h2>Player Marketplace</h2><p class="muted">Limited, Off Sale, and sold-out items can be resold by players.</p></div><a href="/#resale" data-page="resale">Open market</a></div>'+ownListingMarkup+'<div class="resale-offer-list">'+listingRows+'</div></section>':"";
  app.innerHTML='<div class="item-detail-page"><a class="item-back-link" href="/#catalog" data-page="catalog">‹ Back to Catalog</a><div class="item-detail-card">'+
   '<div class="item-detail-image" id="itemDetailPreview">'+itemPreview(item)+itemBadgeMarkup(item)+'</div>'+
@@ -971,7 +971,8 @@ async function groupsPage(){
  document.getElementById("groupCreateForm")?.addEventListener("submit",async event=>{
   event.preventDefault();
   const form=event.currentTarget,values=new FormData(form),message=document.getElementById("groupCreateMessage"),button=form.querySelector("button[type=submit]");
-  const data={name:String(values.get("name")||"").trim(),description:String(values.get("description")||"").trim()};
+  const data={name:String(values.get("name")||"").trim(),description:String(values.get("description")||"").trim(),
+   is_limited:values.get("is_limited")==="1"};
   if(Number(me?.balance||0)<100){message.textContent="You need at least 100 P$ to create a group.";return}
   button.disabled=true;message.textContent="Creating group...";
   try{
@@ -1410,7 +1411,8 @@ async function adminPanel(){
    '<label>Валюта<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label>'+
    '<label>Категория<select name="category">'+categories.map(category=>'<option value="'+category+'">'+({Hats:"Шляпы",Hair:"Волосы",Faces:"Лица",Shirts:"Футболки",Pants:"Штаны"}[category]||category)+'</option>').join("")+'</select></label>'+
    '<label>Название предмета<input name="name" maxlength="80" required placeholder="Введи название предмета"></label>'+
-   '<label>Ссылка на картинку предмета<input name="image_url" type="url" maxlength="500" required placeholder="https://..."></label>'+
+   '<label>Ссылка на картинку предмета<input name="image_url" type="url" maxlength="500" required placeholder="https://..."></label>
+   '<label class="admin-limited-option"><input name="is_limited" type="checkbox" value="1"> Сделать предмет Limited</label>'+'+
    '<img id="adminItemImagePreview" class="creator-review-image-preview" alt="Предпросмотр предмета" hidden>'+
    '<label>Описание <span class="muted">(необязательно)</span><textarea name="description" maxlength="500" rows="3" placeholder="Опиши предмет"></textarea></label>'+
    '<div class="creator-create-actions"><button class="primary" type="submit">Отправить владельцу на проверку</button><span id="adminItemSubmissionMessage" class="muted" role="status"></span></div>'+
