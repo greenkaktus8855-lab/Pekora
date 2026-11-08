@@ -1411,8 +1411,8 @@ async function adminPanel(){
    '<label>Валюта<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label>'+
    '<label>Категория<select name="category">'+categories.map(category=>'<option value="'+category+'">'+({Hats:"Шляпы",Hair:"Волосы",Faces:"Лица",Shirts:"Футболки",Pants:"Штаны"}[category]||category)+'</option>').join("")+'</select></label>'+
    '<label>Название предмета<input name="name" maxlength="80" required placeholder="Введи название предмета"></label>'+
-   '<label>Ссылка на картинку предмета<input name="image_url" type="url" maxlength="500" required placeholder="https://..."></label>
-   '<label class="admin-limited-option"><input name="is_limited" type="checkbox" value="1"> Сделать предмет Limited</label>'+'+
+   '<label>Ссылка на картинку предмета<input name="image_url" type="url" maxlength="500" required placeholder="https://..."></label>'+
+   '<label class="admin-limited-option"><input name="is_limited" type="checkbox" value="1"> Сделать предмет Limited</label>'+
    '<img id="adminItemImagePreview" class="creator-review-image-preview" alt="Предпросмотр предмета" hidden>'+
    '<label>Описание <span class="muted">(необязательно)</span><textarea name="description" maxlength="500" rows="3" placeholder="Опиши предмет"></textarea></label>'+
    '<div class="creator-create-actions"><button class="primary" type="submit">Отправить владельцу на проверку</button><span id="adminItemSubmissionMessage" class="muted" role="status"></span></div>'+
