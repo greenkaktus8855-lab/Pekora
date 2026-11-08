@@ -749,13 +749,9 @@ async function getProfileTotalRap(env,userId) {
 }
 
 function resaleListingPriceLimit(item,baseline=null) {
-  const rap=Number(item?.rap_value||0);
-  const isLimited=Number(item?.is_limited)===1&&Number(item?.is_offsale)!==1;
-  const referencePrice=isLimited&&item?.rap_currency==="P$"&&Number.isSafeInteger(rap)&&rap>0
-    ?rap
-    :Number(baseline?.base_price??item?.price??0);
-  const safeReference=Number.isSafeInteger(referencePrice)?Math.max(1,referencePrice):1;
-  return Math.min(Number.MAX_SAFE_INTEGER,safeReference*5);
+  // Keep a generous fixed ceiling for player listings. Asking prices do not
+  // affect RAP: Limited RAP is calculated only from catalog purchases.
+  return 1000000;
 }
 
 async function syncItemMarketPrice(env,itemId) {
@@ -1268,7 +1264,7 @@ async function route(request, env) {
     if (!item) return fail("This item is not in your inventory.",404);
     const baseline=await env.DB.prepare("SELECT base_price,base_currency FROM item_market_price_baselines WHERE item_id=?").bind(itemId).first();
     const maxListingPrice=resaleListingPriceLimit(item,baseline);
-    if(price>maxListingPrice)return fail("Maximum listing price for this item is "+maxListingPrice.toLocaleString()+" P$ (5x current RAP).",400);
+    if(price>maxListingPrice)return fail("Maximum listing price for this item is "+maxListingPrice.toLocaleString()+" P$ (maximum allowed price).",400);
     const soldOut = Number(item.stock_limit)>0 && Number(item.stock_sold)>=Number(item.stock_limit);
     if (Number(item.is_limited)!==1&&Number(item.is_offsale)!==1&&!soldOut) return fail("Only Limited, Off Sale, or sold-out items can be resold.",403);
     const locked = await env.DB.prepare("SELECT 1 AS locked FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId).first();
