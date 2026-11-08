@@ -623,8 +623,7 @@ async function announceLimitedItem(item, env, siteOrigin) {
       {name:"Category",value:String(item.category || "Other"),inline:true}
     ],
     image:item.image_url && /^https:\/\//i.test(String(item.image_url)) ? {url:String(item.image_url)} : undefined,
-    footer:{text:"Sakura • Limited items"},
-    timestamp:new Date().toISOString()
+    footer:{text:"Sakura • Limited items"}
   };
   const response = await fetch(env.DISCORD_LIMITED_WEBHOOK,{
     method:"POST",
@@ -2385,6 +2384,24 @@ async function route(request, env) {
     if (!results?.[1]?.meta?.changes || !results?.[2]?.meta?.changes) {
       console.error("[Sakura admin items] Publishing did not create the catalog item:",JSON.stringify(results));
       return fail("The item could not be published. Please retry or inspect the Worker logs.",500);
+    }
+    if (Number(pending.is_limited)===1) {
+      try {
+        const announcement=await announceLimitedItem({
+          id:itemId,
+          name:pending.name,
+          category:pending.category,
+          price:Number(pending.price||0),
+          currency:pending.currency||"P$",
+          image_url:pending.image_url,
+          stock_limit:Number(pending.stock_limit||0)
+        },env,url.origin);
+        if (!announcement.sent && announcement.reason!=="already_announced") {
+          console.error("[Sakura Discord] Limited announcement was not sent:",announcement.reason);
+        }
+      } catch (error) {
+        console.error("[Sakura Discord] New Limited announcement failed:",error);
+      }
     }
     return json({ok:true,status:"APPROVED",itemId});
   }
