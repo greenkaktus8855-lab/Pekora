@@ -1413,6 +1413,7 @@ async function adminPanel(){
    '<label>Название предмета<input name="name" maxlength="80" required placeholder="Введи название предмета"></label>'+
    '<label>Ссылка на картинку предмета<input name="image_url" type="url" maxlength="500" required placeholder="https://..."></label>'+
    '<label class="admin-limited-option"><input name="is_limited" type="checkbox" value="1"> Сделать предмет Limited</label>'+
+   '<label class="admin-limited-stock-field" style="display:none">Количество копий Limited<input name="stock_limit" type="number" min="1" max="1000000" step="1" value="100"></label>'+
    '<img id="adminItemImagePreview" class="creator-review-image-preview" alt="Предпросмотр предмета" hidden>'+
    '<label>Описание <span class="muted">(необязательно)</span><textarea name="description" maxlength="500" rows="3" placeholder="Опиши предмет"></textarea></label>'+
    '<div class="creator-create-actions"><button class="primary" type="submit">Отправить владельцу на проверку</button><span id="adminItemSubmissionMessage" class="muted" role="status"></span></div>'+
@@ -1432,6 +1433,13 @@ async function adminPanel(){
  const message=document.getElementById("adminItemSubmissionMessage");
  const imageInput=form?.querySelector('input[name="image_url"]');
  const preview=document.getElementById("adminItemImagePreview");
+ const limitedInput=form?.querySelector('input[name="is_limited"]');
+ const limitedStockField=form?.querySelector(".admin-limited-stock-field");
+ const updateLimitedStockVisibility=()=>{
+  if(limitedStockField)limitedStockField.style.display=limitedInput?.checked?"":"none";
+ };
+ limitedInput?.addEventListener("change",updateLimitedStockVisibility);
+ updateLimitedStockVisibility();
  imageInput?.addEventListener("input",()=>{
   try{
    const value=new URL(imageInput.value.trim());
@@ -1446,6 +1454,8 @@ async function adminPanel(){
   const values=new FormData(form);
   const payload={
    price:Number(values.get("price")),
+   is_limited:values.get("is_limited")==="1",
+   stock_limit:values.get("is_limited")==="1"?Number(values.get("stock_limit")||0):0,
    currency:String(values.get("currency")||"P$"),
    category:String(values.get("category")||""),
    name:String(values.get("name")||"").trim(),
@@ -1673,7 +1683,7 @@ async function owner(){
    ownerAdminItemSubmissionsHost.innerHTML=submissions.length?submissions.map(submission=>
     '<article class="creator-review-row"><div class="creator-review-details"><div class="creator-review-title"><h3>'+esc(submission.name)+'</h3><span class="creator-review-type">'+esc(submission.category)+'</span></div>'+
     '<p class="muted">Submitted by <a href="/#profile?username='+encodeURIComponent(submission.username||"")+'" data-profile="'+esc(submission.username||"")+'">'+esc(submission.username||"Unknown")+'</a></p>'+
-    '<p>'+esc(submission.description||"No description provided.")+'</p><p class="muted">'+Number(submission.price||0).toLocaleString()+' '+esc(submission.currency||"P$")+' · '+esc(new Date(submission.created_at+"Z").toLocaleString())+'</p>'+
+    '<p>'+esc(submission.description||"No description provided.")+'</p><p class="muted">'+Number(submission.price||0).toLocaleString()+' '+esc(submission.currency||"P$")+' · '+esc(new Date(submission.created_at+"Z").toLocaleString())+(Number(submission.is_limited)===1?' · LIMITED · '+Number(submission.stock_limit||0).toLocaleString()+' copies':'')+'</p>'+
     '<a class="asset-external-link" href="'+esc(submission.image_url)+'" target="_blank" rel="noopener noreferrer">Open submitted image</a>'+
     '<img class="creator-review-image-preview" src="'+esc(submission.image_url)+'" alt="Submitted item preview" loading="lazy">'+
     '<div class="creator-review-actions"><button class="primary" type="button" data-admin-item-action="approve" data-admin-item-id="'+esc(submission.id)+'">Publish</button><button class="button secondary" type="button" data-admin-item-action="reject" data-admin-item-id="'+esc(submission.id)+'">Reject</button></div></div></article>'
