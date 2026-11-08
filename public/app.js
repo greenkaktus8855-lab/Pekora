@@ -373,7 +373,7 @@ async function showItem(itemId,updateHistory=true){
   const cachedItemIndex=items.findIndex(entry=>entry.id===item.id);
   if(cachedItemIndex>=0)items[cachedItemIndex]={...items[cachedItemIndex],price:item.price,currency:item.currency,rap_value:item.rap_value,rap_currency:item.rap_currency};
  }
- const maxResalePrice=Math.max(1,Math.floor(Number(resaleSnapshot?.maxListingPrice||Math.max(1,Number(item.rap_value||item.price||1)*5))));
+ const maxResalePrice=Math.max(1,Math.floor(Number(resaleSnapshot?.maxListingPrice||1000000)));
  const ownedCount=ownedItemCount(item.id),isOwned=ownedCount>0,isAtLimit=Number(item.is_limited)===1&&ownedCount>=1,isOffsale=Number(item.is_offsale)===1,stock=itemStockState(item);
  const resaleEligible=Number(item.is_limited)===1||isOffsale||stock.soldOut;
  const resaleListings=Array.isArray(resaleSnapshot.listings)?resaleSnapshot.listings:[];
