@@ -656,11 +656,12 @@ function inventoryItemCard(item){
  const giftDate=Date.parse(item.gift_opens_at||"");
  const canOpenGift=isGift&&!opened&&!item.active_listing_id&&Number.isFinite(giftDate)&&Date.now()>=giftDate;
  const giftStatus=isGift?(opened?'<div class="inventory-gift-status">Gift opened · '+esc(item.gift_reward_name||"Reward received")+'</div>':Number.isFinite(giftDate)?'<div class="inventory-gift-status">Opens '+esc(new Date(giftDate).toLocaleString())+'</div>':'<div class="inventory-gift-status">Gift opening date unavailable</div>'):"";
+ const giftOdds=isGift&&!opened&&Array.isArray(item.gift_rewards)&&item.gift_rewards.length?'<div class="inventory-gift-odds"><strong>Possible rewards:</strong> '+item.gift_rewards.map(reward=>esc(reward.name||"Item")+' — '+Number(reward.chance_percent).toFixed(2)+'%').join(" · ")+'</div>':"";
  const giftButton=canOpenGift?'<button class="primary inventory-open-gift" type="button" data-open-gift="'+esc(item.id)+'">Open Gift</button>':"";
  return '<article class="item-card inventory-item-card">'+
   '<a class="item-image" href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+itemPreview(item)+itemBadgeMarkup(item)+'</a>'+
   '<h3><a href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+esc(item.name)+'</a></h3>'+
-  '<div class="muted">'+esc(item.category)+'</div>'+(Number(item.quantity)>1?'<div class="muted">Quantity: '+Number(item.quantity)+'</div>':"")+status+giftStatus+giftButton+
+  '<div class="muted">'+esc(item.category)+'</div>'+(Number(item.quantity)>1?'<div class="muted">Quantity: '+Number(item.quantity)+'</div>':"")+status+giftStatus+giftOdds+giftButton+
   '</article>';
 }
 async function inventory(){
