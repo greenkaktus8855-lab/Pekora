@@ -2550,7 +2550,7 @@ async function route(request, env) {
       let giftRewards=[],giftOpensAt="";
       if (isGift) {
         giftOpensAt=String(data.gift_opens_at||"");
-        if (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(giftOpensAt) || !Number.isFinite(Date.parse(giftOpensAt))) return fail("Choose a valid gift opening date and time.");
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(giftOpensAt) || !Number.isFinite(Date.parse(giftOpensAt))) return fail("Choose a valid gift opening date and time.");
         const parsedRewards=normalizeGiftRewards(data.gift_rewards ?? (data.gift_reward_item_id ? [{item_id:data.gift_reward_item_id,chance_percent:100}] : []));
         if(parsedRewards.error)return fail(parsedRewards.error);
         giftRewards=parsedRewards.rewards;
@@ -2598,7 +2598,7 @@ async function route(request, env) {
         let opensAt=existingGift.opens_at;
         if(data.gift_opens_at!==undefined){
           opensAt=String(data.gift_opens_at||"");
-          if(!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(opensAt)||!Number.isFinite(Date.parse(opensAt)))return fail("Choose a valid gift opening date and time.");
+          if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(opensAt)||!Number.isFinite(Date.parse(opensAt)))return fail("Choose a valid gift opening date and time.");
         }
         giftRewardUpdate={rewards,opensAt};
       }
