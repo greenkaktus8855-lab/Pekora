@@ -12,5 +12,6 @@ ON gift_reward_options(gift_item_id,sort_order);
 
 INSERT OR IGNORE INTO gift_reward_options
   (gift_item_id,reward_item_id,chance_percent,sort_order)
-SELECT gift_item_id,reward_item_id,100,0
-FROM gift_items;
+SELECT g.gift_item_id,g.reward_item_id,100,0
+FROM gift_items g
+JOIN items i ON i.id=g.reward_item_id;
