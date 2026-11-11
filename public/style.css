@@ -1410,3 +1410,19 @@ body{color:#f0eaf8!important}
 
 .friend-action-buttons{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto}
 @media(max-width:520px){.friend-action-buttons{flex-wrap:wrap;justify-content:flex-end}}
+
+
+/* Weighted gift reward editor */
+#ownerGiftOptions{grid-column:1/-1;display:grid;gap:8px;padding:12px;background:#211b2b;border:1px solid #49375e;border-radius:4px}
+.owner-gift-editor{display:grid;gap:8px;margin:8px 0;padding:10px;background:#211b2b;border:1px solid #49375e;border-radius:4px}
+.owner-gift-reward-list{display:grid;gap:6px;min-width:0}
+.owner-gift-reward-row{display:grid;grid-template-columns:minmax(0,1fr) 110px auto;align-items:end;gap:8px;min-width:0}
+.owner-gift-reward-row select,.owner-gift-reward-row input{width:100%;min-width:0;min-height:34px;padding:6px;border:1px solid #bbb;background:#211b2b;color:#f0eaf8}
+.owner-gift-reward-row label{display:grid;gap:3px;font-size:12px}
+.owner-gift-reward-row button{white-space:nowrap}
+.owner-gift-total{display:block;font-weight:600}
+.inventory-gift-odds{margin-top:6px;padding:7px;background:#f5efff;border-left:3px solid #7b2cbf;color:#342444;font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+@media(max-width:767px){
+ .owner-gift-reward-row{grid-template-columns:minmax(0,1fr) 86px}
+ .owner-gift-reward-row button{grid-column:1/-1;justify-self:start}
+}
