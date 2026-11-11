@@ -1482,8 +1482,16 @@ async function route(request, env) {
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,v.quantity,r.id AS active_listing_id,r.price AS active_listing_price,CASE WHEN gi.gift_item_id IS NULL THEN 0 ELSE 1 END AS is_gift,gi.opens_at AS gift_opens_at,gr.name AS gift_reward_name,CASE WHEN go.user_id IS NULL THEN 0 ELSE 1 END AS gift_opened,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id LEFT JOIN resale_listings r ON r.item_id=i.id AND r.seller_id=v.user_id AND r.status='ACTIVE' LEFT JOIN gift_items gi ON gi.gift_item_id=i.id LEFT JOIN gift_openings go ON go.gift_item_id=i.id AND go.user_id=v.user_id LEFT JOIN items gr ON gr.id=COALESCE(go.reward_item_id,gi.reward_item_id) WHERE v.user_id=? AND v.quantity>0 ORDER BY v.purchased_at DESC").bind(user.id).all();
-    return json({ items:rows.results || [] });
+    const [rows,rewardRows] = await Promise.all([
+      env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,v.quantity,r.id AS active_listing_id,r.price AS active_listing_price,CASE WHEN gi.gift_item_id IS NULL THEN 0 ELSE 1 END AS is_gift,gi.opens_at AS gift_opens_at,gr.name AS gift_reward_name,CASE WHEN go.user_id IS NULL THEN 0 ELSE 1 END AS gift_opened,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id LEFT JOIN resale_listings r ON r.item_id=i.id AND r.seller_id=v.user_id AND r.status='ACTIVE' LEFT JOIN gift_items gi ON gi.gift_item_id=i.id LEFT JOIN gift_openings go ON go.gift_item_id=i.id AND go.user_id=v.user_id LEFT JOIN items gr ON gr.id=COALESCE(go.reward_item_id,gi.reward_item_id) WHERE v.user_id=? AND v.quantity>0 ORDER BY v.purchased_at DESC").bind(user.id).all(),
+      env.DB.prepare("SELECT o.gift_item_id,o.reward_item_id,o.chance_percent,i.name AS reward_name FROM gift_reward_options o JOIN items i ON i.id=o.reward_item_id WHERE o.gift_item_id IN (SELECT item_id FROM inventory WHERE user_id=? AND quantity>0) ORDER BY o.gift_item_id,o.sort_order").bind(user.id).all()
+    ]);
+    const rewardsByGift=new Map();
+    for(const option of rewardRows.results||[]){
+      if(!rewardsByGift.has(option.gift_item_id))rewardsByGift.set(option.gift_item_id,[]);
+      rewardsByGift.get(option.gift_item_id).push({item_id:option.reward_item_id,name:option.reward_name,chance_percent:Number(option.chance_percent)});
+    }
+    return json({items:(rows.results||[]).map(item=>({...item,gift_rewards:rewardsByGift.get(item.id)||[]}))});
   }
 
   if (request.method === "POST" && path === "/api/inventory/sell") {
