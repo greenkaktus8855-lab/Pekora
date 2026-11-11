@@ -2547,8 +2547,10 @@ async function route(request, env) {
       return json({items:(rows.results||[]).map(item=>({...item,gift_rewards:rewardsByGift.get(item.id)||[]}))});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
-      const result = await env.DB.prepare("UPDATE items SET is_for_sale=0 WHERE is_for_sale=1").run();
-      return json({ok:true,hidden:result?.meta?.changes||0});
+      const protectedRows=await env.DB.prepare("SELECT DISTINCT reward_item_id FROM gift_reward_options").all();
+      const preservedGiftRewards=(protectedRows.results||[]).map(row=>row.reward_item_id);
+      const result = await env.DB.prepare("UPDATE items SET is_for_sale=CASE WHEN id IN (SELECT reward_item_id FROM gift_reward_options) THEN 1 ELSE 0 END,is_catalog_visible=0 WHERE is_for_sale=1 OR is_catalog_visible=1").run();
+      return json({ok:true,hidden:result?.meta?.changes||0,preservedGiftRewards});
     }
     if (path === "/api/owner/items" && request.method === "POST") {
       const data = await body(request), error = validItem(data);
