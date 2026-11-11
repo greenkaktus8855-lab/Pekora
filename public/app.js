@@ -2017,8 +2017,8 @@ async function owner(){
    if(newItemForm.elements.gift_opens_at)newItemForm.elements.gift_opens_at.required=Boolean(giftToggle?.checked);
   };
   if(giftRewardSelect){
-   const rewardOptions=ownerItems.filter(item=>Number(item.is_for_sale)===1&&Number(item.is_gift)!==1);
-   giftRewardSelect.innerHTML='<option value="">Choose an existing catalog item</option>'+rewardOptions.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.name)+' · '+esc(item.category)+'</option>').join("");
+   const rewardOptions=ownerItems.filter(item=>Number(item.is_for_sale)===1&&Number(item.is_offsale)===1&&Number(item.is_gift)!==1);
+   giftRewardSelect.innerHTML='<option value="">Choose an Offsale catalog item</option>'+rewardOptions.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.name)+' · '+esc(item.category)+' · Offsale</option>').join("");
   }
   giftToggle?.addEventListener("change",updateGiftOptions);
   updateGiftOptions();
