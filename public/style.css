@@ -576,6 +576,9 @@ model-viewer.pekora-model{display:block;width:100%;height:100%;min-height:150px;
  box-shadow:0 1px 3px rgba(0,0,0,.2);pointer-events:none
 }
 .stock-overlay.sold-out{background:#a92e2e}
+.gift-overlay{position:absolute;top:7px;right:7px;z-index:4;padding:4px 7px;border-radius:3px;background:#6b2eb5;color:#fff;font-size:11px;font-weight:700;line-height:1.2;pointer-events:none}
+.inventory-gift-status{display:block;margin:5px 0;color:#6b2eb5;font-size:12px}
+.inventory-open-gift{margin-top:6px}
 .item-stock-text{margin:2px 0 5px;color:#666;font-size:12px;line-height:1.35}
 .item-detail-stock{margin:-8px 0 14px;color:#c8bfd2;font-size:13px}
 .owner-toggle{display:flex!important;flex-direction:row!important;align-items:center;justify-content:space-between;gap:12px;padding:7px 10px;background:#211b2b;border:1px solid #d9d9d9;border-radius:4px}
