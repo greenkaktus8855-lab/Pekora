@@ -1957,6 +1957,48 @@ async function owner(){
    }catch(e){toast(e.message)}
    finally{button.disabled=false;button.textContent="Remove all items from catalog"}
   });
+  const giftRewardChoices=ownerItems.filter(item=>Number(item.is_for_sale)===1&&Number(item.is_offsale)===1&&Number(item.is_gift)!==1);
+  function giftRewardRowMarkup(selectedId="",chance=100){
+   const options=giftRewardChoices.map(item=>'<option value="'+esc(item.id)+'" '+(item.id===selectedId?'selected':'')+'>'+esc(item.name)+' · '+esc(item.category)+'</option>').join("");
+   return '<div class="owner-gift-reward-row"><select class="owner-gift-reward-item" required><option value="">Choose an Offsale reward</option>'+options+'</select><label>Chance %<input class="owner-gift-reward-chance" type="number" min="0.01" max="100" step="0.01" value="'+esc(chance)+'" required></label><button class="button secondary" type="button" data-remove-gift-reward>Remove</button></div>';
+  }
+  function refreshGiftRewardList(container,totalElement,addButton){
+   if(!container)return;
+   const rows=[...container.querySelectorAll(".owner-gift-reward-row")];
+   const basisPoints=rows.reduce((sum,row)=>sum+Math.round(Number(row.querySelector(".owner-gift-reward-chance")?.value||0)*100),0);
+   if(totalElement)totalElement.textContent="Total chance: "+(basisPoints/100).toFixed(2)+"%"+(basisPoints===10000?" ✓":" (must equal 100%)");
+   if(addButton)addButton.disabled=rows.length>=10;
+  }
+  function addGiftRewardRow(container,selectedId="",chance=100,totalElement=null,addButton=null){
+   if(!container)return false;
+   if(container.querySelectorAll(".owner-gift-reward-row").length>=10){toast("A gift can contain at most 10 rewards.");return false;}
+   container.insertAdjacentHTML("beforeend",giftRewardRowMarkup(selectedId,chance));
+   refreshGiftRewardList(container,totalElement,addButton);
+   return true;
+  }
+  function readGiftRewards(container){
+   const rows=[...(container?.querySelectorAll(".owner-gift-reward-row")||[])];
+   if(rows.length<1||rows.length>10)throw new Error("A gift must contain between 1 and 10 rewards.");
+   const seen=new Set();
+   let total=0;
+   const rewards=rows.map((row,index)=>{
+    const itemId=String(row.querySelector(".owner-gift-reward-item")?.value||"");
+    const chance=Number(row.querySelector(".owner-gift-reward-chance")?.value);
+    const basisPoints=Math.round(chance*100);
+    if(!itemId)throw new Error("Choose an item for every gift reward.");
+    if(seen.has(itemId))throw new Error("Each gift reward must be a different item.");
+    if(!Number.isFinite(chance)||basisPoints<1||basisPoints>10000||Math.abs(chance*100-basisPoints)>0.000001)throw new Error("Each chance must be from 0.01% to 100% with up to 2 decimal places.");
+    seen.add(itemId);total+=basisPoints;
+    return {item_id:itemId,chance_percent:basisPoints/100,sort_order:index};
+   });
+   if(total!==10000)throw new Error("Gift reward chances must add up to exactly 100%.");
+   return rewards;
+  }
+  function toLocalDateTimeInput(value){
+   const date=new Date(value||"");
+   if(!Number.isFinite(date.getTime()))return "";
+   return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  }
   function drawOwnerItems(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
     '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
