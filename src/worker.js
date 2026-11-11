@@ -672,7 +672,7 @@ async function announcePriceIncrease(item, oldPrice, newPrice, env, siteOrigin) 
 
 async function announceMissingLimitedItems(env, siteOrigin) {
   if (!env.DISCORD_LIMITED_WEBHOOK) return {sent:0,skipped:true};
-  const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.stock_limit FROM items i LEFT JOIN discord_limited_announcements a ON a.item_id=i.id WHERE i.is_limited=1 AND a.item_id IS NULL ORDER BY i.created_at ASC LIMIT 50").all();
+  const rows = await env.DB.prepare("SELECT i.id,i.name,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.stock_limit FROM items i LEFT JOIN discord_limited_announcements a ON a.item_id=i.id WHERE i.is_limited=1 AND i.is_for_sale=1 AND i.is_catalog_visible=1 AND a.item_id IS NULL ORDER BY i.created_at ASC LIMIT 50").all();
   let sent=0;
   for (const item of rows.results || []) {
     const result=await announceLimitedItem(item,env,siteOrigin);
@@ -2509,7 +2509,7 @@ async function route(request, env) {
       ];
       if (isGift) createStatements.push(env.DB.prepare("INSERT INTO gift_items (gift_item_id,reward_item_id,opens_at) VALUES (?,?,?)").bind(itemId,giftRewardItemId,giftOpensAt));
       await env.DB.batch(createStatements);
-      if (isLimited && data.is_for_sale !== false) {
+      if (isLimited && data.is_for_sale !== false && data.is_catalog_visible !== false) {
         try {
           await announceLimitedItem({id:itemId,name:data.name,category:data.category,price:Number(data.price),currency:data.currency||"P$",image_url:String(data.image_url||"").trim(),stock_limit:stockLimit},env,url.origin);
         } catch (error) { console.error("[Sakura Discord] New Limited announcement failed:",error); }
@@ -2537,7 +2537,7 @@ async function route(request, env) {
       const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
       await env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,currency=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=?,is_offsale=?,is_catalog_visible=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),merged.currency,String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,merged.is_offsale?1:0,merged.is_catalog_visible?1:0,match[1]).run();
-      if (String(merged.currency||"P$")===String(current.currency||"P$") && Number(merged.price) > Number(current.price || 0) && Number(merged.is_for_sale) === 1) {
+      if (String(merged.currency||"P$")===String(current.currency||"P$") && Number(merged.price) > Number(current.price || 0) && Number(merged.is_for_sale) === 1 && Number(merged.is_catalog_visible) === 1) {
         try {
           await announcePriceIncrease({
             id:match[1],
