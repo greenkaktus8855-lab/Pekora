@@ -1115,7 +1115,7 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id WHERE i.is_for_sale=1 ORDER BY i.created_at DESC,i.rowid DESC").all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN gi.gift_item_id IS NULL THEN 0 ELSE 1 END AS is_gift,gi.opens_at AS gift_opens_at,gr.name AS gift_reward_name,CASE WHEN i.category='Accessories' THEN CASE WHEN model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id LEFT JOIN gift_items gi ON gi.gift_item_id=i.id LEFT JOIN items gr ON gr.id=gi.reward_item_id WHERE i.is_for_sale=1 ORDER BY i.created_at DESC,i.rowid DESC").all();
     return json({ items:rows.results || [] });
   }
 
@@ -1405,10 +1405,34 @@ async function route(request, env) {
     return json({ purchases:rows.results || [] });
   }
 
+  if (request.method === "POST" && path === "/api/gifts/open") {
+    const user=await requireUser(request,env);
+    if(!user)return fail("Please sign in.",401);
+    const data=await body(request);
+    const giftItemId=String(data?.itemId||"");
+    if(!/^[A-Za-z0-9_-]{1,80}$/.test(giftItemId))return fail("Choose a valid gift.");
+    const gift=await env.DB.prepare("SELECT g.reward_item_id,g.opens_at,reward.name AS reward_name FROM gift_items g JOIN items reward ON reward.id=g.reward_item_id WHERE g.gift_item_id=? AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=? AND v.item_id=g.gift_item_id AND v.quantity>0) AND NOT EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=g.gift_item_id AND r.seller_id=? AND r.status='ACTIVE')").bind(giftItemId,user.id,user.id).first();
+    if(!gift)return fail("This gift is not in your inventory or is currently listed for resale.",404);
+    const opensAt=Date.parse(gift.opens_at);
+    if(!Number.isFinite(opensAt))return fail("This gift has an invalid opening date. Contact the Owner.",500);
+    if(Date.now()<opensAt)return fail("This gift opens on "+new Date(opensAt).toLocaleString("en-GB",{timeZone:"Europe/Kyiv"})+".",409);
+    const previous=await env.DB.prepare("SELECT 1 AS opened FROM gift_openings WHERE user_id=? AND gift_item_id=?").bind(user.id,giftItemId).first();
+    if(previous)return fail("This gift has already been opened.",409);
+    const results=await env.DB.batch([
+      env.DB.prepare("INSERT INTO gift_openings (user_id,gift_item_id,reward_item_id) VALUES (?,?,?) ON CONFLICT(user_id,gift_item_id) DO NOTHING").bind(user.id,giftItemId,gift.reward_item_id),
+      env.DB.prepare("UPDATE inventory SET quantity=quantity-1 WHERE user_id=? AND item_id=? AND quantity>0 AND changes()=1").bind(user.id,giftItemId),
+      env.DB.prepare("INSERT INTO inventory (id,user_id,item_id,quantity) SELECT ?,?,?,1 WHERE changes()=1 ON CONFLICT(user_id,item_id) DO UPDATE SET quantity=inventory.quantity+1").bind(id(),user.id,gift.reward_item_id),
+      env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=? AND quantity<=0").bind(user.id,giftItemId)
+    ]);
+    if(!results?.[0]?.meta?.changes)return fail("This gift has already been opened.",409);
+    if(!results?.[1]?.meta?.changes||!results?.[2]?.meta?.changes)return fail("The gift could not be opened. Refresh your inventory and try again.",409);
+    return json({ok:true,giftItemId,rewardItemId:gift.reward_item_id,rewardName:gift.reward_name});
+  }
+
   if (request.method === "GET" && path === "/api/inventory") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,v.quantity,r.id AS active_listing_id,r.price AS active_listing_price,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id LEFT JOIN resale_listings r ON r.item_id=i.id AND r.seller_id=v.user_id AND r.status='ACTIVE' WHERE v.user_id=? AND v.quantity>0 ORDER BY v.purchased_at DESC").bind(user.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,v.quantity,r.id AS active_listing_id,r.price AS active_listing_price,CASE WHEN gi.gift_item_id IS NULL THEN 0 ELSE 1 END AS is_gift,gi.opens_at AS gift_opens_at,gr.name AS gift_reward_name,CASE WHEN go.user_id IS NULL THEN 0 ELSE 1 END AS gift_opened,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id LEFT JOIN resale_listings r ON r.item_id=i.id AND r.seller_id=v.user_id AND r.status='ACTIVE' LEFT JOIN gift_items gi ON gi.gift_item_id=i.id LEFT JOIN items gr ON gr.id=gi.reward_item_id LEFT JOIN gift_openings go ON go.gift_item_id=i.id AND go.user_id=v.user_id WHERE v.user_id=? AND v.quantity>0 ORDER BY v.purchased_at DESC").bind(user.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -1420,7 +1444,7 @@ async function route(request, env) {
   if (request.method === "GET" && profileIdInventoryMatch) {
     const profile = await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND is_banned=0").bind(Number(profileIdInventoryMatch[1])).first();
     if (!profile) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,v.quantity,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.quantity>0 ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,v.quantity,CASE WHEN gi.gift_item_id IS NULL THEN 0 ELSE 1 END AS is_gift,gi.opens_at AS gift_opens_at,gr.name AS gift_reward_name,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id LEFT JOIN gift_items gi ON gi.gift_item_id=i.id LEFT JOIN items gr ON gr.id=gi.reward_item_id WHERE v.user_id=? AND v.quantity>0 ORDER BY v.purchased_at DESC").bind(profile.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -1442,7 +1466,7 @@ async function route(request, env) {
     const username = profileInventoryMatch[1];
     const profile = await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE AND is_banned=0").bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,v.quantity,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.quantity>0 ORDER BY v.purchased_at DESC").bind(profile.id).all();
+    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,v.quantity,CASE WHEN gi.gift_item_id IS NULL THEN 0 ELSE 1 END AS is_gift,gi.opens_at AS gift_opens_at,gr.name AS gift_reward_name,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM inventory v JOIN items i ON i.id=v.item_id LEFT JOIN gift_items gi ON gi.gift_item_id=i.id LEFT JOIN items gr ON gr.id=gi.reward_item_id WHERE v.user_id=? AND v.quantity>0 ORDER BY v.purchased_at DESC").bind(profile.id).all();
     return json({ items:rows.results || [] });
   }
 
@@ -2445,7 +2469,7 @@ async function route(request, env) {
     if (path === "/api/owner/items" && request.method === "GET") {
       try { await announceMissingLimitedItems(env, url.origin); }
       catch (error) { console.error("[Sakura Discord] Missing Limited scan failed:",error); }
-      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id ORDER BY i.created_at DESC,i.name").all();
+      const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.is_for_sale,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN gi.gift_item_id IS NULL THEN 0 ELSE 1 END AS is_gift,gi.reward_item_id,gi.opens_at AS gift_opens_at,gr.name AS gift_reward_name,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id LEFT JOIN gift_items gi ON gi.gift_item_id=i.id LEFT JOIN items gr ON gr.id=gi.reward_item_id ORDER BY i.created_at DESC,i.name").all();
       return json({items:rows.results||[]});
     }
     if (path === "/api/owner/items" && request.method === "DELETE") {
@@ -2458,16 +2482,31 @@ async function route(request, env) {
       if (data.is_for_sale !== undefined && typeof data.is_for_sale !== "boolean") return fail("Item catalog visibility must be true or false.");
       if (data.is_offsale !== undefined && typeof data.is_offsale !== "boolean") return fail("Off Sale status must be true or false.");
       if (data.is_limited !== undefined && typeof data.is_limited !== "boolean") return fail("Limited status must be true or false.");
+      if (data.is_gift !== undefined && typeof data.is_gift !== "boolean") return fail("Gift status must be true or false.");
       const isLimited = data.is_limited === true;
+      const isGift = data.is_gift === true;
       const stockLimit = data.stock_limit === undefined || data.stock_limit === null || data.stock_limit === "" ? 0 : Number(data.stock_limit);
       if (!Number.isSafeInteger(stockLimit) || stockLimit < 0 || stockLimit > 1000000) return fail("Stock must be a whole number from 0 to 1,000,000.");
       if (isLimited && stockLimit < 1) return fail("A Limited item must have a stock quantity of at least 1.");
+      let giftRewardItemId="",giftOpensAt="";
+      if (isGift) {
+        giftRewardItemId=String(data.gift_reward_item_id||"");
+        giftOpensAt=String(data.gift_opens_at||"");
+        if (!/^[A-Za-z0-9_-]{1,80}$/.test(giftRewardItemId)) return fail("Choose the item that this gift contains.");
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(giftOpensAt) || !Number.isFinite(Date.parse(giftOpensAt))) return fail("Choose a valid gift opening date and time.");
+        const rewardItem=await env.DB.prepare("SELECT id FROM items WHERE id=? AND is_for_sale=1").bind(giftRewardItemId).first();
+        if (!rewardItem) return fail("The gift reward must be an existing item in the public catalog.",404);
+      }
       const itemId=id();
       const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
       const assetId = Number(data.asset_id || 0);
       const assetTypeId = Number(data.asset_type_id || (assetId ? (defaultAssetTypes[data.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID (for example neck, back, front, shoulder or waist).");
-      await env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),data.currency||"P$",String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,isLimited?1:0,stockLimit,0,data.is_for_sale===false?0:1,data.is_offsale===true?1:0).run();
+      const createStatements=[
+        env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),data.currency||"P$",String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,isLimited?1:0,stockLimit,0,data.is_for_sale===false?0:1,data.is_offsale===true?1:0)
+      ];
+      if (isGift) createStatements.push(env.DB.prepare("INSERT INTO gift_items (gift_item_id,reward_item_id,opens_at) VALUES (?,?,?)").bind(itemId,giftRewardItemId,giftOpensAt));
+      await env.DB.batch(createStatements);
       if (isLimited && data.is_for_sale !== false) {
         try {
           await announceLimitedItem({id:itemId,name:data.name,category:data.category,price:Number(data.price),currency:data.currency||"P$",image_url:String(data.image_url||"").trim(),stock_limit:stockLimit},env,url.origin);
