@@ -1426,3 +1426,5 @@ body{color:#f0eaf8!important}
  .owner-gift-reward-row{grid-template-columns:minmax(0,1fr) 86px}
  .owner-gift-reward-row button{grid-column:1/-1;justify-self:start}
 }
+
+.item-gift-odds{margin-top:7px;padding:7px;background:#f5efff;border-left:3px solid #7b2cbf;color:#342444;font-size:12px;line-height:1.45;overflow-wrap:anywhere}
