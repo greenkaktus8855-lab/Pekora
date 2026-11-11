@@ -2625,6 +2625,10 @@ async function route(request, env) {
       const merged={name:data.name??current.name,description:data.description??current.description,category:data.category??current.category,price:data.price??current.price,currency:data.currency??current.currency??"P$",image_url:data.image_url??current.image_url,model_url:data.model_url??current.model_url??"",asset_id:data.asset_id??current.asset_id??0,asset_type_id:data.asset_type_id??current.asset_type_id??0,is_for_sale:data.is_for_sale===undefined?current.is_for_sale:(data.is_for_sale?1:0),is_catalog_visible:data.is_catalog_visible===undefined?Number(current.is_catalog_visible??1)===1:(data.is_catalog_visible?1:0),is_offsale:data.is_offsale===undefined?Number(current.is_offsale||0)===1:data.is_offsale,is_limited:data.is_limited===undefined?Number(current.is_limited)===1:data.is_limited,stock_limit:data.stock_limit===undefined?Number(current.stock_limit||0):Number(data.stock_limit)};
       if (!Number.isSafeInteger(merged.stock_limit) || merged.stock_limit < 0 || merged.stock_limit > 1000000) return fail("Stock must be a whole number from 0 to 1,000,000.");
       if (merged.is_limited && merged.stock_limit < 1) return fail("A Limited item must have a stock quantity of at least 1.");
+      if (Number(merged.is_for_sale)!==1 || !merged.is_offsale) {
+        const giftUsage=await env.DB.prepare("SELECT COUNT(*) AS n FROM gift_reward_options WHERE reward_item_id=?").bind(match[1]).first();
+        if(Number(giftUsage?.n||0)>0)return fail("This item is used as a Gift reward. Edit those gifts before removing it from the catalog or changing Offsale.",409);
+      }
       if (merged.stock_limit > 0 && merged.stock_limit < Number(current.stock_sold||0)) return fail("Stock cannot be lower than the number already sold.");
       const keepLegacyImage = String(merged.image_url||"") === String(current.image_url||"");
       const error=validItem(merged,keepLegacyImage); if(error)return fail(error);
@@ -2663,6 +2667,8 @@ async function route(request, env) {
       return json({ok:true});
     }
     if (match && request.method === "DELETE") {
+      const giftUsage=await env.DB.prepare("SELECT COUNT(*) AS n FROM gift_reward_options WHERE reward_item_id=?").bind(match[1]).first();
+      if(Number(giftUsage?.n||0)>0)return fail("This item is used as a Gift reward. Edit those gifts before removing or deleting it.",409);
       if (url.searchParams.get("permanent") === "1") {
         const itemId = match[1];
         const current = await env.DB.prepare("SELECT id FROM items WHERE id=?").bind(itemId).first();
