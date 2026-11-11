@@ -1411,8 +1411,9 @@ async function route(request, env) {
     const data=await body(request);
     const giftItemId=String(data?.itemId||"");
     if(!/^[A-Za-z0-9_-]{1,80}$/.test(giftItemId))return fail("Choose a valid gift.");
-    const gift=await env.DB.prepare("SELECT g.reward_item_id,g.opens_at,reward.name AS reward_name FROM gift_items g JOIN items reward ON reward.id=g.reward_item_id WHERE g.gift_item_id=? AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=? AND v.item_id=g.gift_item_id AND v.quantity>0) AND NOT EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=g.gift_item_id AND r.seller_id=? AND r.status='ACTIVE')").bind(giftItemId,user.id,user.id).first();
+    const gift=await env.DB.prepare("SELECT g.reward_item_id,g.opens_at,reward.name AS reward_name,reward.is_offsale AS reward_is_offsale FROM gift_items g JOIN items reward ON reward.id=g.reward_item_id WHERE g.gift_item_id=? AND EXISTS (SELECT 1 FROM inventory v WHERE v.user_id=? AND v.item_id=g.gift_item_id AND v.quantity>0) AND NOT EXISTS (SELECT 1 FROM resale_listings r WHERE r.item_id=g.gift_item_id AND r.seller_id=? AND r.status='ACTIVE')").bind(giftItemId,user.id,user.id).first();
     if(!gift)return fail("This gift is not in your inventory or is currently listed for resale.",404);
+    if(Number(gift.reward_is_offsale)!==1)return fail("This gift reward is not Offsale. Contact the Owner.",409);
     const opensAt=Date.parse(gift.opens_at);
     if(!Number.isFinite(opensAt))return fail("This gift has an invalid opening date. Contact the Owner.",500);
     if(Date.now()<opensAt)return fail("This gift opens on "+new Date(opensAt).toLocaleString("en-GB",{timeZone:"Europe/Kyiv"})+".",409);
@@ -2494,8 +2495,8 @@ async function route(request, env) {
         giftOpensAt=String(data.gift_opens_at||"");
         if (!/^[A-Za-z0-9_-]{1,80}$/.test(giftRewardItemId)) return fail("Choose the item that this gift contains.");
         if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(giftOpensAt) || !Number.isFinite(Date.parse(giftOpensAt))) return fail("Choose a valid gift opening date and time.");
-        const rewardItem=await env.DB.prepare("SELECT id FROM items WHERE id=? AND is_for_sale=1").bind(giftRewardItemId).first();
-        if (!rewardItem) return fail("The gift reward must be an existing item in the public catalog.",404);
+        const rewardItem=await env.DB.prepare("SELECT i.id FROM items i WHERE i.id=? AND i.is_for_sale=1 AND i.is_offsale=1 AND NOT EXISTS (SELECT 1 FROM gift_items gi WHERE gi.gift_item_id=i.id)").bind(giftRewardItemId).first();
+        if (!rewardItem) return fail("The gift reward must be an Offsale item in the public catalog.",404);
       }
       const itemId=id();
       const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
