@@ -1956,9 +1956,10 @@ async function owner(){
    try{
     const result=await api("/api/owner/items",{method:"DELETE"});
     if(!isActiveView(view))return;
-    ownerItems=ownerItems.map(item=>({...item,is_for_sale:0}));
+    const protectedGiftRewards=new Set(result.preservedGiftRewards||[]);
+    ownerItems=ownerItems.map(item=>({...item,is_for_sale:protectedGiftRewards.has(item.id)?1:0,is_catalog_visible:0}));
     drawOwnerItems();updateOwnerItemCount();
-    toast(result.hidden+" items removed from the public catalog");
+    toast(result.hidden+" items hidden from the public catalog"+(protectedGiftRewards.size?"; "+protectedGiftRewards.size+" Offsale gift rewards kept active":""));
    }catch(e){toast(e.message)}
    finally{button.disabled=false;button.textContent="Remove all items from catalog"}
   });
