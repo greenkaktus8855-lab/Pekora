@@ -1561,9 +1561,9 @@ async function owner(){
  ' <label>Total stock (0 = unlimited)<input name="stock_limit" type="number" min="0" max="1000000" value="0" step="1"></label>'+
  '<label class="owner-toggle"><span>This item is a Gift</span><input name="is_gift" type="checkbox"></label>'+
  '<div id="ownerGiftOptions" style="display:none">'+
-  '<label>Item inside the gift<select name="gift_reward_item_id" id="ownerGiftRewardItem"><option value="">Choose an existing catalog item</option></select></label>'+
+  '<strong>Possible gift rewards (maximum 10)</strong><div id="ownerGiftRewardRows" class="owner-gift-reward-list"></div><button class="button secondary" id="addOwnerGiftReward" type="button">Add reward</button><span id="ownerGiftChanceTotal" class="muted">Total chance: 100.00%</span>'+
   '<label>Gift opens at<input name="gift_opens_at" type="datetime-local"></label>'+
-  '<p class="muted">Players can open this gift from their Inventory after the selected date and time. The selected item is guaranteed.</p>'+
+  '<p class="muted">Players can open this gift from their Inventory after the selected date and time. The server selects one Offsale reward using the percentages above. Chances must add up to 100%.</p>'+
  '</div>'+
  '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
  '<label>3D model file (.glb, max 1 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
@@ -2079,16 +2079,21 @@ async function owner(){
   if(!newItemForm)return;
   const giftToggle=newItemForm.elements.is_gift;
   const giftOptions=document.getElementById("ownerGiftOptions");
-  const giftRewardSelect=document.getElementById("ownerGiftRewardItem");
+  const giftRewardHost=document.getElementById("ownerGiftRewardRows");
+  const giftRewardAdd=document.getElementById("addOwnerGiftReward");
+  const giftRewardTotal=document.getElementById("ownerGiftChanceTotal");
   const updateGiftOptions=()=>{
    if(giftOptions)giftOptions.style.display=giftToggle?.checked?"":"none";
-   if(giftRewardSelect)giftRewardSelect.required=Boolean(giftToggle?.checked);
    if(newItemForm.elements.gift_opens_at)newItemForm.elements.gift_opens_at.required=Boolean(giftToggle?.checked);
   };
-  if(giftRewardSelect){
-   const rewardOptions=ownerItems.filter(item=>Number(item.is_for_sale)===1&&Number(item.is_offsale)===1&&Number(item.is_gift)!==1);
-   giftRewardSelect.innerHTML='<option value="">Choose an Offsale item</option>'+rewardOptions.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.name)+' · '+esc(item.category)+' · Offsale</option>').join("");
-  }
+  if(giftRewardHost)addGiftRewardRow(giftRewardHost,"",100,giftRewardTotal,giftRewardAdd);
+  giftRewardAdd?.addEventListener("click",()=>addGiftRewardRow(giftRewardHost,"",100,giftRewardTotal,giftRewardAdd));
+  giftRewardHost?.addEventListener("click",event=>{
+   const remove=event.target.closest("[data-remove-gift-reward]");
+   if(remove){remove.closest(".owner-gift-reward-row")?.remove();refreshGiftRewardList(giftRewardHost,giftRewardTotal,giftRewardAdd);}
+  });
+  giftRewardHost?.addEventListener("input",()=>refreshGiftRewardList(giftRewardHost,giftRewardTotal,giftRewardAdd));
+  giftRewardHost?.addEventListener("change",()=>refreshGiftRewardList(giftRewardHost,giftRewardTotal,giftRewardAdd));
   giftToggle?.addEventListener("change",updateGiftOptions);
   updateGiftOptions();
   newItemForm.addEventListener("submit",async e=>{
@@ -2102,9 +2107,10 @@ async function owner(){
      const parsedGiftDate=new Date(giftDateRaw);
      if(!Number.isFinite(parsedGiftDate.getTime()))throw new Error("Choose a valid gift opening date and time.");
      giftOpensAt=parsedGiftDate.toISOString();
-     if(!String(f.get("gift_reward_item_id")||""))throw new Error("Choose the item inside the gift.");
+     // The reward list is validated below; entries must be unique and total 100%.
     }
-    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0),is_catalog_visible:f.get("is_catalog_visible")==="on",is_gift:isGift,gift_reward_item_id:isGift?String(f.get("gift_reward_item_id")||""):"",gift_opens_at:giftOpensAt};
+    const giftRewards=isGift?readGiftRewards(giftRewardHost):[];
+    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0),is_catalog_visible:f.get("is_catalog_visible")==="on",is_gift:isGift,gift_rewards:giftRewards,gift_opens_at:giftOpensAt};
     const modelFile=f.get("model_file");
     if(modelFile instanceof File && modelFile.size){
      msg.textContent="Uploading 3D model...";
@@ -2117,9 +2123,11 @@ async function owner(){
     msg.textContent="Saving item...";
     const result=await api("/api/owner/items",{method:"POST",body:JSON.stringify(data)});
     if(!isActiveView(view))return;
-    e.target.reset();e.target.elements.price.value=50;e.target.elements.currency.value="P$";updateGiftOptions();msg.textContent="Item added.";
-    const giftReward=ownerItems.find(item=>item.id===data.gift_reward_item_id);
-    ownerItems.unshift({id:result.id,...data,is_limited:data.is_limited?1:0,is_offsale:data.is_offsale?1:0,is_gift:data.is_gift?1:0,is_catalog_visible:data.is_catalog_visible?1:0,gift_reward_name:giftReward?.name||"",stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:data.category==="Accessories"?"3D":"IMAGE_ONLY"});
+    e.target.reset();e.target.elements.price.value=50;e.target.elements.currency.value="P$";
+    giftRewardHost.innerHTML="";addGiftRewardRow(giftRewardHost,"",100,giftRewardTotal,giftRewardAdd);
+    updateGiftOptions();msg.textContent="Item added.";
+    const savedRewards=data.gift_rewards.map(reward=>({...reward,name:ownerItems.find(item=>item.id===reward.item_id)?.name||"Reward"}));
+    ownerItems.unshift({id:result.id,...data,gift_rewards:savedRewards,is_limited:data.is_limited?1:0,is_offsale:data.is_offsale?1:0,is_gift:data.is_gift?1:0,is_catalog_visible:data.is_catalog_visible?1:0,gift_reward_name:savedRewards[0]?.name||"",stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:data.category==="Accessories"?"3D":"IMAGE_ONLY"});
     drawOwnerItems();updateOwnerItemCount();
    }catch(err){msg.textContent=err.message}
   });
