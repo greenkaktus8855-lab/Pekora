@@ -277,7 +277,11 @@ function itemCreatorMarkup(item){
   : '<span>'+creator+'</span>';
  return '<div class="item-creator muted">Created by '+link+'</div>';
 }
-function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+itemBadgeMarkup(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+(Number(x.quantity)>1?'<div class="muted">Quantity: '+Number(x.quantity)+'</div>':"")+itemCreatorMarkup(x)+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(Number(x.stock_limit)>0?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'</article>'}
+function itemGiftOddsMarkup(x){
+ if(Number(x?.is_gift)!==1||!Array.isArray(x.gift_rewards)||!x.gift_rewards.length)return "";
+ return '<div class="item-gift-odds"><strong>Possible rewards:</strong> '+x.gift_rewards.map(reward=>esc(reward.name||"Item")+' — '+Number(reward.chance_percent).toFixed(2)+'%').join(" · ")+'</div>';
+}
+function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+itemBadgeMarkup(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+(Number(x.quantity)>1?'<div class="muted">Quantity: '+Number(x.quantity)+'</div>':"")+itemCreatorMarkup(x)+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(Number(x.stock_limit)>0?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+itemGiftOddsMarkup(x)+'</article>'}
 function itemPriceHistoryMarkup(item,history){
  const soldOut=Number(item.stock_limit)>0&&Number(item.stock_sold)>=Number(item.stock_limit);
  const eligible=Number(item.is_limited)===1||Number(item.is_offsale)===1||soldOut;
