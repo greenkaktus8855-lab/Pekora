@@ -2004,12 +2004,38 @@ async function owner(){
     '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
     '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><select name="currency"><option value="P$" '+((x.currency||"P$")==="P$"?'selected':'')+'>P$</option><option value="Tix" '+(x.currency==="Tix"?'selected':'')+'>Tix</option></select><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><label class="owner-inline-check"><input name="is_limited" type="checkbox" '+(Number(x.is_limited)===1?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" step="1" value="'+Number(x.stock_limit||0)+'" placeholder="Total stock (0 = unlimited)"><label class="owner-inline-check"><input name="is_offsale" type="checkbox" '+(Number(x.is_offsale)===1?'checked':'')+'> Off Sale</label><label class="owner-inline-check"><input name="is_catalog_visible" type="checkbox" '+(Number(x.is_catalog_visible)!==0?'checked':'')+'> Show in Catalog</label></div>'+
+    (Number(x.is_gift)===1?'<div class="owner-gift-editor"><strong>Gift rewards (up to 10)</strong><div class="owner-gift-reward-list" data-gift-rewards-for="'+esc(x.id)+'">'+(x.gift_rewards||[{item_id:x.reward_item_id,chance_percent:100}]).map(reward=>giftRewardRowMarkup(reward.item_id,reward.chance_percent)).join("")+'</div><button class="button secondary" type="button" data-add-gift-reward-for="'+esc(x.id)+'">Add reward</button><span class="muted owner-gift-total">Total chance: 100.00%</span><label>Gift opens at<input name="gift_opens_at" type="datetime-local" value="'+toLocalDateTimeInput(x.gift_opens_at)+'" required></label></div>':'')+
     '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(Number(x.is_for_sale)!==1?'Removed from catalog':(Number(x.is_catalog_visible)===0?'Hidden from catalog':(Number(x.is_offsale)===1?'Off Sale':'For sale')))+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+(Number(x.is_gift)===1?' · GIFT → '+esc(x.gift_reward_name||"Missing reward")+' · opens '+(x.gift_opens_at?esc(new Date(x.gift_opens_at).toLocaleString()):"date unavailable"):'')+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'<button class="button danger-button" type="button" data-delete-item="'+esc(x.id)+'">Delete permanently</button></div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
+   document.querySelectorAll(".owner-gift-reward-list").forEach(container=>{
+    const editor=container.closest(".owner-gift-editor");
+    const total=editor?.querySelector(".owner-gift-total");
+    const add=editor?.querySelector("[data-add-gift-reward-for]");
+    refreshGiftRewardList(container,total,add);
+    container.addEventListener("click",event=>{
+     const remove=event.target.closest("[data-remove-gift-reward]");
+     if(remove){remove.closest(".owner-gift-reward-row")?.remove();refreshGiftRewardList(container,total,add);}
+    });
+    container.addEventListener("input",()=>refreshGiftRewardList(container,total,add));
+    container.addEventListener("change",()=>refreshGiftRewardList(container,total,add));
+   });
+   document.querySelectorAll("[data-add-gift-reward-for]").forEach(button=>button.addEventListener("click",()=>{
+    const editor=button.closest(".owner-gift-editor");
+    const container=editor?.querySelector(".owner-gift-reward-list");
+    addGiftRewardRow(container,"",100,editor?.querySelector(".owner-gift-total"),button);
+   }));
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
      const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",is_catalog_visible:f.get("is_catalog_visible")==="on",stock_limit:Number(f.get("stock_limit")||0)};
+     const currentItem=ownerItems.find(item=>item.id===id);
+     if(Number(currentItem?.is_gift)===1){
+      updated.gift_rewards=readGiftRewards(form.querySelector(".owner-gift-reward-list"));
+      const opensRaw=String(f.get("gift_opens_at")||"");
+      const opensDate=new Date(opensRaw);
+      if(!opensRaw||!Number.isFinite(opensDate.getTime()))throw new Error("Choose a valid gift opening date and time.");
+      updated.gift_opens_at=opensDate.toISOString();
+     }
      await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(updated)});
      if(!isActiveView(view))return;
      ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated,is_limited:updated.is_limited?1:0,is_offsale:updated.is_offsale?1:0,is_catalog_visible:updated.is_catalog_visible?1:0}:item);
