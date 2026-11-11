@@ -262,6 +262,7 @@ function itemStockState(x){
 function itemBadgeMarkup(x){
  const stock=itemStockState(x);
  return (stock.limited?'<span class="limited-overlay icon-labels Limited" role="img" aria-label="Limited"></span>':"")+
+  (Number(x?.is_gift)===1?'<span class="gift-overlay">GIFT</span>':"")+
   (stock.finite?'<span class="stock-overlay '+(stock.soldOut?'sold-out':'')+'">'+(stock.soldOut?'Sold out':stock.remaining+' left')+'</span>':"");
 }
 function itemStockText(x){
@@ -650,10 +651,16 @@ function inventoryItemCard(item){
  const status=item.active_listing_id
   ?'<span class="inventory-listing-status">Listed · '+currencyMarkup(item.active_listing_price,"P$")+'</span>'
   :eligible?'<span class="inventory-resale-hint">Eligible for resale</span>':"";
+ const isGift=Number(item.is_gift)===1;
+ const opened=Number(item.gift_opened)===1;
+ const giftDate=Date.parse(item.gift_opens_at||"");
+ const canOpenGift=isGift&&!opened&&!item.active_listing_id&&Number.isFinite(giftDate)&&Date.now()>=giftDate;
+ const giftStatus=isGift?(opened?'<div class="inventory-gift-status">Gift opened · '+esc(item.gift_reward_name||"Reward received")+'</div>':Number.isFinite(giftDate)?'<div class="inventory-gift-status">Opens '+esc(new Date(giftDate).toLocaleString())+'</div>':'<div class="inventory-gift-status">Gift opening date unavailable</div>'):"";
+ const giftButton=canOpenGift?'<button class="primary inventory-open-gift" type="button" data-open-gift="'+esc(item.id)+'">Open Gift</button>':"";
  return '<article class="item-card inventory-item-card">'+
   '<a class="item-image" href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+itemPreview(item)+itemBadgeMarkup(item)+'</a>'+
   '<h3><a href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+esc(item.name)+'</a></h3>'+
-  '<div class="muted">'+esc(item.category)+'</div>'+(Number(item.quantity)>1?'<div class="muted">Quantity: '+Number(item.quantity)+'</div>':"")+status+
+  '<div class="muted">'+esc(item.category)+'</div>'+(Number(item.quantity)>1?'<div class="muted">Quantity: '+Number(item.quantity)+'</div>':"")+status+giftStatus+giftButton+
   '</article>';
 }
 async function inventory(){
@@ -667,6 +674,14 @@ async function inventory(){
   if(!isActiveView(view)||!grid?.isConnected)return;
   const ownedItems=Array.isArray(d.items)?d.items:[];
   grid.innerHTML=ownedItems.length?ownedItems.map(inventoryItemCard).join(""):'<div class="empty">Your inventory is empty. <a href="/#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+  grid.querySelectorAll("[data-open-gift]").forEach(button=>button.addEventListener("click",async()=>{
+   button.disabled=true;button.textContent="Opening...";
+   try{
+    const result=await api("/api/gifts/open",{method:"POST",body:JSON.stringify({itemId:button.dataset.openGift})});
+    toast("Gift opened! You received "+(result.rewardName||"a new item")+".");
+    await inventory();
+   }catch(error){toast(error.message);button.disabled=false;button.textContent="Open Gift"}
+  }));
  }catch(error){if(isActiveView(view)&&grid?.isConnected)grid.textContent=error.message}
 }
 
@@ -1543,6 +1558,12 @@ async function owner(){
  '<label class="owner-toggle"><span>Limited item</span><input name="is_limited" type="checkbox"></label>'+
  '<label class="owner-toggle"><span>Off Sale (visible, cannot buy)</span><input name="is_offsale" type="checkbox"></label>'+
  ' <label>Total stock (0 = unlimited)<input name="stock_limit" type="number" min="0" max="1000000" value="0" step="1"></label>'+
+ '<label class="owner-toggle"><span>This item is a Gift</span><input name="is_gift" type="checkbox"></label>'+
+ '<div id="ownerGiftOptions" style="display:none">'+
+  '<label>Item inside the gift<select name="gift_reward_item_id" id="ownerGiftRewardItem"><option value="">Choose an existing catalog item</option></select></label>'+
+  '<label>Gift opens at<input name="gift_opens_at" type="datetime-local"></label>'+
+  '<p class="muted">Players can open this gift from their Inventory after the selected date and time. The selected item is guaranteed.</p>'+
+ '</div>'+
  '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
  '<label>3D model file (.glb, max 1 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
  '<label>Or existing 3D model URL<input name="model_url" type="url" maxlength="1000" placeholder="https://...model.glb"></label>'+
@@ -1940,7 +1961,7 @@ async function owner(){
     '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
     '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><select name="currency"><option value="P$" '+((x.currency||"P$")==="P$"?'selected':'')+'>P$</option><option value="Tix" '+(x.currency==="Tix"?'selected':'')+'>Tix</option></select><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><label class="owner-inline-check"><input name="is_limited" type="checkbox" '+(Number(x.is_limited)===1?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" step="1" value="'+Number(x.stock_limit||0)+'" placeholder="Total stock (0 = unlimited)"><label class="owner-inline-check"><input name="is_offsale" type="checkbox" '+(Number(x.is_offsale)===1?'checked':'')+'> Off Sale</label></div>'+
-    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?(Number(x.is_offsale)===1?'Off Sale':'For sale'):'Removed from catalog')+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+'</span></div>'+
+    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?(Number(x.is_offsale)===1?'Off Sale':'For sale'):'Removed from catalog')+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+(Number(x.is_gift)===1?' · GIFT → '+esc(x.gift_reward_name||"Missing reward")+' · opens '+(x.gift_opens_at?esc(new Date(x.gift_opens_at).toLocaleString()):"date unavailable"):'')+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'<button class="button danger-button" type="button" data-delete-item="'+esc(x.id)+'">Delete permanently</button></div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
@@ -1987,10 +2008,34 @@ async function owner(){
   drawOwnerItems();
   const newItemForm=document.getElementById("newItemForm");
   if(!newItemForm)return;
+  const giftToggle=newItemForm.elements.is_gift;
+  const giftOptions=document.getElementById("ownerGiftOptions");
+  const giftRewardSelect=document.getElementById("ownerGiftRewardItem");
+  const updateGiftOptions=()=>{
+   if(giftOptions)giftOptions.style.display=giftToggle?.checked?"":"none";
+   if(giftRewardSelect)giftRewardSelect.required=Boolean(giftToggle?.checked);
+   if(newItemForm.elements.gift_opens_at)newItemForm.elements.gift_opens_at.required=Boolean(giftToggle?.checked);
+  };
+  if(giftRewardSelect){
+   const rewardOptions=ownerItems.filter(item=>Number(item.is_for_sale)===1&&Number(item.is_gift)!==1);
+   giftRewardSelect.innerHTML='<option value="">Choose an existing catalog item</option>'+rewardOptions.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.name)+' · '+esc(item.category)+'</option>').join("");
+  }
+  giftToggle?.addEventListener("change",updateGiftOptions);
+  updateGiftOptions();
   newItemForm.addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
-    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0)};
+    const isGift=f.get("is_gift")==="on";
+    const giftDateRaw=String(f.get("gift_opens_at")||"");
+    let giftOpensAt="";
+    if(isGift){
+     if(!giftDateRaw)throw new Error("Choose when the gift should open.");
+     const parsedGiftDate=new Date(giftDateRaw);
+     if(!Number.isFinite(parsedGiftDate.getTime()))throw new Error("Choose a valid gift opening date and time.");
+     giftOpensAt=parsedGiftDate.toISOString();
+     if(!String(f.get("gift_reward_item_id")||""))throw new Error("Choose the item inside the gift.");
+    }
+    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0),is_gift:isGift,gift_reward_item_id:isGift?String(f.get("gift_reward_item_id")||""):"",gift_opens_at:giftOpensAt};
     const modelFile=f.get("model_file");
     if(modelFile instanceof File && modelFile.size){
      msg.textContent="Uploading 3D model...";
@@ -2003,8 +2048,9 @@ async function owner(){
     msg.textContent="Saving item...";
     const result=await api("/api/owner/items",{method:"POST",body:JSON.stringify(data)});
     if(!isActiveView(view))return;
-    e.target.reset();e.target.elements.price.value=50;e.target.elements.currency.value="P$";msg.textContent="Item added.";
-    ownerItems.unshift({id:result.id,...data,is_limited:data.is_limited?1:0,is_offsale:data.is_offsale?1:0,stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:data.category==="Accessories"?"3D":"IMAGE_ONLY"});
+    e.target.reset();e.target.elements.price.value=50;e.target.elements.currency.value="P$";updateGiftOptions();msg.textContent="Item added.";
+    const giftReward=ownerItems.find(item=>item.id===data.gift_reward_item_id);
+    ownerItems.unshift({id:result.id,...data,is_limited:data.is_limited?1:0,is_offsale:data.is_offsale?1:0,is_gift:data.is_gift?1:0,gift_reward_name:giftReward?.name||"",stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:data.category==="Accessories"?"3D":"IMAGE_ONLY"});
     drawOwnerItems();updateOwnerItemCount();
    }catch(err){msg.textContent=err.message}
   });
