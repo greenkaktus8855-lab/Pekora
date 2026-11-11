@@ -1149,8 +1149,16 @@ async function route(request, env) {
   }
 
   if (request.method === "GET" && path === "/api/catalog") {
-    const rows = await env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN gi.gift_item_id IS NULL THEN 0 ELSE 1 END AS is_gift,gi.opens_at AS gift_opens_at,gr.name AS gift_reward_name,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id LEFT JOIN gift_items gi ON gi.gift_item_id=i.id LEFT JOIN items gr ON gr.id=gi.reward_item_id WHERE i.is_for_sale=1 AND i.is_catalog_visible=1 ORDER BY i.created_at DESC,i.rowid DESC").all();
-    return json({ items:rows.results || [] });
+    const [rows,rewardRows] = await Promise.all([
+      env.DB.prepare("SELECT i.id,i.name,i.description,i.category,i.price,i.currency,i.rap_value,i.rap_currency,i.image_url,i.model_url,i.asset_id,i.asset_type_id,i.is_limited,i.is_offsale,i.stock_limit,i.stock_sold,i.created_at,ic.creator_name,cu.public_id AS creator_public_id,CASE WHEN gi.gift_item_id IS NULL THEN 0 ELSE 1 END AS is_gift,gi.opens_at AS gift_opens_at,gr.name AS gift_reward_name,CASE WHEN i.category='Accessories' THEN CASE WHEN i.model_url<>'' THEN '3D' ELSE '3D_MISSING' END ELSE 'IMAGE_ONLY' END AS asset_kind FROM items i LEFT JOIN item_creators ic ON ic.item_id=i.id LEFT JOIN users cu ON cu.id=ic.creator_id LEFT JOIN gift_items gi ON gi.gift_item_id=i.id LEFT JOIN items gr ON gr.id=gi.reward_item_id WHERE i.is_for_sale=1 AND i.is_catalog_visible=1 ORDER BY i.created_at DESC,i.rowid DESC").all(),
+      env.DB.prepare("SELECT o.gift_item_id,o.reward_item_id,o.chance_percent,i.name AS reward_name FROM gift_reward_options o JOIN items i ON i.id=o.reward_item_id WHERE o.gift_item_id IN (SELECT id FROM items WHERE is_for_sale=1 AND is_catalog_visible=1) ORDER BY o.gift_item_id,o.sort_order").all()
+    ]);
+    const rewardsByGift=new Map();
+    for(const option of rewardRows.results||[]){
+      if(!rewardsByGift.has(option.gift_item_id))rewardsByGift.set(option.gift_item_id,[]);
+      rewardsByGift.get(option.gift_item_id).push({item_id:option.reward_item_id,name:option.reward_name,chance_percent:Number(option.chance_percent)});
+    }
+    return json({items:(rows.results||[]).map(item=>({...item,gift_rewards:rewardsByGift.get(item.id)||[]}))});
   }
 
   if (path === "/api/creator/model-submissions" && request.method === "GET") {
