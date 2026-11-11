@@ -1557,6 +1557,7 @@ async function owner(){
   '<label>Price currency<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label>'+
  '<label class="owner-toggle"><span>Limited item</span><input name="is_limited" type="checkbox"></label>'+
  '<label class="owner-toggle"><span>Off Sale (visible, cannot buy)</span><input name="is_offsale" type="checkbox"></label>'+
+ '<label class="owner-toggle"><span>Show in public Catalog</span><input name="is_catalog_visible" type="checkbox" checked></label>'+
  ' <label>Total stock (0 = unlimited)<input name="stock_limit" type="number" min="0" max="1000000" value="0" step="1"></label>'+
  '<label class="owner-toggle"><span>This item is a Gift</span><input name="is_gift" type="checkbox"></label>'+
  '<div id="ownerGiftOptions" style="display:none">'+
@@ -1942,7 +1943,7 @@ async function owner(){
   let ownerItems=data.items||[];
   function updateOwnerItemCount(){
    const count=document.querySelectorAll("#ownerStats .info-panel")[1]?.querySelector("b");
-   if(count)count.textContent=ownerItems.filter(item=>Number(item.is_for_sale)===1).length;
+   if(count)count.textContent=ownerItems.filter(item=>Number(item.is_for_sale)===1&&Number(item.is_catalog_visible)!==0).length;
   }
   document.getElementById("clearPublicCatalog").addEventListener("click",async()=>{
    if(!confirm("Remove ALL items from the public catalog? Existing user inventories and balances will not be changed."))return;
@@ -1960,16 +1961,16 @@ async function owner(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
     '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
-    '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><select name="currency"><option value="P$" '+((x.currency||"P$")==="P$"?'selected':'')+'>P$</option><option value="Tix" '+(x.currency==="Tix"?'selected':'')+'>Tix</option></select><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><label class="owner-inline-check"><input name="is_limited" type="checkbox" '+(Number(x.is_limited)===1?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" step="1" value="'+Number(x.stock_limit||0)+'" placeholder="Total stock (0 = unlimited)"><label class="owner-inline-check"><input name="is_offsale" type="checkbox" '+(Number(x.is_offsale)===1?'checked':'')+'> Off Sale</label></div>'+
-    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(x.is_for_sale?(Number(x.is_offsale)===1?'Off Sale':'For sale'):'Removed from catalog')+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+(Number(x.is_gift)===1?' · GIFT → '+esc(x.gift_reward_name||"Missing reward")+' · opens '+(x.gift_opens_at?esc(new Date(x.gift_opens_at).toLocaleString()):"date unavailable"):'')+'</span></div>'+
+    '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><select name="currency"><option value="P$" '+((x.currency||"P$")==="P$"?'selected':'')+'>P$</option><option value="Tix" '+(x.currency==="Tix"?'selected':'')+'>Tix</option></select><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><label class="owner-inline-check"><input name="is_limited" type="checkbox" '+(Number(x.is_limited)===1?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" step="1" value="'+Number(x.stock_limit||0)+'" placeholder="Total stock (0 = unlimited)"><label class="owner-inline-check"><input name="is_offsale" type="checkbox" '+(Number(x.is_offsale)===1?'checked':'')+'> Off Sale</label><label class="owner-inline-check"><input name="is_catalog_visible" type="checkbox" '+(Number(x.is_catalog_visible)!==0?'checked':'')+'> Show in Catalog</label></div>'+
+    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(Number(x.is_for_sale)!==1?'Removed from catalog':(Number(x.is_catalog_visible)===0?'Hidden from catalog':(Number(x.is_offsale)===1?'Off Sale':'For sale')))+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+(Number(x.is_gift)===1?' · GIFT → '+esc(x.gift_reward_name||"Missing reward")+' · opens '+(x.gift_opens_at?esc(new Date(x.gift_opens_at).toLocaleString()):"date unavailable"):'')+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'<button class="button danger-button" type="button" data-delete-item="'+esc(x.id)+'">Delete permanently</button></div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
    document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
     e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
     try{
-     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0)};
+     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",is_catalog_visible:f.get("is_catalog_visible")==="on",stock_limit:Number(f.get("stock_limit")||0)};
      await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(updated)});
      if(!isActiveView(view))return;
-     ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated,is_limited:updated.is_limited?1:0,is_offsale:updated.is_offsale?1:0}:item);
+     ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated,is_limited:updated.is_limited?1:0,is_offsale:updated.is_offsale?1:0,is_catalog_visible:updated.is_catalog_visible?1:0}:item);
      drawOwnerItems();updateOwnerItemCount();toast("Item saved");
     }catch(err){toast(err.message)}
    }));
@@ -2018,7 +2019,7 @@ async function owner(){
   };
   if(giftRewardSelect){
    const rewardOptions=ownerItems.filter(item=>Number(item.is_for_sale)===1&&Number(item.is_offsale)===1&&Number(item.is_gift)!==1);
-   giftRewardSelect.innerHTML='<option value="">Choose an Offsale catalog item</option>'+rewardOptions.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.name)+' · '+esc(item.category)+' · Offsale</option>').join("");
+   giftRewardSelect.innerHTML='<option value="">Choose an Offsale item</option>'+rewardOptions.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.name)+' · '+esc(item.category)+' · Offsale</option>').join("");
   }
   giftToggle?.addEventListener("change",updateGiftOptions);
   updateGiftOptions();
@@ -2035,7 +2036,7 @@ async function owner(){
      giftOpensAt=parsedGiftDate.toISOString();
      if(!String(f.get("gift_reward_item_id")||""))throw new Error("Choose the item inside the gift.");
     }
-    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0),is_gift:isGift,gift_reward_item_id:isGift?String(f.get("gift_reward_item_id")||""):"",gift_opens_at:giftOpensAt};
+    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0),is_catalog_visible:f.get("is_catalog_visible")==="on",is_gift:isGift,gift_reward_item_id:isGift?String(f.get("gift_reward_item_id")||""):"",gift_opens_at:giftOpensAt};
     const modelFile=f.get("model_file");
     if(modelFile instanceof File && modelFile.size){
      msg.textContent="Uploading 3D model...";
@@ -2050,7 +2051,7 @@ async function owner(){
     if(!isActiveView(view))return;
     e.target.reset();e.target.elements.price.value=50;e.target.elements.currency.value="P$";updateGiftOptions();msg.textContent="Item added.";
     const giftReward=ownerItems.find(item=>item.id===data.gift_reward_item_id);
-    ownerItems.unshift({id:result.id,...data,is_limited:data.is_limited?1:0,is_offsale:data.is_offsale?1:0,is_gift:data.is_gift?1:0,gift_reward_name:giftReward?.name||"",stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:data.category==="Accessories"?"3D":"IMAGE_ONLY"});
+    ownerItems.unshift({id:result.id,...data,is_limited:data.is_limited?1:0,is_offsale:data.is_offsale?1:0,is_gift:data.is_gift?1:0,is_catalog_visible:data.is_catalog_visible?1:0,gift_reward_name:giftReward?.name||"",stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:data.category==="Accessories"?"3D":"IMAGE_ONLY"});
     drawOwnerItems();updateOwnerItemCount();
    }catch(err){msg.textContent=err.message}
   });
