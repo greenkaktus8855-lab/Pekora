@@ -925,7 +925,7 @@ const AVATAR_ASSET_TYPE_NAMES = Object.freeze({
   41:"Hair Accessory",42:"Face Accessory",43:"Neck Accessory",44:"Shoulder Accessory",
   45:"Front Accessory",46:"Back Accessory",47:"Waist Accessory",
   48:"Climb Animation",49:"Death Animation",50:"Fall Animation",51:"Idle Animation",
-  52:"Jump Animation",53:"Run Animation",54:"Swim Animation"
+  52:"Jump Animation",53:"Run Animation",54:"Swim Animation",55:"Walk Animation",61:"Emote Animation"
 });
 
 async function getAvatarRenderProfile(env, publicId) {
@@ -954,10 +954,40 @@ function createRccAvatarAppearance(profileData, baseUrl) {
       },
       currentVersionId:Number(item.asset_id)
     }));
-  const assetAndAssetTypeIds = assets.map(asset => ({
-    assetId:asset.id,
-    assetTypeId:asset.assetType.id
-  }));
+
+  // Match OpenPekora's CharacterFetch contract: animations and emotes are
+  // separate from the ordinary asset/type pairs.
+  const animationTypeKeys = {
+    48:"climb",49:"death",50:"fall",51:"idle",
+    52:"jump",53:"run",54:"swim",55:"walk"
+  };
+  const animationTypeIds = new Set(Object.keys(animationTypeKeys).map(Number));
+  const animationAssetIds = {};
+  const emotes = [];
+  for (const asset of assets) {
+    const typeId = Number(asset.assetType.id);
+    const animationKey = animationTypeKeys[typeId];
+    if (animationKey && !animationAssetIds[animationKey]) {
+      animationAssetIds[animationKey] = asset.id;
+    } else if (typeId === 61) {
+      emotes.push({
+        assetId:asset.id,
+        assetName:asset.name,
+        position:emotes.length+1
+      });
+    }
+  }
+
+  const assetAndAssetTypeIds = assets
+    .filter(asset => Number(asset.assetType.id)!==61 && !animationTypeIds.has(Number(asset.assetType.id)))
+    .map(asset => ({
+      assetId:asset.id,
+      assetTypeId:asset.assetType.id
+    }));
+  const equippedGearVersionIds = assets
+    .filter(asset => Number(asset.assetType.id)===19)
+    .map(asset => asset.id);
+
   const c = settings.bodyColors;
   const bodyColors = {
     ...c,
@@ -965,7 +995,7 @@ function createRccAvatarAppearance(profileData, baseUrl) {
     LeftArmColor:c.leftArmColorId,
     LeftLegColor:c.leftLegColorId,
     RightArmColor:c.rightArmColorId,
-    RightLegColor:c.rightArmColorId,
+    RightLegColor:c.rightLegColorId,
     TorsoColor:c.torsoColorId
   };
   const s = settings.scales;
@@ -981,15 +1011,15 @@ function createRccAvatarAppearance(profileData, baseUrl) {
   return {
     resolvedAvatarType:settings.rigType,
     accessoryVersionIds:[],
-    equippedGearVersionIds:assets.filter(asset=>asset.assetType.id===19).map(asset=>asset.id),
+    equippedGearVersionIds,
     assetAndAssetTypeIds,
-    backpackGearVersionIds:[],
-    animationAssetIds:{},
+    backpackGearVersionIds:equippedGearVersionIds,
+    animationAssetIds,
     playerAvatarType:settings.rigType,
     scales,
     bodyColorsUrl:baseUrl+"Asset/BodyColors.ashx?userId="+encodeURIComponent(profileData.profile.public_id),
     bodyColors,
-    emotes:[],
+    emotes,
     assets
   };
 }
@@ -1047,7 +1077,7 @@ async function route(request, env) {
         '</Properties></Item></roblox>';
       return new Response(xml,{headers:{
         "content-type":"application/xml; charset=utf-8",
-        "cache-control":"private, max-age=30",
+        "cache-control":"private, no-store",
         "x-content-type-options":"nosniff"
       }});
     }
