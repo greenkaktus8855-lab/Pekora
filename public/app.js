@@ -107,6 +107,7 @@ function renderSidebar(active="home"){
  const links=[
   ["home","icon-nav-home","Home"],
   ["profile","icon-nav-profile","Profile"],
+  ["avatar","icon-nav-profile","Avatar"],
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-trade","Trades"],
   ["inventory","icon-nav-inventory","Inventory"],
@@ -1203,6 +1204,120 @@ async function groupPage(groupId){
   });
  }catch(error){
   if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(error.message)+' <a href="/#groups" data-page="groups">Back to Groups</a></div>';
+ }
+}
+
+async function avatarPage(){
+ const view=beginView();
+ renderSidebar("avatar");
+ if(!me){
+  app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> to edit your avatar.</div>';
+  return;
+ }
+ app.innerHTML='<div class="empty">Loading your avatar...</div>';
+ try{
+  const [avatarData,inventoryData]=await Promise.all([
+   api("/api/avatar"),
+   api("/api/inventory")
+  ]);
+  if(!isActiveView(view))return;
+
+  const equipped=Array.isArray(avatarData.equipped)?avatarData.equipped:[];
+  const inventory=Array.isArray(inventoryData.items)?inventoryData.items:[];
+  const equippedIds=new Set(equipped.map(item=>String(item.id)));
+  const eligible=inventory.filter(item=>
+   ["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category)
+  );
+
+  const renderItem=(item)=>{
+   const canRender=Number(item.asset_id)>0&&Number(item.asset_type_id)>0;
+   const isWearing=equippedIds.has(String(item.id));
+   const actionButton=canRender
+    ? '<button class="button '+(isWearing?'secondary':'')+' avatar-item-toggle" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+(isWearing?'remove':'wear')+'">'+(isWearing?'Remove':'Wear')+'</button>'
+    : '<button class="button secondary" type="button" disabled title="This item has no OpenPekora asset ID">Not renderable</button>';
+   return '<article class="sakura-avatar-item">'+
+    '<div class="sakura-avatar-item-image">'+itemPreview(item)+'</div>'+
+    '<div class="sakura-avatar-item-info"><strong>'+esc(item.name)+'</strong><span>'+esc(item.category)+(Number(item.quantity)>1?' · ×'+Number(item.quantity):'')+'</span>'+(isWearing?'<span class="sakura-avatar-wearing">Wearing</span>':'')+'</div>'+
+    actionButton+
+   '</article>';
+  };
+
+  const equippedRows=equipped.length
+   ? equipped.map(renderItem).join("")
+   : '<div class="op-profile-empty">Nothing is equipped yet.</div>';
+  const inventoryRows=eligible.length
+   ? eligible.map(renderItem).join("")
+   : '<div class="op-profile-empty">No avatar items in your inventory yet.</div>';
+
+  app.innerHTML='<div class="sakura-avatar-editor-page">'+
+   '<div class="sakura-avatar-editor-heading"><div><h1 class="page-title">Avatar</h1><p class="muted">Edit your Sakura character and see the OpenPekora 3D render.</p></div>'+
+    '<button class="button secondary" id="refreshSakuraAvatar" type="button">Refresh render</button></div>'+
+   '<section class="sakura-avatar-editor-preview-section">'+
+    '<div class="sakura-profile-avatar sakura-avatar-editor-preview"><div class="sakura-avatar-fallback">'+avatar(me.username)+'</div><div class="sakura-avatar-render" data-sakura-avatar data-avatar-id="'+esc(me.publicId||"")+'"><span class="sakura-avatar-loading">Loading OpenPekora avatar...</span></div></div>'+
+    '<div class="sakura-avatar-editor-settings"><h2>Character settings</h2>'+
+     '<label for="sakuraAvatarRig">Avatar type</label><select id="sakuraAvatarRig" class="catalog-select"><option value="R6" '+(avatarData.rigType==="R6"?"selected":"")+'>R6</option><option value="R15" '+(avatarData.rigType==="R15"?"selected":"")+'>R15</option></select>'+
+     '<p class="muted">Changes are saved to your Sakura account.</p>'+
+     '<a class="button secondary" href="/#inventory" data-page="inventory">Open Inventory</a>'+
+    '</div>'+
+   '</section>'+
+   '<section class="sakura-avatar-editor-section"><h2>Wearing</h2><div class="sakura-avatar-item-list">'+equippedRows+'</div></section>'+
+   '<section class="sakura-avatar-editor-section"><h2>Your avatar items</h2><div class="sakura-avatar-item-list">'+inventoryRows+'</div></section>'+
+  '</div>';
+
+  mountSakuraProfileAvatar(me.publicId);
+
+  document.getElementById("refreshSakuraAvatar")?.addEventListener("click",async event=>{
+   const button=event.currentTarget;
+   button.disabled=true;
+   button.textContent="Refreshing...";
+   try{
+    const host=app.querySelector("[data-sakura-avatar]");
+    if(host)host.innerHTML='<span class="sakura-avatar-loading">Requesting a fresh OpenPekora render...</span>';
+    const response=await fetch("/api/avatar/render/"+encodeURIComponent(me.publicId)+"?refresh=1&nonce="+Date.now(),{
+     credentials:"same-origin",
+     cache:"no-store"
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||"Avatar render failed.");
+    if(isActiveView(view))await avatarPage();
+   }catch(error){
+    if(isActiveView(view)){
+     toast(error.message);
+     button.disabled=false;
+     button.textContent="Refresh render";
+    }
+   }
+  });
+
+  document.getElementById("sakuraAvatarRig")?.addEventListener("change",async event=>{
+   const control=event.currentTarget;
+   const rigType=control.value;
+   control.disabled=true;
+   try{
+    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"rig",rigType})});
+    if(isActiveView(view))await avatarPage();
+   }catch(error){
+    toast(error.message);
+    if(isActiveView(view))control.disabled=false;
+   }
+  });
+
+  app.querySelectorAll("[data-avatar-item]").forEach(button=>{
+   button.addEventListener("click",async()=>{
+    const itemId=button.dataset.avatarItem;
+    const action=button.dataset.avatarAction;
+    button.disabled=true;
+    try{
+     await api("/api/avatar",{method:"PUT",body:JSON.stringify({action,itemId})});
+     if(isActiveView(view))await avatarPage();
+    }catch(error){
+     toast(error.message);
+     if(isActiveView(view))button.disabled=false;
+    }
+   });
+  });
+ }catch(error){
+  if(isActiveView(view))app.innerHTML='<div class="empty">Could not load avatar: '+esc(error.message)+'</div>';
  }
 }
 
@@ -2390,6 +2505,7 @@ async function render(name){
  else if(name==="group")await groupPage(query.get("id"));
  else if(name==="banned")await bannedAccountPage(query.get("username")||query.get("id"));
  else if(name==="profile")await (query.get("id")?profile(query.get("id"),true):profile(query.get("username")||me?.username));
+ else if(name==="avatar")await avatarPage();
  else if(name==="item")await showItem(query.get("id"),false);
  else if(name==="users"||name==="community")users();
  else if(name==="rap"||name==="rapleaderboard"||name==="leaderboard")await rapLeaderboardPage();
