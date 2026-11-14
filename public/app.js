@@ -766,7 +766,7 @@ async function profile(identifier=me?.username,byId=false){
   const publicId=p.publicId??p.id,profileUrl="/#profile?id="+encodeURIComponent(publicId);
   if(!byId&&publicId){history.replaceState({page:"profile",publicId},"",profileUrl)}
   const profileAvatar=avatar(p.username);
-  const profileRenderImage="";
+  const profileRenderImage='<img id="profileRenderImage" class="profile-render-image" alt="Roblox avatar preview" loading="eager" hidden>';
   app.innerHTML='<div class="op-profile">'+
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+profileRenderImage+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
@@ -780,8 +780,28 @@ async function profile(identifier=me?.username,byId=false){
    '</section>'+
    '<section class="op-profile-section op-profile-badges-section"><h2>Badges</h2>'+profileBadgesMarkup(p)+'</section>'+
    '</div>';
+  loadProfileAvatarRender(p.username,view);
   if(!isSelf&&me)loadProfileFriendAction(p.username);
  }catch(e){if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+}
+async function loadProfileAvatarRender(username,view){
+ const image=document.getElementById("profileRenderImage");
+ if(!image)return;
+ try{
+  const result=await api("/api/avatar/render?username="+encodeURIComponent(username));
+  if(!isActiveView(view)||!image.isConnected||!result?.available||!result.imageUrl)return;
+  const imageUrl=new URL(result.imageUrl);
+  const host=imageUrl.hostname.toLowerCase();
+  if(imageUrl.protocol!=="https:"||!(host==="rbxcdn.com"||host.endsWith(".rbxcdn.com")))return;
+  image.addEventListener("error",()=>{
+   image.hidden=true;
+   image.removeAttribute("src");
+  },{once:true});
+  image.src=imageUrl.href;
+  image.hidden=false;
+ }catch(error){
+  console.warn("[Sakura avatar render] Could not load Roblox avatar preview:",error?.message||error);
+ }
 }
 async function loadProfileFriendAction(username){
  const view=activeView,host=document.getElementById("profileFriendAction");if(!host)return;
