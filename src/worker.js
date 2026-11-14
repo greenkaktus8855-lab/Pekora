@@ -933,7 +933,7 @@ async function getAvatarRenderProfile(env, publicId) {
     .bind(Number(publicId)).first();
   if (!profile) return null;
   const [rows,settings] = await Promise.all([
-    env.DB.prepare("SELECT i.id,i.name,i.category,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC")
+    env.DB.prepare("SELECT i.id,i.name,i.category,i.model_url,i.asset_id,CASE WHEN i.asset_type_id>0 THEN i.asset_type_id ELSE CASE i.category WHEN 'Hats' THEN 8 WHEN 'Hair' THEN 41 WHEN 'Faces' THEN 18 WHEN 'T-Shirts' THEN 2 WHEN 'Shirts' THEN 11 WHEN 'Pants' THEN 12 ELSE 0 END END AS asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC")
       .bind(profile.id).all(),
     loadAvatarSettings(env,profile.id)
   ]);
@@ -965,8 +965,18 @@ function createRccAvatarAppearance(profileData, baseUrl) {
     LeftArmColor:c.leftArmColorId,
     LeftLegColor:c.leftLegColorId,
     RightArmColor:c.rightArmColorId,
-    RightLegColor:c.rightLegColorId,
+    RightLegColor:c.rightArmColorId,
     TorsoColor:c.torsoColorId
+  };
+  const s = settings.scales;
+  const scales = {
+    ...s,
+    Height:s.height,
+    Width:s.width,
+    Head:s.head,
+    Depth:s.depth,
+    Proportion:s.proportion,
+    BodyType:s.bodyType
   };
   return {
     resolvedAvatarType:settings.rigType,
@@ -976,7 +986,7 @@ function createRccAvatarAppearance(profileData, baseUrl) {
     backpackGearVersionIds:[],
     animationAssetIds:{},
     playerAvatarType:settings.rigType,
-    scales:settings.scales,
+    scales,
     bodyColorsUrl:baseUrl+"Asset/BodyColors.ashx?userId="+encodeURIComponent(profileData.profile.public_id),
     bodyColors,
     emotes:[],
@@ -1860,7 +1870,7 @@ async function route(request, env) {
     const profile = await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND is_banned=0").bind(Number(publicAvatarMatch[1])).first();
     if (!profile) return fail("User not found.",404);
     const [rows,settings] = await Promise.all([
-      env.DB.prepare("SELECT i.id,i.name,i.category,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND (i.model_url<>'' OR (i.asset_id>0 AND i.asset_type_id>0)) ORDER BY e.equipped_at DESC").bind(profile.id).all(),
+      env.DB.prepare("SELECT i.id,i.name,i.category,i.model_url,i.asset_id,CASE WHEN i.asset_type_id>0 THEN i.asset_type_id ELSE CASE i.category WHEN 'Hats' THEN 8 WHEN 'Hair' THEN 41 WHEN 'Faces' THEN 18 WHEN 'T-Shirts' THEN 2 WHEN 'Shirts' THEN 11 WHEN 'Pants' THEN 12 ELSE 0 END END AS asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND (i.model_url<>'' OR i.asset_id>0) ORDER BY e.equipped_at DESC").bind(profile.id).all(),
       loadAvatarSettings(env,profile.id)
     ]);
     return json({enabled:true,equipped:rows.results||[],...settings});
@@ -1869,7 +1879,7 @@ async function route(request, env) {
   if (path === "/api/avatar" && request.method === "GET") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const [rows,settings] = await Promise.all([env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND (i.model_url<>'' OR (i.asset_id>0 AND i.asset_type_id>0)) ORDER BY e.equipped_at DESC").bind(user.id).all(),loadAvatarSettings(env,user.id)]);
+    const [rows,settings] = await Promise.all([env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url,i.asset_id,CASE WHEN i.asset_type_id>0 THEN i.asset_type_id ELSE CASE i.category WHEN 'Hats' THEN 8 WHEN 'Hair' THEN 41 WHEN 'Faces' THEN 18 WHEN 'T-Shirts' THEN 2 WHEN 'Shirts' THEN 11 WHEN 'Pants' THEN 12 ELSE 0 END END AS asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND (i.model_url<>'' OR i.asset_id>0) ORDER BY e.equipped_at DESC").bind(user.id).all(),loadAvatarSettings(env,user.id)]);
     return json({enabled:true,equipped:rows.results||[],...settings});
   }
 
@@ -1952,7 +1962,7 @@ async function route(request, env) {
 
     const itemId = String(data.itemId||"");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId) || !["wear","remove"].includes(action)) return fail("Choose an inventory item and a valid avatar action.");
-    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id,i.asset_type_id,i.model_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
+    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id,CASE WHEN i.asset_type_id>0 THEN i.asset_type_id ELSE CASE i.category WHEN 'Hats' THEN 8 WHEN 'Hair' THEN 41 WHEN 'Faces' THEN 18 WHEN 'T-Shirts' THEN 2 WHEN 'Shirts' THEN 11 WHEN 'Pants' THEN 12 ELSE 0 END END AS asset_type_id,i.model_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
     if (!item) return fail("You can only equip items in your inventory.",404);
     if (!["Hats","Hair","Faces","T-Shirts","Shirts","Pants","Accessories"].includes(item.category)) return fail("This item category cannot be equipped on the avatar.");
     if (action === "remove") {
