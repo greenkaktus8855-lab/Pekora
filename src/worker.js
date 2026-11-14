@@ -226,7 +226,7 @@ async function ensureSiteSettings(env) {
         }
       }
 
-      await env.DB.batch([
+      const schemaStatements = [
         env.DB.prepare("CREATE TABLE IF NOT EXISTS site_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS user_memberships (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, membership_type TEXT NOT NULL DEFAULT 'None' CHECK(membership_type IN ('None','BuildersClub','TurboBuildersClub','OutrageousBuildersClub','Premium')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS membership_daily_rewards (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, reward_date TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0), created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,reward_date))"),
@@ -295,7 +295,15 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("DELETE FROM auth_rate_limits WHERE window_started_at < CAST(strftime('%s','now') AS INTEGER)-86400"),
         env.DB.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')"),
         env.DB.prepare("DELETE FROM banned_session_notices WHERE expires_at <= datetime('now')")
-      ]);
+      ];
+      for (let statementIndex = 0; statementIndex < schemaStatements.length; statementIndex++) {
+        try {
+          await schemaStatements[statementIndex].run();
+        } catch (schemaError) {
+          console.error("[Pekora setup] Schema statement failed at index " + statementIndex + ":", schemaError);
+          throw schemaError;
+        }
+      }
       await env.DB.prepare("INSERT OR IGNORE INTO user_badges (user_id,badge_key) SELECT id,'ADMINISTRATOR' FROM users WHERE username COLLATE NOCASE IN ('Admin','Sakura')").run();
 
 
