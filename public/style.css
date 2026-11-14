@@ -1446,3 +1446,17 @@ body{color:#f0eaf8!important}
  .currency-sale-quantity{justify-self:start}
  .currency-sale-row>b{justify-self:end}
 }
+
+
+/* Inventory management */
+.inventory-management-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 14px}
+.inventory-management-heading .page-title{margin:0 0 4px}
+.inventory-management-heading .inventory-sell-intro{margin:0}
+.inventory-management-heading>#clearInventoryButton{flex:0 0 auto}
+.inventory-item-actions{display:flex;gap:8px;width:100%;margin-top:10px}
+.inventory-remove-button{width:100%;min-height:34px}
+.inventory-item-actions button:disabled,#clearInventoryButton:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:560px){
+ .inventory-management-heading{align-items:stretch;flex-direction:column}
+ .inventory-management-heading>#clearInventoryButton{width:100%}
+}
