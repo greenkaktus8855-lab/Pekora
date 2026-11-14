@@ -16,11 +16,15 @@ function decodeBase64Text(value) {
 }
 
 function vectorFrom(value, fallback = [0, 0, 0]) {
-  return new THREE.Vector3(
-    Number(value?.x ?? fallback[0]),
-    Number(value?.y ?? fallback[1]),
-    Number(value?.z ?? fallback[2])
-  );
+  const coordinates = [value?.x, value?.y, value?.z];
+  return new THREE.Vector3(...coordinates.map((coordinate, index) => {
+    const number = Number(coordinate);
+    return Number.isFinite(number) ? number : fallback[index];
+  }));
+}
+
+function isFiniteVector(value) {
+  return Boolean(value) && ["x", "y", "z"].every(key => Number.isFinite(Number(value[key])));
 }
 
 function prepareMaterials(mtlText, files, objectUrls) {
@@ -90,6 +94,10 @@ function prepareMaterials(mtlText, files, objectUrls) {
 
   for (const [name, material] of Object.entries(creator.materials || {})) {
     if (!material || !/^Player\d+/i.test(name)) continue;
+    if (material.map) {
+      material.map.colorSpace = THREE.SRGBColorSpace;
+      material.map.needsUpdate = true;
+    }
     material.opacity = 1;
     material.transparent = false;
     material.alphaTest = 0.02;
@@ -121,6 +129,7 @@ export async function mountSakuraAvatar(host, publicId) {
 
   const response = await fetch("/api/avatar/render/" + encodeURIComponent(publicId), {
     credentials: "same-origin",
+    cache: "no-store",
     headers: { Accept: "application/json" }
   });
   const renderData = await response.json().catch(() => ({}));
@@ -150,12 +159,16 @@ export async function mountSakuraAvatar(host, publicId) {
 
   const bounds = new THREE.Box3().setFromObject(avatarObject);
   if (bounds.isEmpty()) throw new Error("The avatar renderer returned an empty model.");
-  const min = vectorFrom(renderData.aabb?.min);
-  const max = vectorFrom(renderData.aabb?.max);
-  const center = min.clone().add(max).multiplyScalar(0.5);
-  if (!Number.isFinite(center.x) || !Number.isFinite(center.y) || !Number.isFinite(center.z)) {
+  const minValue = renderData.aabb?.min;
+  const maxValue = renderData.aabb?.max;
+  const center = new THREE.Vector3();
+  if (isFiniteVector(minValue) && isFiniteVector(maxValue)) {
+    center.copy(vectorFrom(minValue)).add(vectorFrom(maxValue)).multiplyScalar(0.5);
+  } else {
     bounds.getCenter(center);
   }
+  const modelSize = bounds.getSize(new THREE.Vector3());
+  const modelDistance = Math.max(modelSize.length() * 1.8, 5);
 
   const width = Math.max(1, host.clientWidth || 178);
   const height = Math.max(1, host.clientHeight || 228);
@@ -169,8 +182,12 @@ export async function mountSakuraAvatar(host, publicId) {
     0.01,
     10000
   );
-  const cameraPosition = vectorFrom(cameraData.position, [0, 2, 5]);
-  if (cameraPosition.distanceTo(center) < 0.05) cameraPosition.z += 5;
+  const cameraPosition = isFiniteVector(cameraData.position)
+    ? vectorFrom(cameraData.position)
+    : new THREE.Vector3(center.x, center.y + Math.max(0.5, modelSize.y * 0.3), center.z + modelDistance);
+  if (cameraPosition.distanceTo(center) < 0.05) {
+    cameraPosition.set(center.x, center.y + Math.max(0.5, modelSize.y * 0.3), center.z + modelDistance);
+  }
   camera.position.copy(cameraPosition);
   camera.lookAt(center);
 
