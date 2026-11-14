@@ -34,7 +34,22 @@ catch { throw "game-renderer\config.json is invalid JSON: $($_.Exception.Message
 $secret = [string]$env:PEKORA_RENDERER_SECRET
 if ([string]::IsNullOrWhiteSpace($secret)) {
     $bridgeBaseUrl = [string]$config.BaseUrl
-    if ($bridgeBaseUrl -match '/_sakura-rcc/([^/]+)/?
+    if ($bridgeBaseUrl -match '/_sakura-rcc/([^/]+)/') {
+        $secret = [Uri]::UnescapeDataString($Matches[1])
+    }
+}
+if ([string]::IsNullOrWhiteSpace($secret)) {
+    $secureSecret = Read-Host "Enter the SAME value as Cloudflare Worker secret AVATAR_RENDERER_SECRET" -AsSecureString
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSecret)
+    try {
+        $secret = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+    }
+}
+if ([string]::IsNullOrWhiteSpace($secret) -or $secret.Length -lt 24) {
+    throw "The renderer secret must contain at least 24 characters. Nothing was started."
+}
 $port = [int]$config.Ports.Process
 if ($port -lt 1 -or $port -gt 65535) { throw "Ports.Process in config.json is invalid." }
 
