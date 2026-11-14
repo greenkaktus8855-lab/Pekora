@@ -79,7 +79,7 @@ function prepareMaterials(mtlText, files, objectUrls) {
     }
 
     // Avatar atlas materials should not inherit accidental zero-opacity MTL values.
-    if (/^Player\d+/i.test(materialName) || matchedTexture) {
+    if (/Player\d+/i.test(materialName) || matchedTexture) {
       info.d = 1;
       delete info.Tr;
       delete info.tr;
