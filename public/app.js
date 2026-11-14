@@ -778,12 +778,13 @@ async function mountSakuraProfileAvatar(publicId){
  const host=app.querySelector("[data-sakura-avatar]");
  if(!host)return;
  try{
-  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-sakura-20261114-3");
+  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-sakura-20261114-4");
   const renderer=await sakuraAvatarModulePromise;
   if(!host.isConnected)return;
   const dispose=await renderer.mountSakuraAvatar(host,publicId);
   if(!host.isConnected&&typeof dispose==="function")dispose();
  }catch(error){
+  sakuraAvatarModulePromise=null;
   if(!host.isConnected)return;
   host.innerHTML='<span class="sakura-avatar-loading">'+esc(error?.message||"3D avatar is unavailable")+'</span>';
   console.error("[Sakura avatar]",error);
@@ -1256,7 +1257,7 @@ async function avatarPage(){
    const renderable=Number(item.asset_id)>0&&Number(item.asset_type_id)>0;
    const action=mode==="wearing"?"remove":(wearing?"remove":"wear");
    const label=action==="remove"?"Remove":"Wear";
-   const button=renderable
+   const button=action==="remove"||renderable
     ? '<button class="button '+(action==="remove"?'secondary':'primary')+' avatar-item-toggle" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+action+'">'+label+'</button>'
     : '<button class="button secondary" type="button" disabled title="Wearing this item is temporarily unavailable">Temporarily unavailable to wear</button>';
    return '<article class="op-avatar-item">'+
@@ -1385,9 +1386,7 @@ async function avatarPage(){
    button.disabled=true;
    button.textContent="Saving...";
    try{
-    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"rig",rigType})});
-    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"colors",bodyColors})});
-    if(rigType==="R15")await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"scales",scales})});
+    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"settings",rigType,bodyColors,scales})});
     document.getElementById("opAvatarSaveStatus").textContent="Saved. Refreshing your avatar...";
     if(isActiveView(view))await avatarPage();
    }catch(error){
