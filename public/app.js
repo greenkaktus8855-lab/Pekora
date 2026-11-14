@@ -696,7 +696,14 @@ async function avatarPage(){
   if(!isActiveView(view)||!wardrobe?.isConnected)return;
   const currentTone=String(avatarData.bodyColors?.headColorId??125);
   const toneSelect=document.getElementById("sakuraAvatarSkinTone");
-  if(toneSelect)toneSelect.value=currentTone;
+  if(toneSelect){
+   if(![...toneSelect.options].some(option=>option.value===currentTone)){
+    const savedOption=document.createElement("option");
+    savedOption.value=currentTone;savedOption.textContent="Saved color ("+currentTone+")";
+    toneSelect.appendChild(savedOption);
+   }
+   toneSelect.value=currentTone;
+  }
   document.querySelectorAll("[data-avatar-rig]").forEach(button=>{
    button.classList.toggle("primary",button.dataset.avatarRig===(avatarData.rigType||"R6"));
    button.classList.toggle("secondary",button.dataset.avatarRig!==(avatarData.rigType||"R6"));
@@ -866,7 +873,7 @@ async function mountSakuraAvatar(containerId,statusId,data,view){
   avatarRendererDisposers.add(dispose);
   if(status)status.hidden=true;
  }catch(error){
-  if(status&&status.isConnected){status.hidden=false;status.textContent="Sakura 3D renderer could not start. Check the browser console."}
+  if(host&&host.isConnected)host.innerHTML='<div class="avatar-render-status sakura-avatar-render-error">Sakura 3D renderer could not start. Check the browser console.</div>';
   console.error("[Sakura avatar renderer] Failed to start:",error);
  }
 }
