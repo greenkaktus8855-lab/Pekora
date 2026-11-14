@@ -209,10 +209,10 @@ async function areEligibleGiftRewards(env, rewards) {
   return (found.results || []).length === rewards.length;
 }
 
-let siteSettingsPromise;
+let siteSettingsReady = false;
 async function ensureSiteSettings(env) {
-  if (!siteSettingsPromise) {
-    siteSettingsPromise = (async () => {
+  if (siteSettingsReady) return;
+  await (async () => {
       // A previous interrupted resale-table rename can leave triggers whose
       // SQL still points at the temporary legacy table. Remove only those
       // stale triggers before the normal schema setup recreates valid ones.
@@ -574,13 +574,8 @@ async function ensureSiteSettings(env) {
         for(const row of resaleBaselines.results||[])await syncItemMarketPrice(env,row.item_id);
         await env.DB.prepare("INSERT OR IGNORE INTO site_settings (setting_key,setting_value) VALUES ('resale_market_guardrails_2026_11_06_v1','done')").run();
       }
-    })().catch(error => {
-      // Do not cache a rejected setup promise forever after a transient D1 failure.
-      siteSettingsPromise = undefined;
-      throw error;
-    });
-  }
-  return siteSettingsPromise;
+  })();
+  siteSettingsReady = true;
 }
 
 async function rateLimitKey(request, purpose) {
