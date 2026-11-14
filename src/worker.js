@@ -1676,7 +1676,7 @@ async function route(request, env) {
 
     const itemId = String(data.itemId||"");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId) || !["wear","remove"].includes(action)) return fail("Choose an inventory item and a valid avatar action.");
-    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
+    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id,i.model_url,i.image_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
     if (!item) return fail("You can only equip items in your inventory.",404);
     if (!["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category)) return fail("This item category cannot be equipped on the avatar.");
     if (action === "remove") {
