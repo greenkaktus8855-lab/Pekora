@@ -277,11 +277,7 @@ function itemCreatorMarkup(item){
   : '<span>'+creator+'</span>';
  return '<div class="item-creator muted">Created by '+link+'</div>';
 }
-function itemGiftOddsMarkup(x){
- if(Number(x?.is_gift)!==1||!Array.isArray(x.gift_rewards)||!x.gift_rewards.length)return "";
- return '<div class="item-gift-odds"><strong>Possible rewards:</strong> '+x.gift_rewards.map(reward=>esc(reward.name||"Item")+' — '+Number(reward.chance_percent).toFixed(2)+'%').join(" · ")+'</div>';
-}
-function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+itemBadgeMarkup(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+(Number(x.quantity)>1?'<div class="muted">Quantity: '+Number(x.quantity)+'</div>':"")+itemCreatorMarkup(x)+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(Number(x.stock_limit)>0?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+itemGiftOddsMarkup(x)+'</article>'}
+function itemCard(x){return '<article class="item-card"><div class="item-image">'+itemPreview(x)+itemBadgeMarkup(x)+'</div><h3>'+esc(x.name)+'</h3><div class="muted">'+esc(x.category)+'</div>'+(Number(x.quantity)>1?'<div class="muted">Quantity: '+Number(x.quantity)+'</div>':"")+itemCreatorMarkup(x)+'<div class="price">'+currencyMarkup(x.price,x.currency||"P$")+'</div>'+(Number(x.stock_limit)>0?'<div class="item-stock-text">'+esc(itemStockText(x))+'</div>':"")+'</article>'}
 function itemPriceHistoryMarkup(item,history){
  const soldOut=Number(item.stock_limit)>0&&Number(item.stock_sold)>=Number(item.stock_limit);
  const eligible=Number(item.is_limited)===1||Number(item.is_offsale)===1||soldOut;
@@ -660,12 +656,11 @@ function inventoryItemCard(item){
  const giftDate=Date.parse(item.gift_opens_at||"");
  const canOpenGift=isGift&&!opened&&!item.active_listing_id&&Number.isFinite(giftDate)&&Date.now()>=giftDate;
  const giftStatus=isGift?(opened?'<div class="inventory-gift-status">Gift opened · '+esc(item.gift_reward_name||"Reward received")+'</div>':Number.isFinite(giftDate)?'<div class="inventory-gift-status">Opens '+esc(new Date(giftDate).toLocaleString())+'</div>':'<div class="inventory-gift-status">Gift opening date unavailable</div>'):"";
- const giftOdds=isGift&&!opened&&Array.isArray(item.gift_rewards)&&item.gift_rewards.length?'<div class="inventory-gift-odds"><strong>Possible rewards:</strong> '+item.gift_rewards.map(reward=>esc(reward.name||"Item")+' — '+Number(reward.chance_percent).toFixed(2)+'%').join(" · ")+'</div>':"";
  const giftButton=canOpenGift?'<button class="primary inventory-open-gift" type="button" data-open-gift="'+esc(item.id)+'">Open Gift</button>':"";
  return '<article class="item-card inventory-item-card">'+
   '<a class="item-image" href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+itemPreview(item)+itemBadgeMarkup(item)+'</a>'+
   '<h3><a href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+esc(item.name)+'</a></h3>'+
-  '<div class="muted">'+esc(item.category)+'</div>'+(Number(item.quantity)>1?'<div class="muted">Quantity: '+Number(item.quantity)+'</div>':"")+status+giftStatus+giftOdds+giftButton+
+  '<div class="muted">'+esc(item.category)+'</div>'+(Number(item.quantity)>1?'<div class="muted">Quantity: '+Number(item.quantity)+'</div>':"")+status+giftStatus+giftButton+
   '</article>';
 }
 async function inventory(){
@@ -1586,9 +1581,9 @@ async function owner(){
  ' <label>Total stock (0 = unlimited)<input name="stock_limit" type="number" min="0" max="1000000" value="0" step="1"></label>'+
  '<label class="owner-toggle"><span>This item is a Gift</span><input name="is_gift" type="checkbox"></label>'+
  '<div id="ownerGiftOptions" style="display:none">'+
-  '<strong>Possible gift rewards (maximum 10)</strong><div id="ownerGiftRewardRows" class="owner-gift-reward-list"></div><button class="button secondary" id="addOwnerGiftReward" type="button">Add reward</button><span id="ownerGiftChanceTotal" class="muted">Total chance: 100.00%</span>'+
+  '<strong>Gift contents (maximum 10)</strong><div id="ownerGiftRewardRows" class="owner-gift-reward-list"></div><button class="button secondary" id="addOwnerGiftReward" type="button">Add reward</button>'+
   '<label>Gift opens at<input name="gift_opens_at" type="datetime-local"></label>'+
-  '<p class="muted">Players can open this gift from their Inventory after the selected date and time. The server selects one Offsale reward using the percentages above. Chances must add up to 100%.</p>'+
+  '<p class="muted">Players can open this gift from their Inventory after the selected date and time. One Offsale reward is selected when the gift is opened.</p>'+
  '</div>'+
  '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
  '<label>3D model file (.glb, max 1 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
@@ -2032,14 +2027,81 @@ async function owner(){
    if(!Number.isFinite(date.getTime()))return "";
    return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);
   }
+  const ownerItemDraftPrefix="sakura_owner_item_draft_v2_";
+  const ownerNewItemDraftKey="sakura_owner_new_item_draft_v2";
+  function captureDraftControls(form){
+   return [...form.querySelectorAll("input[name],select[name],textarea[name]")]
+    .filter(control=>control.type!=="file")
+    .map(control=>({name:control.name,type:control.type,value:control.value,checked:control.type==="checkbox"?control.checked:undefined}));
+  }
+  function applyDraftControls(form,controls){
+   for(const saved of (Array.isArray(controls)?controls:[])){
+    const control=form.elements.namedItem(saved.name);
+    if(!control||control.type==="file")continue;
+    if(saved.type==="checkbox")control.checked=Boolean(saved.checked);
+    else control.value=String(saved.value??"");
+   }
+  }
+  function saveOwnerItemDraft(form){
+   if(!form?.dataset.editItem)return;
+   try{
+    const container=form.querySelector(".owner-gift-reward-list");
+    const rewards=container?[...container.querySelectorAll(".owner-gift-reward-row")].map(row=>({
+     item_id:String(row.querySelector(".owner-gift-reward-item")?.value||""),
+     chance_percent:String(row.querySelector(".owner-gift-reward-chance")?.value||"")
+    })):[];
+    localStorage.setItem(ownerItemDraftPrefix+form.dataset.editItem,JSON.stringify({controls:captureDraftControls(form),rewards,savedAt:Date.now()}));
+   }catch(error){console.warn("Could not save local item draft",error)}
+  }
+  function restoreOwnerItemDraft(form){
+   try{
+    const raw=localStorage.getItem(ownerItemDraftPrefix+form.dataset.editItem);
+    if(!raw)return false;
+    const draft=JSON.parse(raw);
+    applyDraftControls(form,draft.controls);
+    const container=form.querySelector(".owner-gift-reward-list");
+    if(container&&Array.isArray(draft.rewards)){
+     const editor=container.closest(".owner-gift-editor");
+     const total=editor?.querySelector(".owner-gift-total");
+     const add=editor?.querySelector("[data-add-gift-reward-for]");
+     container.innerHTML="";
+     for(const reward of draft.rewards)addGiftRewardRow(container,reward.item_id,String(reward.chance_percent||""),total,add);
+    }
+    form.dataset.hasRestoredDraft="1";
+    return true;
+   }catch(error){console.warn("Could not restore local item draft",error);return false}
+  }
+  function saveNewItemDraft(form,rewardHost){
+   try{
+    const rewards=rewardHost?[...rewardHost.querySelectorAll(".owner-gift-reward-row")].map(row=>({
+     item_id:String(row.querySelector(".owner-gift-reward-item")?.value||""),
+     chance_percent:String(row.querySelector(".owner-gift-reward-chance")?.value||"")
+    })):[];
+    localStorage.setItem(ownerNewItemDraftKey,JSON.stringify({controls:captureDraftControls(form),rewards,savedAt:Date.now()}));
+   }catch(error){console.warn("Could not save new item draft",error)}
+  }
+  function restoreNewItemDraft(form,rewardHost,rewardTotal,rewardAdd){
+   try{
+    const raw=localStorage.getItem(ownerNewItemDraftKey);
+    if(!raw)return false;
+    const draft=JSON.parse(raw);
+    applyDraftControls(form,draft.controls);
+    if(rewardHost&&Array.isArray(draft.rewards)){
+     rewardHost.innerHTML="";
+     for(const reward of draft.rewards)addGiftRewardRow(rewardHost,reward.item_id,String(reward.chance_percent||""),rewardTotal,rewardAdd);
+    }
+    return true;
+   }catch(error){console.warn("Could not restore new item draft",error);return false}
+  }
   function drawOwnerItems(){
    document.getElementById("ownerItems").innerHTML=ownerItems.length?ownerItems.map(x=>'<form class="owner-item-row" data-edit-item="'+esc(x.id)+'">'+
     '<div class="owner-item-thumb">'+itemPreview(x)+'</div>'+
     '<div class="owner-item-fields"><input name="name" value="'+esc(x.name)+'" maxlength="80" required>'+
     '<div class="owner-item-subfields"><select name="category">'+ITEM_CATEGORIES.map(c=>'<option value="'+c+'" '+(c===x.category?'selected':'')+'>'+c+'</option>').join("")+'</select><input name="price" type="number" min="0" max="1000000" value="'+Number(x.price)+'" required><select name="currency"><option value="P$" '+((x.currency||"P$")==="P$"?'selected':'')+'>P$</option><option value="Tix" '+(x.currency==="Tix"?'selected':'')+'>Tix</option></select><input name="image_url" type="url" maxlength="500" value="'+esc(x.image_url||"")+'" placeholder="Image URL"><input name="model_url" type="url" maxlength="1000" value="'+esc(x.model_url||"")+'" placeholder="3D model URL (.glb / .gltf)"><label class="owner-inline-check"><input name="is_limited" type="checkbox" '+(Number(x.is_limited)===1?'checked':'')+'> Limited</label><input name="stock_limit" type="number" min="0" max="1000000" step="1" value="'+Number(x.stock_limit||0)+'" placeholder="Total stock (0 = unlimited)"><label class="owner-inline-check"><input name="is_offsale" type="checkbox" '+(Number(x.is_offsale)===1?'checked':'')+'> Off Sale</label><label class="owner-inline-check"><input name="is_catalog_visible" type="checkbox" '+(Number(x.is_catalog_visible)!==0?'checked':'')+'> Show in Catalog</label></div>'+
-    (Number(x.is_gift)===1?'<div class="owner-gift-editor"><strong>Gift rewards (up to 10)</strong><div class="owner-gift-reward-list" data-gift-rewards-for="'+esc(x.id)+'">'+(x.gift_rewards||[{item_id:x.reward_item_id,chance_percent:100}]).map(reward=>giftRewardRowMarkup(reward.item_id,reward.chance_percent)).join("")+'</div><button class="button secondary" type="button" data-add-gift-reward-for="'+esc(x.id)+'">Add reward</button><span class="muted owner-gift-total">Total chance: 100.00%</span><label>Gift opens at<input name="gift_opens_at" type="datetime-local" value="'+toLocalDateTimeInput(x.gift_opens_at)+'" required></label></div>':'')+
-    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(Number(x.is_for_sale)!==1?'Removed from catalog':(Number(x.is_catalog_visible)===0?'Hidden from catalog':(Number(x.is_offsale)===1?'Off Sale':'For sale')))+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+(Number(x.is_gift)===1?' · GIFT → '+esc((x.gift_rewards||[]).map(reward=>(reward.name||ownerItems.find(entry=>entry.id===reward.item_id)?.name||"Reward")+" "+Number(reward.chance_percent).toFixed(2)+"%").join(", ")||x.gift_reward_name||"Missing reward")+' · opens '+(x.gift_opens_at?esc(new Date(x.gift_opens_at).toLocaleString()):"date unavailable"):'')+'</span></div>'+
+    (Number(x.is_gift)===1?'<div class="owner-gift-editor"><strong>Gift rewards (up to 10)</strong><div class="owner-gift-reward-list" data-gift-rewards-for="'+esc(x.id)+'">'+(x.gift_rewards||[{item_id:x.reward_item_id,chance_percent:100}]).map(reward=>giftRewardRowMarkup(reward.item_id,reward.chance_percent)).join("")+'</div><button class="button secondary" type="button" data-add-gift-reward-for="'+esc(x.id)+'">Add reward</button><label>Gift opens at<input name="gift_opens_at" type="datetime-local" value="'+toLocalDateTimeInput(x.gift_opens_at)+'" required></label></div>':'')+
+    '<textarea name="description" rows="2" maxlength="500">'+esc(x.description||"")+'</textarea><span class="muted">'+(Number(x.is_for_sale)!==1?'Removed from catalog':(Number(x.is_catalog_visible)===0?'Hidden from catalog':(Number(x.is_offsale)===1?'Off Sale':'For sale')))+' · '+(Number(x.stock_limit)>0?(Number(x.stock_sold||0)+' / '+Number(x.stock_limit)+' sold · '+Math.max(0,Number(x.stock_limit)-Number(x.stock_sold||0))+' left'):(Number(x.stock_sold||0)+' sold · unlimited stock'))+(Number(x.is_gift)===1?' · GIFT · opens '+(x.gift_opens_at?esc(new Date(x.gift_opens_at).toLocaleString()):"date unavailable"):'')+'</span></div>'+
     '<div class="owner-item-actions"><button class="button" type="submit">Save</button>'+(x.is_for_sale?'<button class="button secondary" type="button" data-remove-item="'+esc(x.id)+'">Remove</button>':'<button class="button" type="button" data-restore-item="'+esc(x.id)+'">Restore</button>')+'<button class="button danger-button" type="button" data-delete-item="'+esc(x.id)+'">Delete permanently</button></div></form>').join(""):'<div class="empty">No catalog items yet.</div>';
+   document.querySelectorAll("[data-edit-item]").forEach(restoreOwnerItemDraft);
    document.querySelectorAll(".owner-gift-reward-list").forEach(container=>{
     const editor=container.closest(".owner-gift-editor");
     const total=editor?.querySelector(".owner-gift-total");
@@ -2047,7 +2109,7 @@ async function owner(){
     refreshGiftRewardList(container,total,add);
     container.addEventListener("click",event=>{
      const remove=event.target.closest("[data-remove-gift-reward]");
-     if(remove){remove.closest(".owner-gift-reward-row")?.remove();refreshGiftRewardList(container,total,add);}
+     if(remove){remove.closest(".owner-gift-reward-row")?.remove();refreshGiftRewardList(container,total,add);saveOwnerItemDraft(container.closest("[data-edit-item]"));}
     });
     container.addEventListener("input",()=>refreshGiftRewardList(container,total,add));
     container.addEventListener("change",()=>refreshGiftRewardList(container,total,add));
@@ -2056,25 +2118,64 @@ async function owner(){
     const editor=button.closest(".owner-gift-editor");
     const container=editor?.querySelector(".owner-gift-reward-list");
     addGiftRewardRow(container,"",100,editor?.querySelector(".owner-gift-total"),button);
+    saveOwnerItemDraft(button.closest("[data-edit-item]"));
    }));
-   document.querySelectorAll("[data-edit-item]").forEach(form=>form.addEventListener("submit",async e=>{
-    e.preventDefault();const f=new FormData(form),id=form.dataset.editItem;
-    try{
-     const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",is_catalog_visible:f.get("is_catalog_visible")==="on",stock_limit:Number(f.get("stock_limit")||0)};
-     const currentItem=ownerItems.find(item=>item.id===id);
-     if(Number(currentItem?.is_gift)===1){
-      updated.gift_rewards=readGiftRewards(form.querySelector(".owner-gift-reward-list"));
-      const opensRaw=String(f.get("gift_opens_at")||"");
-      const opensDate=new Date(opensRaw);
-      if(!opensRaw||!Number.isFinite(opensDate.getTime()))throw new Error("Choose a valid gift opening date and time.");
-      updated.gift_opens_at=opensDate.toISOString();
-     }
-     await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(updated)});
-     if(!isActiveView(view))return;
-     ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated,is_limited:updated.is_limited?1:0,is_offsale:updated.is_offsale?1:0,is_catalog_visible:updated.is_catalog_visible?1:0}:item);
-     drawOwnerItems();updateOwnerItemCount();toast("Item saved");
-    }catch(err){toast(err.message)}
-   }));
+   document.querySelectorAll("[data-edit-item]").forEach(form=>{
+    let autoSaveTimer=null;
+    const id=form.dataset.editItem;
+    const scheduleSave=()=>{
+     saveOwnerItemDraft(form);
+     if(autoSaveTimer!==null)clearTimeout(autoSaveTimer);
+     autoSaveTimer=setTimeout(()=>{
+      if(!form.isConnected||form.dataset.saving==="1"||!form.checkValidity())return;
+      const current=ownerItems.find(item=>item.id===id);
+      if(Number(current?.is_gift)===1){
+       try{
+        readGiftRewards(form.querySelector(".owner-gift-reward-list"));
+        const opensRaw=String(form.elements.gift_opens_at?.value||"");
+        const opensDate=new Date(opensRaw);
+        if(!opensRaw||!Number.isFinite(opensDate.getTime()))return;
+       }catch{return}
+      }
+      form.dataset.autoSaving="1";
+      form.requestSubmit();
+     },1100);
+    };
+    form.addEventListener("input",scheduleSave);
+    form.addEventListener("change",scheduleSave);
+    if(form.dataset.hasRestoredDraft==="1")scheduleSave();
+    form.addEventListener("submit",async e=>{
+     e.preventDefault();
+     if(form.dataset.saving==="1")return;
+     form.dataset.saving="1";
+     const wasAutoSave=form.dataset.autoSaving==="1";
+     form.dataset.autoSaving="0";
+     if(autoSaveTimer!==null){clearTimeout(autoSaveTimer);autoSaveTimer=null;}
+     const f=new FormData(form),id=form.dataset.editItem;
+     try{
+      const updated={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",is_catalog_visible:f.get("is_catalog_visible")==="on",stock_limit:Number(f.get("stock_limit")||0)};
+      const currentItem=ownerItems.find(item=>item.id===id);
+      if(Number(currentItem?.is_gift)===1){
+       updated.gift_rewards=readGiftRewards(form.querySelector(".owner-gift-reward-list"));
+       const opensRaw=String(f.get("gift_opens_at")||"");
+       const opensDate=new Date(opensRaw);
+       if(!opensRaw||!Number.isFinite(opensDate.getTime()))throw new Error("Choose a valid gift opening date and time.");
+       updated.gift_opens_at=opensDate.toISOString();
+      }
+      await api("/api/owner/items/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify(updated)});
+      if(!isActiveView(view))return;
+      try{localStorage.removeItem(ownerItemDraftPrefix+id)}catch{}
+      ownerItems=ownerItems.map(item=>item.id===id?{...item,...updated,is_limited:updated.is_limited?1:0,is_offsale:updated.is_offsale?1:0,is_catalog_visible:updated.is_catalog_visible?1:0}:item);
+      if(wasAutoSave){
+       form.dataset.hasRestoredDraft="0";
+       toast(Number(currentItem?.is_gift)===1?"Gift settings saved":"Changes saved");
+      }else{
+       drawOwnerItems();updateOwnerItemCount();toast("Item saved");
+      }
+     }catch(err){toast(err.message)}
+     finally{form.dataset.saving="0";form.dataset.autoSaving="0";}
+    });
+   });
    document.querySelectorAll("[data-restore-item]").forEach(button=>button.addEventListener("click",async()=>{
     try{
      const id=button.dataset.restoreItem;
@@ -2119,16 +2220,23 @@ async function owner(){
    if(giftOptions)giftOptions.style.display=giftToggle?.checked?"":"none";
    if(newItemForm.elements.gift_opens_at)newItemForm.elements.gift_opens_at.required=Boolean(giftToggle?.checked);
   };
-  if(giftRewardHost)addGiftRewardRow(giftRewardHost,"",100,giftRewardTotal,giftRewardAdd);
-  giftRewardAdd?.addEventListener("click",()=>addGiftRewardRow(giftRewardHost,"",100,giftRewardTotal,giftRewardAdd));
+  const restoredNewItemDraft=restoreNewItemDraft(newItemForm,giftRewardHost,giftRewardTotal,giftRewardAdd);
+  if(!restoredNewItemDraft&&giftRewardHost)addGiftRewardRow(giftRewardHost,"",100,giftRewardTotal,giftRewardAdd);
+  giftRewardAdd?.addEventListener("click",()=>{addGiftRewardRow(giftRewardHost,"",100,giftRewardTotal,giftRewardAdd);saveNewItemDraft(newItemForm,giftRewardHost);});
   giftRewardHost?.addEventListener("click",event=>{
    const remove=event.target.closest("[data-remove-gift-reward]");
-   if(remove){remove.closest(".owner-gift-reward-row")?.remove();refreshGiftRewardList(giftRewardHost,giftRewardTotal,giftRewardAdd);}
+   if(remove){remove.closest(".owner-gift-reward-row")?.remove();refreshGiftRewardList(giftRewardHost,giftRewardTotal,giftRewardAdd);saveNewItemDraft(newItemForm,giftRewardHost);}
   });
-  giftRewardHost?.addEventListener("input",()=>refreshGiftRewardList(giftRewardHost,giftRewardTotal,giftRewardAdd));
-  giftRewardHost?.addEventListener("change",()=>refreshGiftRewardList(giftRewardHost,giftRewardTotal,giftRewardAdd));
+  giftRewardHost?.addEventListener("input",()=>{refreshGiftRewardList(giftRewardHost,giftRewardTotal,giftRewardAdd);saveNewItemDraft(newItemForm,giftRewardHost);});
+  giftRewardHost?.addEventListener("change",()=>{refreshGiftRewardList(giftRewardHost,giftRewardTotal,giftRewardAdd);saveNewItemDraft(newItemForm,giftRewardHost);});
   giftToggle?.addEventListener("change",updateGiftOptions);
+  newItemForm.addEventListener("input",()=>saveNewItemDraft(newItemForm,giftRewardHost));
+  newItemForm.addEventListener("change",()=>saveNewItemDraft(newItemForm,giftRewardHost));
   updateGiftOptions();
+  if(restoredNewItemDraft){
+   const draftMessage=document.getElementById("ownerFormMessage");
+   if(draftMessage)draftMessage.textContent="Restored an unfinished draft from this browser. Click Add Item to save it.";
+  }
   newItemForm.addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
    try{
@@ -2156,6 +2264,7 @@ async function owner(){
     msg.textContent="Saving item...";
     const result=await api("/api/owner/items",{method:"POST",body:JSON.stringify(data)});
     if(!isActiveView(view))return;
+    try{localStorage.removeItem(ownerNewItemDraftKey)}catch{}
     e.target.reset();e.target.elements.price.value=50;e.target.elements.currency.value="P$";
     giftRewardHost.innerHTML="";addGiftRewardRow(giftRewardHost,"",100,giftRewardTotal,giftRewardAdd);
     updateGiftOptions();msg.textContent="Item added.";
