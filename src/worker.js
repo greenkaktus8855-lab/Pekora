@@ -1966,7 +1966,7 @@ async function route(request, env) {
       ]);
     } else if (action === "unban_ip") {
       await env.DB.batch([
-        env.DB.prepare("DELETE FROM banned_ip_addresses WHERE user_id=?").bind(targetId),
+        env.DB.prepare("DELETE FROM banned_ip_addresses WHERE user_id=? OR ip_hash IN (SELECT ip_hash FROM user_ip_addresses WHERE user_id=?)").bind(targetId,targetId),
         env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"IP_UNBAN","Permanent IP ban removed by owner")
       ]);
     } else if (action === "ban" || action === "unban") {
