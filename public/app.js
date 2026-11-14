@@ -778,7 +778,7 @@ async function mountSakuraProfileAvatar(publicId){
  const host=app.querySelector("[data-sakura-avatar]");
  if(!host)return;
  try{
-  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-openpekora-20261114-1");
+  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-openpekora-20261114-2");
   const renderer=await sakuraAvatarModulePromise;
   if(!host.isConnected)return;
   const dispose=await renderer.mountSakuraAvatar(host,publicId);
@@ -1273,7 +1273,7 @@ async function avatarPage(){
    return '<label class="op-avatar-scale-control"><span>'+label+' <output data-avatar-scale-value="'+key+'">'+value.toFixed(2)+'</output></span><input type="range" data-avatar-scale="'+key+'" min="'+min+'" max="'+max+'" step="0.01" value="'+value+'"></label>';
   }).join("");
 
-  app.innerHTML='<div class="op-avatar-editor">'+
+  app.innerHTML='<div class="sakura-avatar-editor-page op-avatar-editor">'+
    '<div class="op-avatar-editor-heading"><div><h1 class="page-title">Avatar Editor</h1><p class="muted">Customize your character, choose clothes and save your look.</p></div><button class="button secondary" id="refreshSakuraAvatar" type="button">Redraw avatar</button></div>'+
    '<div class="op-avatar-editor-layout">'+
     '<section class="op-avatar-preview-panel">'+
