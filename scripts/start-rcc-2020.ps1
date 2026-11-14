@@ -304,41 +304,67 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
         throw "RCCService did not open TCP $rccPort within 45 seconds. See $rccOut and $rccErr."
     }
 
-    # Probe the same BatchJob SOAP operation used by OpenPekora at render time.
-    # Its XML namespace must match Config.BaseUrl (the private Sakura bridge URL).
-    # Keep the SOAP listener local and do not add a SOAPAction header.
+    # Record the RCC binary identity and query its own WSDL before sending SOAP.
+    # If this RCC build publishes WSDL, use its exact target namespace and action.
+    $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($rccExe)
+    $versionSummary = "RCC executable: " + $rccExe + [Environment]::NewLine +
+        "File version: " + $versionInfo.FileVersion + [Environment]::NewLine +
+        "Product version: " + $versionInfo.ProductVersion
     $soapNamespace = "http://roblox.com/"
-    $probeJobId = [Guid]::NewGuid().ToString()
-    $probeScriptId = [Guid]::NewGuid().ToString()
+    $getStatusAction = "http://roblox.com/GetStatus"
+    $wsdlLog = Join-Path $logDir "rcc-service-wsdl.xml"
+    $wsdlStatus = "WSDL endpoint was not queried."
+    try {
+        $wsdlResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$rccPort/?wsdl" -Method Get -UseBasicParsing -TimeoutSec 10
+        $wsdlText = [string]$wsdlResponse.Content
+        [System.IO.File]::WriteAllText($wsdlLog, $wsdlText, $utf8NoBom)
+        $wsdlDoc = [xml]$wsdlText
+        $targetNamespace = [string]$wsdlDoc.DocumentElement.GetAttribute("targetNamespace")
+        if (-not [string]::IsNullOrWhiteSpace($targetNamespace)) {
+            $soapNamespace = $targetNamespace
+        }
+        $nsManager = New-Object System.Xml.XmlNamespaceManager($wsdlDoc.NameTable)
+        $nsManager.AddNamespace("wsdl", "http://schemas.xmlsoap.org/wsdl/")
+        $nsManager.AddNamespace("soap", "http://schemas.xmlsoap.org/wsdl/soap/")
+        $actionNode = $wsdlDoc.SelectSingleNode("//wsdl:binding/wsdl:operation[@name='GetStatus']/soap:operation", $nsManager)
+        if ($actionNode -and -not [string]::IsNullOrWhiteSpace([string]$actionNode.GetAttribute("soapAction"))) {
+            $getStatusAction = [string]$actionNode.GetAttribute("soapAction")
+        }
+        $wsdlStatus = "WSDL retrieved; namespace and GetStatus SOAPAction read from RCC."
+    } catch {
+        $wsdlStatus = "RCC did not provide WSDL at /?wsdl: $($_.Exception.Message)"
+        [System.IO.File]::WriteAllText($wsdlLog, $wsdlStatus, $utf8NoBom)
+    }
+
+    $probeLogText = @(
+        $versionSummary,
+        $wsdlStatus,
+        "SOAP namespace: $soapNamespace",
+        "SOAPAction: $getStatusAction"
+    ) -join [Environment]::NewLine
+
+    # GetStatus is a harmless health check and does not execute a render script.
+    $soapNamespaceXml = [System.Security.SecurityElement]::Escape($soapNamespace)
     $probeXml = @"
 <?xml version="1.0" encoding="utf-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:rob="$soapNamespace">
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:rob="$soapNamespaceXml">
   <soapenv:Header/>
   <soapenv:Body>
-    <rob:BatchJob>
-      <rob:job>
-        <rob:id>$probeJobId</rob:id>
-        <rob:expirationInSeconds>30</rob:expirationInSeconds>
-        <rob:cores>1</rob:cores>
-      </rob:job>
-      <rob:script>
-        <rob:name>$probeScriptId</rob:name>
-        <rob:script><![CDATA[return "Sakura RCC SOAP probe"]]></rob:script>
-      </rob:script>
-    </rob:BatchJob>
+    <rob:GetStatus/>
   </soapenv:Body>
 </soapenv:Envelope>
 "@
 
     try {
-        $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$rccPort" -Method Post -ContentType "text/xml; charset=utf-8" -Headers @{ SOAPAction = "http://roblox.com/BatchJob" } -Body $probeXml -UseBasicParsing -TimeoutSec 20
+        $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$rccPort" -Method Post -ContentType "text/xml; charset=utf-8" -Headers @{ SOAPAction = $getStatusAction } -Body $probeXml -UseBasicParsing -TimeoutSec 20
         $statusBody = [string]$statusResponse.Content
-        if ([int]$statusResponse.StatusCode -ne 200 -or $statusBody -notmatch "BatchJobResponse") {
-            throw "RCC returned HTTP $($statusResponse.StatusCode), but the body was not a valid BatchJob SOAP response: $($statusBody.Substring(0,[Math]::Min(700,$statusBody.Length)))"
+        if ([int]$statusResponse.StatusCode -ne 200 -or $statusBody -notmatch "GetStatusResponse") {
+            throw "RCC returned HTTP $($statusResponse.StatusCode), but the body was not a valid GetStatus SOAP response: $($statusBody.Substring(0,[Math]::Min(700,$statusBody.Length)))"
         }
         $preview = $statusBody.Substring(0,[Math]::Min(1500,$statusBody.Length))
-        [System.IO.File]::WriteAllText($probeLog, "SOAP BatchJob succeeded on 127.0.0.1:$rccPort." + [Environment]::NewLine + $preview, $utf8NoBom)
-        Write-Host "SOAP BatchJob succeeded on 127.0.0.1:$rccPort." -ForegroundColor Green
+        $probeLogText += [Environment]::NewLine + "SOAP GetStatus succeeded on 127.0.0.1:$rccPort." + [Environment]::NewLine + $preview
+        [System.IO.File]::WriteAllText($probeLog, $probeLogText, $utf8NoBom)
+        Write-Host "SOAP GetStatus succeeded on 127.0.0.1:$rccPort." -ForegroundColor Green
     } catch {
         $probeError = $_.Exception.Message
         try {
@@ -351,8 +377,9 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
                 }
             }
         } catch {}
-        [System.IO.File]::WriteAllText($probeLog, "SOAP BatchJob failed: " + $probeError, $utf8NoBom)
-        throw "RCCService is listening but did not pass the SOAP test. $probeError. See $probeLog"
+        $probeLogText += [Environment]::NewLine + "SOAP GetStatus failed: " + $probeError
+        [System.IO.File]::WriteAllText($probeLog, $probeLogText, $utf8NoBom)
+        throw "RCCService is listening but its SOAP interface test failed. $probeError. See $probeLog and $wsdlLog"
     }
 
     Write-Host "RCCService startup and SOAP test completed successfully." -ForegroundColor Green
