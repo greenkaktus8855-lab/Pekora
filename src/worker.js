@@ -1684,6 +1684,69 @@ async function route(request, env) {
     return json({ok:true,action,equipped:true});
   }
 
+  if (request.method === "GET" && path === "/api/avatar/render") {
+    const username = String(url.searchParams.get("username") || "").trim();
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.",400);
+
+    try {
+      const lookupResponse = await fetch("https://users.roblox.com/v1/usernames/users", {
+        method:"POST",
+        headers:{"content-type":"application/json","accept":"application/json"},
+        body:JSON.stringify({usernames:[username],excludeBannedUsers:true}),
+        signal:AbortSignal.timeout(8000)
+      });
+      if (!lookupResponse.ok) {
+        console.error("[Sakura avatar render] Roblox username lookup returned",lookupResponse.status);
+        return fail("Roblox account lookup is temporarily unavailable.",502);
+      }
+
+      const lookupData = await lookupResponse.json().catch(()=>null);
+      const robloxUser = Array.isArray(lookupData?.data)
+        ? lookupData.data.find(entry=>String(entry?.name||"").toLowerCase()===username.toLowerCase())
+        : null;
+      if (!robloxUser || !/^\d+$/.test(String(robloxUser.id||""))) {
+        return json({available:false,reason:"No exact Roblox username match."},200,{"cache-control":"public, max-age=300"});
+      }
+
+      const thumbnailUrl = new URL("https://thumbnails.roblox.com/v1/users/avatar");
+      thumbnailUrl.searchParams.set("userIds",String(robloxUser.id));
+      thumbnailUrl.searchParams.set("size","420x420");
+      thumbnailUrl.searchParams.set("format","Png");
+      thumbnailUrl.searchParams.set("isCircular","false");
+
+      const thumbnailResponse = await fetch(thumbnailUrl.toString(), {
+        headers:{"accept":"application/json"},
+        signal:AbortSignal.timeout(8000)
+      });
+      if (!thumbnailResponse.ok) {
+        console.error("[Sakura avatar render] Roblox thumbnail request returned",thumbnailResponse.status);
+        return fail("Roblox avatar rendering is temporarily unavailable.",502);
+      }
+
+      const thumbnailData = await thumbnailResponse.json().catch(()=>null);
+      const thumbnail = Array.isArray(thumbnailData?.data)
+        ? thumbnailData.data.find(entry=>String(entry?.targetId)===String(robloxUser.id))
+        : null;
+      if (!thumbnail || thumbnail.state!=="Completed" || !thumbnail.imageUrl) {
+        return json({available:false,pending:true},200,{"cache-control":"public, max-age=30"});
+      }
+
+      let imageUrl;
+      try { imageUrl = new URL(String(thumbnail.imageUrl)); }
+      catch { return fail("Roblox returned an invalid avatar image.",502); }
+      const imageHost = imageUrl.hostname.toLowerCase();
+      if (imageUrl.protocol!=="https:" || !(imageHost==="rbxcdn.com" || imageHost.endsWith(".rbxcdn.com"))) {
+        console.error("[Sakura avatar render] Rejected unexpected image host:",imageHost);
+        return fail("Roblox returned an unsupported avatar image URL.",502);
+      }
+
+      return json({available:true,imageUrl:imageUrl.href},200,{"cache-control":"public, max-age=300"});
+    } catch (error) {
+      console.error("[Sakura avatar render] Request failed:",error);
+      return fail("Roblox avatar rendering is temporarily unavailable.",502);
+    }
+  }
+
   if (request.method === "GET" && path.startsWith("/api/banned-account/")) {
     let identifier;
     try { identifier = decodeURIComponent(path.slice("/api/banned-account/".length)); }
