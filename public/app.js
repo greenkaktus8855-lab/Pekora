@@ -7,6 +7,11 @@ function setOwnedInventory(list){ownedItemCounts=new Map((list||[]).map(item=>[i
 function ownedItemCount(itemId){return Number(ownedItemCounts.get(itemId)||0);}
 function canBuyItem(item){const count=ownedItemCount(item.id);return Number(item.is_limited)===1?count<10:count===0;}
 let activeView=0;
+const avatarRendererDisposers=new Set();
+function disposeSakuraAvatarRenderers(){
+ for(const dispose of [...avatarRendererDisposers]){try{dispose()}catch{}}
+ avatarRendererDisposers.clear();
+}
 const ITEM_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
 const CREATABLE_CATEGORIES=["Shirts","Pants"];
 const MEMBERSHIP_PLANS=[
@@ -107,6 +112,7 @@ function renderSidebar(active="home"){
  const links=[
   ["home","icon-nav-home","Home"],
   ["profile","icon-nav-profile","Profile"],
+  ["avatar","icon-nav-profile","Avatar"],
   ["friends","icon-nav-friends","Friends"],
   ["trades","icon-nav-trade","Trades"],
   ["inventory","icon-nav-inventory","Inventory"],
@@ -664,6 +670,67 @@ function inventoryItemCard(item){
   '<div class="inventory-item-actions"><button class="button danger-button inventory-remove-button" type="button" data-remove-inventory-item="'+esc(item.id)+'">Remove from inventory</button></div>'+
   '</article>';
 }
+async function avatarPage(){
+ const view=beginView();
+ renderSidebar("avatar");
+ if(!me){app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> to customize your Sakura avatar.</div>';return}
+ app.innerHTML='<div class="avatar-editor sakura-avatar-editor">'+
+  '<div class="avatar-editor-heading"><div><h1 class="page-title">Sakura Avatar</h1><p class="muted">Your character is built by Sakura. It uses your saved body settings and equipped Sakura items.</p></div></div>'+
+  '<div class="sakura-avatar-layout">'+
+   '<section class="sakura-avatar-stage"><div id="sakuraAvatarView" class="sakura-avatar-canvas"><div id="sakuraAvatarStatus" class="avatar-render-status">Building your Sakura avatar...</div></div><p class="sakura-avatar-hint">Drag to rotate · Use the mouse wheel to zoom</p></section>'+
+   '<section class="sakura-avatar-controls">'+
+    '<div class="sakura-avatar-control-group"><h2>Body type</h2><div class="sakura-avatar-choice-row"><button class="button secondary" type="button" data-avatar-rig="R6">Classic R6</button><button class="button secondary" type="button" data-avatar-rig="R15">Segmented R15</button></div></div>'+
+    '<div class="sakura-avatar-control-group"><h2>Body color</h2><label class="sakura-avatar-field">Skin tone<select id="sakuraAvatarSkinTone"><option value="125">Light orange</option><option value="18">Nougat</option><option value="5">Brick yellow</option><option value="45">Light orange-brown</option><option value="217">Brown</option><option value="192">Reddish brown</option><option value="26">Black</option><option value="1">White</option></select></label><button class="button" id="saveAvatarSkinTone" type="button">Apply color</button></div>'+
+    '<div class="sakura-avatar-control-group"><h2>Wardrobe</h2><p class="muted">Wear items from your Sakura inventory. 3D accessories use their uploaded GLB model; image items appear as clothing or face details.</p><div id="sakuraAvatarWardrobe" class="sakura-avatar-wardrobe">Loading inventory...</div></div>'+
+   '</section>'+
+  '</div>'+
+ '</div>';
+ const viewHost=document.getElementById("sakuraAvatarView");
+ const wardrobe=document.getElementById("sakuraAvatarWardrobe");
+ try{
+  const [avatarData,inventoryData]=await Promise.all([api("/api/avatar"),api("/api/inventory")]);
+  if(!isActiveView(view)||!viewHost?.isConnected)return;
+  const equipped=Array.isArray(avatarData.equipped)?avatarData.equipped:[];
+  const state={...avatarData,equipped};
+  await mountSakuraAvatar("sakuraAvatarView","sakuraAvatarStatus",state,view);
+  if(!isActiveView(view)||!wardrobe?.isConnected)return;
+  const currentTone=String(avatarData.bodyColors?.headColorId??125);
+  const toneSelect=document.getElementById("sakuraAvatarSkinTone");
+  if(toneSelect)toneSelect.value=currentTone;
+  document.querySelectorAll("[data-avatar-rig]").forEach(button=>{
+   button.classList.toggle("primary",button.dataset.avatarRig===(avatarData.rigType||"R6"));
+   button.classList.toggle("secondary",button.dataset.avatarRig!==(avatarData.rigType||"R6"));
+   button.addEventListener("click",async()=>{
+    button.disabled=true;
+    try{await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"rig",rigType:button.dataset.avatarRig})});await render("avatar")}
+    catch(error){toast(error.message);button.disabled=false}
+   });
+  });
+  document.getElementById("saveAvatarSkinTone")?.addEventListener("click",async()=>{
+   const colorId=Number(toneSelect?.value||125),bodyColors={};
+   ["headColorId","torsoColorId","leftArmColorId","rightArmColorId","leftLegColorId","rightLegColorId"].forEach(key=>bodyColors[key]=colorId);
+   const button=document.getElementById("saveAvatarSkinTone");if(button)button.disabled=true;
+   try{await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"colors",bodyColors})});await render("avatar")}
+   catch(error){toast(error.message);if(button)button.disabled=false}
+  });
+  const inventoryItems=Array.isArray(inventoryData.items)?inventoryData.items:[];
+  const wearableItems=inventoryItems.filter(item=>ITEM_CATEGORIES.includes(item.category)&&(item.model_url||item.image_url));
+  wardrobe.innerHTML=wearableItems.length?'<div class="sakura-avatar-wardrobe-grid">'+wearableItems.map(item=>{
+   const worn=equipped.some(entry=>entry.id===item.id);
+   const thumb=item.image_url?'<img src="'+esc(item.image_url)+'" alt="" loading="lazy">':'<span class="sakura-avatar-wardrobe-model">3D</span>';
+   return '<article class="sakura-avatar-wardrobe-item"><div class="sakura-avatar-wardrobe-thumb">'+thumb+'</div><div class="sakura-avatar-wardrobe-name">'+esc(item.name)+'</div><div class="muted">'+esc(item.category)+'</div><button class="button '+(worn?'secondary':'')+'" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-worn="'+(worn?'1':'0')+'">'+(worn?'Remove':'Wear')+'</button></article>';
+  }).join("")+'</div>':'<div class="op-profile-empty">No wearable Sakura items in your inventory yet. Items need a preview image or a GLB model.</div>';
+  wardrobe.querySelectorAll("[data-avatar-item]").forEach(button=>button.addEventListener("click",async()=>{
+   button.disabled=true;
+   try{
+    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:button.dataset.avatarWorn==="1"?"remove":"wear",itemId:button.dataset.avatarItem})});
+    await render("avatar");
+   }catch(error){toast(error.message);button.disabled=false}
+  }));
+ }catch(error){
+  if(isActiveView(view)&&wardrobe?.isConnected)wardrobe.innerHTML='<div class="empty">'+esc(error.message)+'</div>';
+ }
+}
 async function inventory(){
  const view=beginView();
  renderSidebar("inventory");
@@ -765,10 +832,9 @@ async function profile(identifier=me?.username,byId=false){
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
   const publicId=p.publicId??p.id,profileUrl="/#profile?id="+encodeURIComponent(publicId);
   if(!byId&&publicId){history.replaceState({page:"profile",publicId},"",profileUrl)}
-  const profileAvatar=avatar(p.username);
-  const profileRenderImage='<img id="profileRenderImage" class="profile-render-image" alt="Roblox avatar preview" loading="eager" hidden>';
+  const profileRenderImage='<div id="profileAvatarRenderer" class="sakura-profile-render"><div id="profileAvatarStatus" class="avatar-render-status">Building Sakura avatar...</div></div>';
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+profileRenderImage+'</div><div class="op-profile-info">'+
+   '<div class="op-profile-header"><div class="op-profile-avatar sakura-profile-avatar">'+profileRenderImage+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
@@ -780,27 +846,28 @@ async function profile(identifier=me?.username,byId=false){
    '</section>'+
    '<section class="op-profile-section op-profile-badges-section"><h2>Badges</h2>'+profileBadgesMarkup(p)+'</section>'+
    '</div>';
-  loadProfileAvatarRender(p.username,view);
+  mountSakuraAvatar("profileAvatarRenderer","profileAvatarStatus",p.avatar,view);
   if(!isSelf&&me)loadProfileFriendAction(p.username);
  }catch(e){if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
-async function loadProfileAvatarRender(username,view){
- const image=document.getElementById("profileRenderImage");
- if(!image)return;
+async function mountSakuraAvatar(containerId,statusId,data,view){
+ const host=document.getElementById(containerId);
+ const status=document.getElementById(statusId);
+ if(!host)return;
  try{
-  const result=await api("/api/avatar/render?username="+encodeURIComponent(username));
-  if(!isActiveView(view)||!image.isConnected||!result?.available||!result.imageUrl)return;
-  const imageUrl=new URL(result.imageUrl);
-  const host=imageUrl.hostname.toLowerCase();
-  if(imageUrl.protocol!=="https:"||!(host==="rbxcdn.com"||host.endsWith(".rbxcdn.com")))return;
-  image.addEventListener("error",()=>{
-   image.hidden=true;
-   image.removeAttribute("src");
-  },{once:true});
-  image.src=imageUrl.href;
-  image.hidden=false;
+  const renderer=await import("/avatar-renderer.js?v=sakura-native-3d-20261114-1");
+  if(!host.isConnected||!isActiveView(view))return;
+  const mounted=renderer.mountSakuraAvatar(host,data||{});
+  const dispose=()=>{
+   try{mounted?.dispose?.()}catch{}
+   avatarRendererDisposers.delete(dispose);
+  };
+  host._sakuraAvatarDispose=dispose;
+  avatarRendererDisposers.add(dispose);
+  if(status)status.hidden=true;
  }catch(error){
-  console.warn("[Sakura avatar render] Could not load Roblox avatar preview:",error?.message||error);
+  if(status&&status.isConnected){status.hidden=false;status.textContent="Sakura 3D renderer could not start. Check the browser console."}
+  console.error("[Sakura avatar renderer] Failed to start:",error);
  }
 }
 async function loadProfileFriendAction(username){
@@ -2354,6 +2421,7 @@ function infoPage(type){
 }
 
 async function render(name){
+ disposeSakuraAvatarRenderers();
  name=name||"home";
  const parts=String(name).split("?",2);
  name=parts[0];
@@ -2363,6 +2431,7 @@ async function render(name){
  else if(name==="login"||name==="register")auth(name);
  else if(name==="owner-recovery")await ownerRecoveryPage();
  else if(name==="inventory")await inventory();
+ else if(name==="avatar")await avatarPage();
  else if(name==="create")await createPage();
  else if(name==="resale")await resaleMarketPage();
  else if(name==="groups")await groupsPage();
