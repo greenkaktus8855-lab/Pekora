@@ -7,8 +7,8 @@ function setOwnedInventory(list){ownedItemCounts=new Map((list||[]).map(item=>[i
 function ownedItemCount(itemId){return Number(ownedItemCounts.get(itemId)||0);}
 function canBuyItem(item){const count=ownedItemCount(item.id);return Number(item.is_limited)===1?count<10:count===0;}
 let activeView=0;
-const ITEM_CATEGORIES=["Hats","Hair","Faces","Shirts","Pants","Accessories"];
-const CREATABLE_CATEGORIES=["Shirts","Pants"];
+const ITEM_CATEGORIES=["Hats","Hair","Faces","T-Shirts","Shirts","Pants","Accessories"];
+const CREATABLE_CATEGORIES=["T-Shirts","Shirts","Pants"];
 const MEMBERSHIP_PLANS=[
  {type:"None",name:"None",short:"None",daily:0,description:"No membership or daily reward"},
  {type:"BuildersClub",name:"Builders Club",short:"BC",daily:15,description:"Basic membership and daily reward"},
@@ -1216,111 +1216,204 @@ async function avatarPage(){
  }
  app.innerHTML='<div class="empty">Loading your avatar...</div>';
  try{
-  const [avatarData,inventoryData]=await Promise.all([
-   api("/api/avatar"),
-   api("/api/inventory")
-  ]);
+  const [avatarData,inventoryData]=await Promise.all([api("/api/avatar"),api("/api/inventory")]);
   if(!isActiveView(view))return;
 
   const equipped=Array.isArray(avatarData.equipped)?avatarData.equipped:[];
   const inventory=Array.isArray(inventoryData.items)?inventoryData.items:[];
+  const eligible=inventory.filter(item=>["Hats","Hair","Faces","T-Shirts","Shirts","Pants","Accessories"].includes(item.category));
   const equippedIds=new Set(equipped.map(item=>String(item.id)));
-  const eligible=inventory.filter(item=>
-   ["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category)
-  );
-
-  const renderItem=(item)=>{
-   const canRender=Number(item.asset_id)>0&&Number(item.asset_type_id)>0;
-   const isWearing=equippedIds.has(String(item.id));
-   const actionButton=canRender
-    ? '<button class="button '+(isWearing?'secondary':'')+' avatar-item-toggle" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+(isWearing?'remove':'wear')+'">'+(isWearing?'Remove':'Wear')+'</button>'
-    : '<button class="button secondary" type="button" disabled title="This item has no OpenPekora asset ID">Not renderable</button>';
-   return '<article class="sakura-avatar-item">'+
-    '<div class="sakura-avatar-item-image">'+itemPreview(item)+'</div>'+
-    '<div class="sakura-avatar-item-info"><strong>'+esc(item.name)+'</strong><span>'+esc(item.category)+(Number(item.quantity)>1?' · ×'+Number(item.quantity):'')+'</span>'+(isWearing?'<span class="sakura-avatar-wearing">Wearing</span>':'')+'</div>'+
-    actionButton+
+  let selectedCategory="All";
+  let selectedPanel="wardrobe";
+  let rigType=avatarData.rigType==="R15"?"R15":"R6";
+  const bodyColors={...(avatarData.bodyColors||{})};
+  const scales={...(avatarData.scales||{})};
+  const categories=["All","T-Shirts","Shirts","Pants","Hats","Hair","Faces","Accessories"];
+  const colorOptions=[
+   [1,"White","#f2f3f3"],[2,"Grey","#a1a5a2"],[5,"Brick yellow","#d7c59a"],
+   [9,"Light reddish violet","#e8bac8"],[11,"Pastel blue","#80bbdb"],[18,"Nougat","#cc8e69"],
+   [21,"Bright red","#c4281c"],[23,"Bright blue","#0d69ac"],[24,"Bright yellow","#f5cd30"],
+   [26,"Black","#1b2a35"],[28,"Dark green","#287f46"],[29,"Medium green","#a1c48c"],
+   [37,"Bright green","#4b974b"],[38,"Dark orange","#a05f35"],[45,"Light blue","#b4d2e4"],
+   [125,"Light orange","#eab98d"]
+  ];
+  const colorParts=[
+   ["headColorId","Head"],["torsoColorId","Torso"],["leftArmColorId","Left arm"],
+   ["rightArmColorId","Right arm"],["leftLegColorId","Left leg"],["rightLegColorId","Right leg"]
+  ];
+  const scaleParts=[
+   ["height","Height",0.9,1.05],["width","Width",0.7,1],["head","Head",0.95,1],
+   ["depth","Depth",0.7,1],["proportion","Proportion",0,1],["bodyType","Body type",0,1]
+  ];
+  const colorOptionsMarkup=currentId=>{
+   const current=Number(currentId||125);
+   const options=colorOptions.map(([id,label])=>'<option value="'+id+'" '+(id===current?'selected':'')+'>'+label+'</option>');
+   if(!colorOptions.some(([id])=>id===current))options.push('<option value="'+current+'" selected>Saved color ('+current+')</option>');
+   return options.join("");
+  };
+  const itemMarkup=(item,mode)=>{
+   const wearing=equippedIds.has(String(item.id));
+   const renderable=Number(item.asset_id)>0&&Number(item.asset_type_id)>0;
+   const action=mode==="wearing"?"remove":(wearing?"remove":"wear");
+   const label=action==="remove"?"Remove":"Wear";
+   const button=renderable
+    ? '<button class="button '+(action==="remove"?'secondary':'primary')+' avatar-item-toggle" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+action+'">'+label+'</button>'
+    : '<button class="button secondary" type="button" disabled title="This item needs a Roblox asset ID and asset type ID">No asset ID</button>';
+   return '<article class="op-avatar-item">'+
+    '<div class="op-avatar-item-image">'+itemPreview(item)+'</div>'+
+    '<div class="op-avatar-item-info"><strong>'+esc(item.name)+'</strong><span>'+esc(item.category)+(Number(item.quantity)>1?' · ×'+Number(item.quantity):'')+'</span>'+(wearing?'<span class="sakura-avatar-wearing">Currently wearing</span>':'')+'</div>'+
+    button+
    '</article>';
   };
+  const colorControls=colorParts.map(([key,label])=>
+   '<label class="op-avatar-color-control"><span>'+label+'</span><select data-avatar-color="'+key+'" class="catalog-select">'+colorOptionsMarkup(bodyColors[key])+'</select></label>'
+  ).join("");
+  const scaleControls=scaleParts.map(([key,label,min,max])=>{
+   const value=Number(scales[key]??(key==="proportion"||key==="bodyType"?0:1));
+   return '<label class="op-avatar-scale-control"><span>'+label+' <output data-avatar-scale-value="'+key+'">'+value.toFixed(2)+'</output></span><input type="range" data-avatar-scale="'+key+'" min="'+min+'" max="'+max+'" step="0.01" value="'+value+'"></label>';
+  }).join("");
 
-  const equippedRows=equipped.length
-   ? equipped.map(renderItem).join("")
-   : '<div class="op-profile-empty">Nothing is equipped yet.</div>';
-  const inventoryRows=eligible.length
-   ? eligible.map(renderItem).join("")
-   : '<div class="op-profile-empty">No avatar items in your inventory yet.</div>';
-
-  app.innerHTML='<div class="sakura-avatar-editor-page">'+
-   '<div class="sakura-avatar-editor-heading"><div><h1 class="page-title">Avatar</h1><p class="muted">Edit your Sakura character and see the OpenPekora 3D render.</p></div>'+
-    '<button class="button secondary" id="refreshSakuraAvatar" type="button">Refresh render</button></div>'+
-   '<section class="sakura-avatar-editor-preview-section">'+
-    '<div class="sakura-profile-avatar sakura-avatar-editor-preview"><div class="sakura-avatar-fallback">'+avatar(me.username)+'</div><div class="sakura-avatar-render" data-sakura-avatar data-avatar-id="'+esc(me.publicId||"")+'"><span class="sakura-avatar-loading">Loading OpenPekora avatar...</span></div></div>'+
-    '<div class="sakura-avatar-editor-settings"><h2>Character settings</h2>'+
-     '<label for="sakuraAvatarRig">Avatar type</label><select id="sakuraAvatarRig" class="catalog-select"><option value="R6" '+(avatarData.rigType==="R6"?"selected":"")+'>R6</option><option value="R15" '+(avatarData.rigType==="R15"?"selected":"")+'>R15</option></select>'+
-     '<p class="muted">Changes are saved to your Sakura account.</p>'+
-     '<a class="button secondary" href="/#inventory" data-page="inventory">Open Inventory</a>'+
-    '</div>'+
-   '</section>'+
-   '<section class="sakura-avatar-editor-section"><h2>Wearing</h2><div class="sakura-avatar-item-list">'+equippedRows+'</div></section>'+
-   '<section class="sakura-avatar-editor-section"><h2>Your avatar items</h2><div class="sakura-avatar-item-list">'+inventoryRows+'</div></section>'+
+  app.innerHTML='<div class="op-avatar-editor">'+
+   '<div class="op-avatar-editor-heading"><div><h1 class="page-title">Avatar Editor</h1><p class="muted">Customize your character, choose clothes and save your look.</p></div><button class="button secondary" id="refreshSakuraAvatar" type="button">Redraw avatar</button></div>'+
+   '<div class="op-avatar-editor-layout">'+
+    '<section class="op-avatar-preview-panel">'+
+     '<div class="op-avatar-preview-heading"><h2>Preview</h2><span class="muted">3D · OpenPekora RCC</span></div>'+
+     '<div class="sakura-profile-avatar sakura-avatar-editor-preview"><div class="sakura-avatar-fallback">'+avatar(me.username)+'</div><div class="sakura-avatar-render" data-sakura-avatar data-avatar-id="'+esc(me.publicId||"")+'"><span class="sakura-avatar-loading">Loading OpenPekora avatar...</span></div></div>'+
+     '<div class="op-avatar-rig-toggle"><span>Avatar type</span><div><button class="op-avatar-rig-button '+(rigType==="R6"?'active':'')+'" type="button" data-avatar-rig="R6" aria-pressed="'+(rigType==="R6")+'">R6</button><button class="op-avatar-rig-button '+(rigType==="R15"?'active':'')+'" type="button" data-avatar-rig="R15" aria-pressed="'+(rigType==="R15")+'">R15</button></div></div>'+
+     '<a class="button secondary op-avatar-inventory-link" href="/#inventory" data-page="inventory">Open Inventory</a>'+
+    '</section>'+
+    '<section class="op-avatar-customizer">'+
+     '<nav class="op-avatar-tabs" aria-label="Avatar editor sections">'+
+      '<button type="button" data-avatar-panel="wardrobe" class="active" aria-pressed="true">Wardrobe</button>'+
+      '<button type="button" data-avatar-panel="wearing" aria-pressed="false">Currently Wearing</button>'+
+      '<button type="button" data-avatar-panel="body" aria-pressed="false">Body</button>'+
+     '</nav>'+
+     '<section id="opAvatarWardrobePanel" class="op-avatar-panel">'+
+      '<div class="op-avatar-wardrobe-heading"><div><h2>Wardrobe</h2><p class="muted">Items you own in your Sakura inventory.</p></div><span class="op-avatar-count">'+eligible.length+' items</span></div>'+
+      '<div class="op-avatar-category-tabs">'+categories.map(category=>'<button type="button" data-avatar-category="'+esc(category)+'" class="'+(category==="All"?'active':'')+'">'+esc(category)+'</button>').join("")+'</div>'+
+      '<div id="opAvatarWardrobeGrid" class="op-avatar-wardrobe-grid"></div>'+
+     '</section>'+
+     '<section id="opAvatarWearingPanel" class="op-avatar-panel" hidden>'+
+      '<div class="op-avatar-wardrobe-heading"><div><h2>Currently Wearing</h2><p class="muted">Remove an item to take it off your character.</p></div><span class="op-avatar-count">'+equipped.length+' items</span></div>'+
+      '<div id="opAvatarWearingGrid" class="op-avatar-wardrobe-grid"></div>'+
+     '</section>'+
+     '<section id="opAvatarBodyPanel" class="op-avatar-panel" hidden>'+
+      '<div class="op-avatar-wardrobe-heading"><div><h2>Body &amp; Colors</h2><p class="muted">Choose colors for individual body parts and adjust R15 proportions.</p></div></div>'+
+      '<div class="op-avatar-color-grid">'+colorControls+'</div>'+
+      '<div id="opAvatarScaleSection" class="op-avatar-scale-section" '+(rigType==="R6"?'hidden':'')+'><h3>Body scaling</h3><div class="op-avatar-scale-grid">'+scaleControls+'</div><p class="muted">Body scaling is available with R15.</p></div>'+
+      '<div class="op-avatar-save-row"><span class="muted" id="opAvatarSaveStatus">Changes are not saved yet.</span><button class="button primary" id="saveAvatarSettings" type="button">Save Changes</button></div>'+
+     '</section>'+
+    '</section>'+
+   '</div>'+
+   '<p class="op-avatar-editor-note">The wardrobe currently shows items from your Sakura inventory. Buy an item from the Catalog first, then wear it here. Roblox clothing that is not in Sakura inventory is not connected yet.</p>'+
   '</div>';
 
+  const wardrobeGrid=document.getElementById("opAvatarWardrobeGrid");
+  const wearingGrid=document.getElementById("opAvatarWearingGrid");
+  const renderLists=()=>{
+   const filtered=selectedCategory==="All"?eligible:eligible.filter(item=>item.category===selectedCategory);
+   wardrobeGrid.innerHTML=filtered.length?filtered.map(item=>itemMarkup(item,"wardrobe")).join(""):'<div class="op-profile-empty">No '+esc(selectedCategory==="All"?"avatar items":selectedCategory)+" in your inventory.</div>";
+   wearingGrid.innerHTML=equipped.length?equipped.map(item=>itemMarkup(item,"wearing")).join(""):'<div class="op-profile-empty">You are not wearing any items.</div>';
+  };
+  const setPanel=panel=>{
+   selectedPanel=panel;
+   for(const button of app.querySelectorAll("[data-avatar-panel]")){
+    const active=button.dataset.avatarPanel===panel;
+    button.classList.toggle("active",active);
+    button.setAttribute("aria-pressed",String(active));
+   }
+   document.getElementById("opAvatarWardrobePanel").hidden=panel!=="wardrobe";
+   document.getElementById("opAvatarWearingPanel").hidden=panel!=="wearing";
+   document.getElementById("opAvatarBodyPanel").hidden=panel!=="body";
+  };
+  renderLists();
   mountSakuraProfileAvatar(me.publicId);
+
+  app.querySelectorAll("[data-avatar-panel]").forEach(button=>button.addEventListener("click",()=>setPanel(button.dataset.avatarPanel)));
+  app.querySelectorAll("[data-avatar-category]").forEach(button=>button.addEventListener("click",()=>{
+   selectedCategory=button.dataset.avatarCategory;
+   app.querySelectorAll("[data-avatar-category]").forEach(tab=>tab.classList.toggle("active",tab===button));
+   renderLists();
+   bindWearButtons();
+  }));
+
+  const bindWearButtons=()=>{
+   app.querySelectorAll("[data-avatar-item]").forEach(button=>{
+    if(button.dataset.bound==="1")return;
+    button.dataset.bound="1";
+    button.addEventListener("click",async()=>{
+     const itemId=button.dataset.avatarItem;
+     const action=button.dataset.avatarAction;
+     button.disabled=true;
+     try{
+      await api("/api/avatar",{method:"PUT",body:JSON.stringify({action,itemId})});
+      if(isActiveView(view))await avatarPage();
+     }catch(error){
+      toast(error.message);
+      if(isActiveView(view))button.disabled=false;
+     }
+    });
+   });
+  };
+  bindWearButtons();
+
+  app.querySelectorAll("[data-avatar-rig]").forEach(button=>button.addEventListener("click",()=>{
+   rigType=button.dataset.avatarRig;
+   app.querySelectorAll("[data-avatar-rig]").forEach(option=>{
+    const active=option.dataset.avatarRig===rigType;
+    option.classList.toggle("active",active);
+    option.setAttribute("aria-pressed",String(active));
+   });
+   document.getElementById("opAvatarScaleSection").hidden=rigType==="R6";
+   document.getElementById("opAvatarSaveStatus").textContent="Avatar type changed. Save your changes.";
+  }));
+
+  app.querySelectorAll("[data-avatar-color]").forEach(select=>select.addEventListener("change",()=>{
+   bodyColors[select.dataset.avatarColor]=Number(select.value);
+   document.getElementById("opAvatarSaveStatus").textContent="Body colors changed. Save your changes.";
+  }));
+  app.querySelectorAll("[data-avatar-scale]").forEach(input=>input.addEventListener("input",()=>{
+   const key=input.dataset.avatarScale;
+   scales[key]=Number(input.value);
+   const output=app.querySelector('[data-avatar-scale-value="'+key+'"]');
+   if(output)output.textContent=Number(input.value).toFixed(2);
+   document.getElementById("opAvatarSaveStatus").textContent="Body proportions changed. Save your changes.";
+  }));
+
+  document.getElementById("saveAvatarSettings")?.addEventListener("click",async event=>{
+   const button=event.currentTarget;
+   button.disabled=true;
+   button.textContent="Saving...";
+   try{
+    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"rig",rigType})});
+    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"colors",bodyColors})});
+    if(rigType==="R15")await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"scales",scales})});
+    document.getElementById("opAvatarSaveStatus").textContent="Saved. Refreshing your avatar...";
+    if(isActiveView(view))await avatarPage();
+   }catch(error){
+    toast(error.message);
+    if(isActiveView(view)){button.disabled=false;button.textContent="Save Changes";}
+   }
+  });
 
   document.getElementById("refreshSakuraAvatar")?.addEventListener("click",async event=>{
    const button=event.currentTarget;
    button.disabled=true;
-   button.textContent="Refreshing...";
+   button.textContent="Redrawing...";
    try{
-    const host=app.querySelector("[data-sakura-avatar]");
-    if(host)host.innerHTML='<span class="sakura-avatar-loading">Requesting a fresh OpenPekora render...</span>';
-    const response=await fetch("/api/avatar/render/"+encodeURIComponent(me.publicId)+"?refresh=1&nonce="+Date.now(),{
-     credentials:"same-origin",
-     cache:"no-store"
-    });
+    const response=await fetch("/api/avatar/render/"+encodeURIComponent(me.publicId)+"?refresh=1&nonce="+Date.now(),{credentials:"same-origin",cache:"no-store"});
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.error||"Avatar render failed.");
     if(isActiveView(view))await avatarPage();
    }catch(error){
-    if(isActiveView(view)){
-     toast(error.message);
-     button.disabled=false;
-     button.textContent="Refresh render";
-    }
-   }
-  });
-
-  document.getElementById("sakuraAvatarRig")?.addEventListener("change",async event=>{
-   const control=event.currentTarget;
-   const rigType=control.value;
-   control.disabled=true;
-   try{
-    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"rig",rigType})});
-    if(isActiveView(view))await avatarPage();
-   }catch(error){
     toast(error.message);
-    if(isActiveView(view))control.disabled=false;
+    if(isActiveView(view)){button.disabled=false;button.textContent="Redraw avatar";}
    }
-  });
-
-  app.querySelectorAll("[data-avatar-item]").forEach(button=>{
-   button.addEventListener("click",async()=>{
-    const itemId=button.dataset.avatarItem;
-    const action=button.dataset.avatarAction;
-    button.disabled=true;
-    try{
-     await api("/api/avatar",{method:"PUT",body:JSON.stringify({action,itemId})});
-     if(isActiveView(view))await avatarPage();
-    }catch(error){
-     toast(error.message);
-     if(isActiveView(view))button.disabled=false;
-    }
-   });
   });
  }catch(error){
   if(isActiveView(view))app.innerHTML='<div class="empty">Could not load avatar: '+esc(error.message)+'</div>';
  }
 }
-
 async function settings(){
  const view=beginView();
  renderSidebar("settings");
