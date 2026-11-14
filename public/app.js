@@ -778,7 +778,7 @@ async function mountSakuraProfileAvatar(publicId){
  const host=app.querySelector("[data-sakura-avatar]");
  if(!host)return;
  try{
-  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-openpekora-20261114-2");
+  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-sakura-20261114-3");
   const renderer=await sakuraAvatarModulePromise;
   if(!host.isConnected)return;
   const dispose=await renderer.mountSakuraAvatar(host,publicId);
@@ -1258,7 +1258,7 @@ async function avatarPage(){
    const label=action==="remove"?"Remove":"Wear";
    const button=renderable
     ? '<button class="button '+(action==="remove"?'secondary':'primary')+' avatar-item-toggle" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+action+'">'+label+'</button>'
-    : '<button class="button secondary" type="button" disabled title="This item needs a Roblox asset ID and asset type ID">Temporarily unavailable</button>';
+    : '<button class="button secondary" type="button" disabled title="Wearing this item is temporarily unavailable">Temporarily unavailable to wear</button>';
    return '<article class="op-avatar-item">'+
     '<div class="op-avatar-item-image">'+itemPreview(item)+'</div>'+
     '<div class="op-avatar-item-info"><strong>'+esc(item.name)+'</strong><span>'+esc(item.category)+(Number(item.quantity)>1?' · ×'+Number(item.quantity):'')+'</span>'+(wearing?'<span class="sakura-avatar-wearing">Currently wearing</span>':'')+'</div>'+
