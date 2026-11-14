@@ -24,37 +24,82 @@ function vectorFrom(value, fallback = [0, 0, 0]) {
 }
 
 function prepareMaterials(mtlText, files, objectUrls) {
-  const materials = new MTLLoader().parse(mtlText, "");
+  const creator = new MTLLoader().parse(mtlText, "");
   const textureEntries = Object.entries(files).filter(([name, file]) =>
-    /tex\.png$/i.test(name) && typeof file?.content === "string"
+    /\.(png|jpe?g|webp)$/i.test(name) && typeof file?.content === "string"
   );
 
-  for (const [materialName, info] of Object.entries(materials.materialsInfo || {})) {
-    const textureId = materialName.match(/Player\d+/)?.[0];
-    if (!textureId) continue;
+  const getTextureUrl = (fileName, file) => {
+    let url = objectUrls.get(fileName);
+    if (!url) {
+      const extension = fileName.split(".").pop()?.toLowerCase();
+      const mime = extension === "jpg" || extension === "jpeg"
+        ? "image/jpeg"
+        : extension === "webp" ? "image/webp" : "image/png";
+      const bytes = decodeBase64(file.content);
+      url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      objectUrls.set(fileName, url);
+    }
+    return url;
+  };
 
-    const matchingTexture = textureEntries.find(([fileName]) =>
-      fileName.toLowerCase().includes((textureId + "Tex").toLowerCase())
+  const textureByName = new Map(
+    textureEntries.map(([name, file]) => [name.split(/[\\/]/).pop().toLowerCase(), [name, file]])
+  );
+
+  for (const [materialName, info] of Object.entries(creator.materialsInfo || {})) {
+    const textureReferences = Object.entries(info).filter(([key, value]) =>
+      key.toLowerCase().startsWith("map_") && typeof value === "string" && value.trim()
     );
-    if (!matchingTexture) continue;
 
-    const [fileName, file] = matchingTexture;
-    let textureUrl = objectUrls.get(fileName);
-    if (!textureUrl) {
-      const textureBytes = decodeBase64(file.content);
-      textureUrl = URL.createObjectURL(new Blob([textureBytes], { type: "image/png" }));
-      objectUrls.set(fileName, textureUrl);
+    let matchedTexture = null;
+    for (const [key, reference] of textureReferences) {
+      const baseName = reference.trim().replace(/^["']|["']$/g, "").split(/[\\/]/).pop().toLowerCase();
+      const entry = textureByName.get(baseName);
+      if (entry) {
+        matchedTexture = entry;
+        info[key] = getTextureUrl(entry[0], entry[1]);
+      }
     }
 
-    for (const key of Object.keys(info)) {
-      if (key.startsWith("map_")) info[key] = textureUrl;
+    // RCC versions sometimes emit PlayerNTex.png without a matching map filename.
+    if (!matchedTexture) {
+      const textureId = materialName.match(/Player\d+/i)?.[0];
+      if (textureId) {
+        matchedTexture = textureEntries.find(([fileName]) =>
+          fileName.toLowerCase().includes((textureId + "Tex").toLowerCase())
+        ) || null;
+        if (matchedTexture) {
+          const textureUrl = getTextureUrl(matchedTexture[0], matchedTexture[1]);
+          for (const key of Object.keys(info)) {
+            if (key.toLowerCase().startsWith("map_")) info[key] = textureUrl;
+          }
+        }
+      }
+    }
+
+    // Avatar atlas materials should not inherit accidental zero-opacity MTL values.
+    if (/^Player\d+/i.test(materialName) || matchedTexture) {
+      info.d = 1;
+      delete info.Tr;
+      delete info.tr;
     }
   }
 
-  materials.preload();
-  return materials;
-}
+  creator.preload();
 
+  for (const [name, material] of Object.entries(creator.materials || {})) {
+    if (!material || !/^Player\d+/i.test(name)) continue;
+    material.opacity = 1;
+    material.transparent = false;
+    material.alphaTest = 0.02;
+    material.depthWrite = true;
+    material.side = THREE.DoubleSide;
+    material.needsUpdate = true;
+  }
+
+  return creator;
+}
 function disposeScene(scene) {
   scene.traverse(object => {
     if (!object.isMesh) return;
