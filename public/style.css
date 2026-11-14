@@ -1491,3 +1491,32 @@ body{color:#f0eaf8!important}
  .sakura-profile-avatar{width:142px!important;height:190px!important;flex-basis:142px!important}
  .op-profile-header{gap:12px}
 }
+
+
+/* Sakura avatar editor */
+.sakura-avatar-editor-page{display:flex;flex-direction:column;gap:18px;max-width:920px}
+.sakura-avatar-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sakura-avatar-editor-heading .page-title{margin:0}
+.sakura-avatar-editor-preview-section{display:flex;align-items:center;gap:22px;padding:18px;background:#211b2b;border:1px solid rgba(255,255,255,.08);border-radius:6px}
+.sakura-avatar-editor-preview{width:220px!important;height:280px!important;flex:0 0 220px!important}
+.sakura-avatar-editor-settings{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:180px}
+.sakura-avatar-editor-settings h2,.sakura-avatar-editor-section h2{margin:0 0 8px;color:#f0eaf8;font-size:22px}
+.sakura-avatar-editor-settings label{color:#c8c0d0;font-size:14px}
+.sakura-avatar-editor-settings select{min-width:150px}
+.sakura-avatar-editor-section{padding:16px;background:#211b2b;border:1px solid rgba(255,255,255,.08);border-radius:6px}
+.sakura-avatar-item-list{display:flex;flex-direction:column;gap:8px}
+.sakura-avatar-item{display:flex;align-items:center;gap:12px;min-width:0;padding:9px;background:rgba(255,255,255,.035);border-radius:5px}
+.sakura-avatar-item-image{width:54px;height:54px;flex:0 0 54px;overflow:hidden;background:#17131d;border-radius:4px}
+.sakura-avatar-item-image img,.sakura-avatar-item-image model-viewer{width:100%;height:100%;object-fit:contain}
+.sakura-avatar-item-info{display:flex;flex:1;min-width:0;flex-direction:column;gap:2px}
+.sakura-avatar-item-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f0eaf8}
+.sakura-avatar-item-info span{color:#b8afc1;font-size:13px}
+.sakura-avatar-item-info .sakura-avatar-wearing{color:#ad77ed}
+.sakura-avatar-item>.button{flex:0 0 auto}
+@media(max-width:620px){
+ .sakura-avatar-editor-preview-section{align-items:center;flex-direction:column}
+ .sakura-avatar-editor-preview{width:190px!important;height:245px!important;flex-basis:245px!important}
+ .sakura-avatar-editor-heading{align-items:flex-start;flex-direction:column}
+ .sakura-avatar-item{flex-wrap:wrap}
+ .sakura-avatar-item>.button{width:100%}
+}
