@@ -1447,6 +1447,20 @@ async function route(request, env) {
     return json({ purchases:rows.results || [] });
   }
 
+
+  if (request.method === "GET" && path === "/api/currency/sales") {
+    const user = await requireUser(request,env);
+    if (!user) return fail("Please sign in.",401);
+    // Creator-made items pay their recorded creator. Items without a creator are paid to Admin.
+    const receivesSitePayout = user.role === "OWNER" && String(user.username||"").toLowerCase() === "admin" ? 1 : 0;
+    const ownershipFilter = "(ic.creator_id=? OR (?=1 AND ic.creator_id IS NULL))";
+    const [rows,summary] = await Promise.all([
+      env.DB.prepare("SELECT p.id,p.price,p.currency,p.purchased_at,i.id AS item_id,i.name AS item_name,i.category,buyer.username AS buyer_name,buyer.public_id AS buyer_public_id,1 AS quantity FROM purchases p JOIN items i ON i.id=p.item_id LEFT JOIN item_creators ic ON ic.item_id=i.id JOIN users buyer ON buyer.id=p.user_id WHERE "+ownershipFilter+" ORDER BY p.purchased_at DESC,p.rowid DESC LIMIT 50").bind(user.id,receivesSitePayout).all(),
+      env.DB.prepare("SELECT COUNT(*) AS total_sales,COALESCE(SUM(CASE WHEN p.currency=? THEN p.price ELSE 0 END),0) AS earned_p,COALESCE(SUM(CASE WHEN p.currency=? THEN p.price ELSE 0 END),0) AS earned_tix FROM purchases p JOIN items i ON i.id=p.item_id LEFT JOIN item_creators ic ON ic.item_id=i.id WHERE "+ownershipFilter).bind("P$","Tix",user.id,receivesSitePayout).first()
+    ]);
+    return json({sales:rows.results||[],summary:{totalSales:Number(summary?.total_sales||0),earnedP:Number(summary?.earned_p||0),earnedTix:Number(summary?.earned_tix||0)}});
+  }
+
   if (request.method === "POST" && path === "/api/gifts/open") {
     const user=await requireUser(request,env);
     if(!user)return fail("Please sign in.",401);
