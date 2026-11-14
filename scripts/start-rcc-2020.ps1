@@ -200,7 +200,7 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
         const headers = {
             "Content-Type": "text/xml; charset=utf-8",
         };
-        const xml = SOAP("http://roblox.com/", jobExpiration, JSON.stringify(data));
+        const xml = SOAP(Config.BaseUrl, jobExpiration, JSON.stringify(data));
         const response = await axios.request({
             method: HttpMethod.POST,
             url: Config.RCCUrl + ":" + port,
@@ -303,17 +303,19 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
         throw "RCCService did not open TCP $rccPort within 45 seconds. See $rccOut and $rccErr."
     }
 
-    # Test the actual SOAP endpoint. The known RCC client uses text/xml and
-    # the standard http://roblox.com/ SOAP namespace, without a SOAPAction header.
-    $probeXml = @'
+    # Use exactly the namespace OpenPekora uses for runtime BatchJob requests:
+    # Config.BaseUrl, which is the private Sakura bridge URL for this deployment.
+    # Keep the SOAP listener local and do not add a SOAPAction header.
+    $soapNamespace = [System.Security.SecurityElement]::Escape($bridgeBaseUrl)
+    $probeXml = @"
 <?xml version="1.0" encoding="utf-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:rob="http://roblox.com/">
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:rob="$soapNamespace">
   <soapenv:Header/>
   <soapenv:Body>
     <rob:GetStatus/>
   </soapenv:Body>
 </soapenv:Envelope>
-'@
+"@
 
     try {
         $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$rccPort" -Method Post -ContentType "text/xml" -Body $probeXml -UseBasicParsing -TimeoutSec 20
