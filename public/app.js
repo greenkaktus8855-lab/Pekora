@@ -772,7 +772,27 @@ async function currencyPage(){
  const view=beginView();
  renderSidebar("currency");
  if(!me){app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> to view your Sakura balances.</div>';return}
- app.innerHTML='<div class="currency-page"><h1 class="page-title">Sakura Currency</h1><section class="info-panel currency-balance-panel"><h2>Your balances</h2><div class="currency-balances">'+currencyMarkup(me.balance,"P$","currency-large")+currencyMarkup(me.tixBalance,"Tix","currency-large")+'</div><p class="muted">P$ and Tix are virtual Sakura currencies used only on this website. They have no real-world monetary value and cannot be withdrawn.</p><p class="muted">Daily reward: every account receives 5 Tix automatically at midnight (Kyiv time).</p></section><section class="owner-section"><h2>Recent purchases</h2><div id="currencyHistory" class="currency-history">Loading purchase history...</div></section><a class="button" href="/#catalog" data-page="catalog">Browse Catalog</a></div>';
+ app.innerHTML='<div class="currency-page"><h1 class="page-title">Sakura Currency</h1><section class="info-panel currency-balance-panel"><h2>Your balances</h2><div class="currency-balances">'+currencyMarkup(me.balance,"P$","currency-large")+currencyMarkup(me.tixBalance,"Tix","currency-large")+'</div><p class="muted">P$ and Tix are virtual Sakura currencies used only on this website. They have no real-world monetary value and cannot be withdrawn.</p><p class="muted">Daily reward: every account receives 5 Tix automatically at midnight (Kyiv time).</p></section><section class="owner-section"><h2>Recent Sales</h2><div id="currencySalesSummary" class="currency-sales-summary">Loading sales...</div><div id="currencySales" class="currency-sales">Loading recent sales...</div></section><section class="owner-section"><h2>Recent purchases</h2><div id="currencyHistory" class="currency-history">Loading purchase history...</div></section><a class="button" href="/#catalog" data-page="catalog">Browse Catalog</a></div>';
+ try{
+  const salesData=await api("/api/currency/sales");
+  const salesHost=document.getElementById("currencySales");
+  const summaryHost=document.getElementById("currencySalesSummary");
+  if(isActiveView(view)&&salesHost&&summaryHost){
+   const sales=salesData.sales||[];
+   const summary=salesData.summary||{};
+   summaryHost.innerHTML='<span>Total sold: <strong>'+Number(summary.totalSales||0).toLocaleString()+'</strong></span><span>Earned: <strong>'+currencyMarkup(summary.earnedP||0,"P$")+'</strong> <strong>'+currencyMarkup(summary.earnedTix||0,"Tix")+'</strong></span>';
+   salesHost.innerHTML=sales.length?'<div class="currency-sales-list">'+sales.map(x=>{
+    const buyer=esc(x.buyer_name||"Unknown");
+    const buyerMarkup=x.buyer_public_id?'<a href="/#profile?id='+encodeURIComponent(x.buyer_public_id)+'" data-profile="'+buyer+'">'+buyer+'</a>':buyer;
+    return '<article class="currency-sale-row"><div class="currency-sale-main"><strong>'+esc(x.item_name||"Item")+'</strong><span class="muted">Bought by '+buyerMarkup+' · '+esc(x.category||"Item")+' · '+new Date(x.purchased_at).toLocaleString()+'</span></div><span class="currency-sale-quantity">'+Number(x.quantity||1)+' pc</span><b>+'+currencyMarkup(x.price,x.currency||"P$")+'</b></article>';
+   }).join("")+'</div>':'<div class="op-empty">No items sold yet. When someone buys one of your items, it will appear here.</div>';
+  }
+ }catch(e){
+  const salesHost=document.getElementById("currencySales");
+  const summaryHost=document.getElementById("currencySalesSummary");
+  if(isActiveView(view)&&salesHost)salesHost.textContent=e.message;
+  if(isActiveView(view)&&summaryHost)summaryHost.textContent="Could not load sales.";
+ }
  try{
   const d=await api("/api/currency/history");
   const host=document.getElementById("currencyHistory");
