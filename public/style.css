@@ -1583,3 +1583,9 @@ body{color:#f0eaf8!important}
  .op-avatar-tabs button{padding:8px 7px;font-size:12px}
  .op-avatar-save-row{align-items:stretch;flex-direction:column}
 }
+
+
+.op-avatar-item-tools{display:flex;flex:0 0 auto;gap:4px}
+.op-avatar-item-tools .button{min-width:30px;padding:5px 6px;font-size:11px}
+.op-avatar-wearing-actions{display:flex;align-items:center;gap:7px}
+@media(max-width:560px){.op-avatar-item-tools{margin-left:auto}.op-avatar-item-tools .button{min-width:44px}.op-avatar-wearing-actions{width:100%;justify-content:space-between}}
