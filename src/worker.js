@@ -91,7 +91,7 @@ async function body(request) {
 const publicUser = u => ({ id:u.id, username:u.username, role:u.role, balance:Number(u.balance||0), tixBalance:Number(u.tix_balance||0), createdAt:u.created_at, publicId:u.public_id ?? null, isVerified:Boolean(u.is_verified), isAssetModerator:Boolean(u.is_asset_moderator), isAdministrator:Boolean(u.is_administrator) });
 const USER_BADGE_KEYS = Object.freeze(["ADMINISTRATOR","ASSET_MODERATOR","EARLY_SUPPORTER","CONTRIBUTOR","CREATOR","COMMUNITY_HELPER"]);
 const USER_BADGE_LABELS = Object.freeze({ADMINISTRATOR:"Administrator",ASSET_MODERATOR:"Asset Moderator",EARLY_SUPPORTER:"Early Supporter",CONTRIBUTOR:"Contributor",CREATOR:"Creator",COMMUNITY_HELPER:"Community Helper"});
-const ITEM_CATEGORIES = ["Hats","Hair","Faces","Shirts","Pants","Accessories"];
+const ITEM_CATEGORIES = ["Hats","Hair","Faces","T-Shirts","Shirts","Pants","Accessories"];
 const DEFAULT_AVATAR_BODY_COLORS = Object.freeze({headColorId:125,torsoColorId:125,leftArmColorId:125,rightArmColorId:125,leftLegColorId:125,rightLegColorId:125});
 const AVATAR_COLOR_IDS = new Set([361,192,217,153,359,352,5,101,1007,1014,38,18,125,1030,133,106,105,1017,24,334,226,141,1021,28,37,310,317,119,1011,1012,1010,23,305,102,45,107,1018,1027,1019,1013,11,1024,104,1023,321,1015,1031,1006,1026,21,1004,1032,1016,330,9,1025,364,351,1008,29,1022,151,135,1020,1028,1009,1029,1003,26,199,194,1002,208,1,1001]);
 const DEFAULT_AVATAR_SCALES = Object.freeze({height:1,width:1,head:1,depth:1,proportion:0,bodyType:0});
@@ -153,7 +153,7 @@ function validItem(data, allowLegacyHttp = false) {
     catch { return "Enter a valid image URL."; }
   }
   const assetId = data.asset_id === undefined || data.asset_id === null || data.asset_id === "" ? 0 : Number(data.asset_id);
-  const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+  const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,"T-Shirts":2,Shirts:11,Pants:12};
   const suppliedAssetTypeId = Number(data.asset_type_id || 0);
   const assetTypeId = suppliedAssetTypeId > 0
     ? suppliedAssetTypeId
@@ -1919,7 +1919,7 @@ async function route(request, env) {
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId) || !["wear","remove"].includes(action)) return fail("Choose an inventory item and a valid avatar action.");
     const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id,i.asset_type_id,i.model_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
     if (!item) return fail("You can only equip items in your inventory.",404);
-    if (!["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category)) return fail("This item category cannot be equipped on the avatar.");
+    if (!["Hats","Hair","Faces","T-Shirts","Shirts","Pants","Accessories"].includes(item.category)) return fail("This item category cannot be equipped on the avatar.");
     if (action === "remove") {
       await env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=?").bind(user.id,itemId).run();
       return json({ok:true,action,equipped:false});
@@ -1936,7 +1936,7 @@ async function route(request, env) {
       }
     }
     const statements = [];
-    if (["Hair","Faces","Shirts","Pants"].includes(item.category)) {
+    if (["Hair","Faces","T-Shirts","Shirts","Pants"].includes(item.category)) {
       statements.push(env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND category=?").bind(user.id,item.category));
     }
     statements.push(env.DB.prepare("INSERT OR IGNORE INTO equipped_items (user_id,item_id,category) VALUES (?,?,?)").bind(user.id,item.id,item.category));
@@ -2925,7 +2925,7 @@ async function route(request, env) {
         if(!await areEligibleGiftRewards(env,giftRewards))return fail("Every gift reward must be an existing Offsale item. Gift items cannot be used as rewards.",404);
       }
       const itemId=id();
-      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,"T-Shirts":2,Shirts:11,Pants:12};
       const assetId = Number(data.asset_id || 0);
       const assetTypeId = Number(data.asset_type_id || (assetId ? (defaultAssetTypes[data.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID (for example neck, back, front, shoulder or waist).");
@@ -2984,7 +2984,7 @@ async function route(request, env) {
       if (merged.stock_limit > 0 && merged.stock_limit < Number(current.stock_sold||0)) return fail("Stock cannot be lower than the number already sold.");
       const keepLegacyImage = String(merged.image_url||"") === String(current.image_url||"");
       const error=validItem(merged,keepLegacyImage); if(error)return fail(error);
-      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,Shirts:11,Pants:12};
+      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,"T-Shirts":2,Shirts:11,Pants:12};
       const assetId = Number(merged.asset_id || 0);
       const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
       if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
