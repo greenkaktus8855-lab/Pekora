@@ -1262,6 +1262,7 @@ async function avatarPage(){
    return '<article class="op-avatar-item">'+
     '<div class="op-avatar-item-image">'+itemPreview(item)+'</div>'+
     '<div class="op-avatar-item-info"><strong>'+esc(item.name)+'</strong><span>'+esc(item.category)+(Number(item.quantity)>1?' · ×'+Number(item.quantity):'')+'</span>'+(wearing?'<span class="sakura-avatar-wearing">Currently wearing</span>':'')+'</div>'+
+    (renderable?'<div class="op-avatar-item-tools"><button type="button" class="button secondary" data-copy-avatar-id="'+Number(item.asset_id)+'">ID</button><button type="button" class="button secondary" data-copy-avatar-link="'+Number(item.asset_id)+'">Link</button></div>':'')+
     button+
    '</article>';
   };
@@ -1294,7 +1295,7 @@ async function avatarPage(){
       '<div id="opAvatarWardrobeGrid" class="op-avatar-wardrobe-grid"></div>'+
      '</section>'+
      '<section id="opAvatarWearingPanel" class="op-avatar-panel" hidden>'+
-      '<div class="op-avatar-wardrobe-heading"><div><h2>Currently Wearing</h2><p class="muted">Remove an item to take it off your character.</p></div><span class="op-avatar-count">'+equipped.length+' items</span></div>'+
+      '<div class="op-avatar-wardrobe-heading"><div><h2>Currently Wearing</h2><p class="muted">Remove an item to take it off your character.</p></div><div class="op-avatar-wearing-actions"><span class="op-avatar-count">'+equipped.length+' items</span><button type="button" class="button secondary" id="copyWearingAvatarIds">Copy IDs</button></div></div>'+
       '<div id="opAvatarWearingGrid" class="op-avatar-wardrobe-grid"></div>'+
      '</section>'+
      '<section id="opAvatarBodyPanel" class="op-avatar-panel" hidden>'+
@@ -1314,6 +1315,20 @@ async function avatarPage(){
    const filtered=selectedCategory==="All"?eligible:eligible.filter(item=>item.category===selectedCategory);
    wardrobeGrid.innerHTML=filtered.length?filtered.map(item=>itemMarkup(item,"wardrobe")).join(""):'<div class="op-profile-empty">No '+esc(selectedCategory==="All"?"avatar items":selectedCategory)+" in your inventory.</div>";
    wearingGrid.innerHTML=equipped.length?equipped.map(item=>itemMarkup(item,"wearing")).join(""):'<div class="op-profile-empty">You are not wearing any items.</div>';
+   app.querySelectorAll("[data-copy-avatar-id]").forEach(button=>{
+    if(button.dataset.copyBound==="1")return;
+    button.dataset.copyBound="1";
+    button.addEventListener("click",()=>copyToClipboard(button.dataset.copyAvatarId,"Asset ID copied"));
+   });
+   app.querySelectorAll("[data-copy-avatar-link]").forEach(button=>{
+    if(button.dataset.copyBound==="1")return;
+    button.dataset.copyBound="1";
+    button.addEventListener("click",()=>copyToClipboard("https://www.roblox.com/catalog/"+encodeURIComponent(button.dataset.copyAvatarLink),"Catalog link copied"));
+   });
+   document.getElementById("copyWearingAvatarIds")?.addEventListener("click",()=>{
+    const ids=equipped.filter(item=>Number(item.asset_id)>0).map(item=>Number(item.asset_id)).join(", ");
+    copyToClipboard(ids,"Avatar asset IDs copied");
+   });
   };
   const setPanel=panel=>{
    selectedPanel=panel;
