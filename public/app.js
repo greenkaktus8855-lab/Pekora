@@ -645,7 +645,7 @@ async function ownerRecoveryPage(){
 }
 
 async function logout(){try{await api("/api/logout",{method:"POST"});setUser(null);page("home")}catch(e){toast(e.message)}}
-function inventoryItemCard(item){
+function inventoryItemCard(item,equippedIds=new Set()){
  const soldOut=Number(item.stock_limit)>0&&Number(item.stock_sold)>=Number(item.stock_limit);
   const eligible=Number(item.is_limited)===1||Number(item.is_offsale)===1||soldOut;
  const status=item.active_listing_id
@@ -657,11 +657,14 @@ function inventoryItemCard(item){
  const canOpenGift=isGift&&!opened&&!item.active_listing_id&&Number.isFinite(giftDate)&&Date.now()>=giftDate;
  const giftStatus=isGift?(opened?'<div class="inventory-gift-status">Gift opened · '+esc(item.gift_reward_name||"Reward received")+'</div>':Number.isFinite(giftDate)?'<div class="inventory-gift-status">Opens '+esc(new Date(giftDate).toLocaleString())+'</div>':'<div class="inventory-gift-status">Gift opening date unavailable</div>'):"";
  const giftButton=canOpenGift?'<button class="primary inventory-open-gift" type="button" data-open-gift="'+esc(item.id)+'">Open Gift</button>':"";
+ const canWear=Boolean(item.model_url)&&["Accessories","Hats","Hair","Faces"].includes(item.category);
+ const isEquipped=equippedIds.has(item.id);
+ const avatarButton=canWear?'<button class="button avatar-equip-button" type="button" data-avatar-wear-item="'+esc(item.id)+'" data-equipped="'+(isEquipped?"1":"0")+'">'+(isEquipped?"Remove from avatar":"Wear on avatar")+'</button>':"";
  return '<article class="item-card inventory-item-card">'+
   '<a class="item-image" href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+itemPreview(item)+itemBadgeMarkup(item)+'</a>'+
   '<h3><a href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+esc(item.name)+'</a></h3>'+
   '<div class="muted">'+esc(item.category)+'</div>'+(Number(item.quantity)>1?'<div class="muted">Quantity: '+Number(item.quantity)+'</div>':"")+status+giftStatus+giftButton+
-  '<div class="inventory-item-actions"><button class="button danger-button inventory-remove-button" type="button" data-remove-inventory-item="'+esc(item.id)+'">Remove from inventory</button></div>'+
+  '<div class="inventory-item-actions">'+avatarButton+'<button class="button danger-button inventory-remove-button" type="button" data-remove-inventory-item="'+esc(item.id)+'">Remove from inventory</button></div>'+
   '</article>';
 }
 async function inventory(){
@@ -671,10 +674,11 @@ async function inventory(){
  app.innerHTML='<div class="inventory-management-heading"><div><h1 class="page-title">Inventory</h1><p class="inventory-sell-intro">Remove individual items or clear your entire inventory. These actions do not issue refunds.</p></div><button class="button danger-button" id="clearInventoryButton" type="button" disabled>Clear inventory</button></div><div id="inventoryGrid" class="item-grid">Loading...</div>';
  const grid=document.getElementById("inventoryGrid");
  try{
-  const d=await api("/api/inventory");
+  const [d,avatarData]=await Promise.all([api("/api/inventory"),api("/api/avatar").catch(()=>({equipped:[]}))]);
   if(!isActiveView(view)||!grid?.isConnected)return;
   const ownedItems=Array.isArray(d.items)?d.items:[];
-  grid.innerHTML=ownedItems.length?ownedItems.map(inventoryItemCard).join(""):'<div class="empty">Your inventory is empty. <a href="/#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+  const equippedIds=new Set((avatarData.equipped||[]).map(item=>item.id));
+  grid.innerHTML=ownedItems.length?ownedItems.map(item=>inventoryItemCard(item,equippedIds)).join(""):'<div class="empty">Your inventory is empty. <a href="/#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
   const clearInventoryButton=document.getElementById("clearInventoryButton");
   if(clearInventoryButton){
    clearInventoryButton.disabled=ownedItems.length===0;
@@ -710,6 +714,25 @@ async function inventory(){
     toast(error.message);
     button.disabled=false;
     button.textContent="Remove from inventory";
+   }
+  }));
+  grid.querySelectorAll("[data-avatar-wear-item]").forEach(button=>button.addEventListener("click",async()=>{
+   const itemId=button.dataset.avatarWearItem;
+   const willEquip=button.dataset.equipped!=="1";
+   const restingText=willEquip?"Wear on avatar":"Remove from avatar";
+   button.disabled=true;
+   button.textContent=willEquip?"Equipping...":"Removing...";
+   try{
+    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:willEquip?"wear":"remove",itemId})});
+    button.dataset.equipped=willEquip?"1":"0";
+    button.textContent=willEquip?"Remove from avatar":"Wear on avatar";
+    button.classList.toggle("secondary",willEquip);
+    toast(willEquip?"Added to your Sakura avatar":"Removed from your Sakura avatar");
+   }catch(error){
+    toast(error.message);
+    button.textContent=restingText;
+   }finally{
+    button.disabled=false;
    }
   }));
   grid.querySelectorAll("[data-open-gift]").forEach(button=>button.addEventListener("click",async()=>{
@@ -749,6 +772,23 @@ async function bannedAccountPage(identifier){
  }
 }
 
+let sakuraAvatarModulePromise=null;
+async function mountSakuraProfileAvatar(publicId){
+ const host=app.querySelector("[data-sakura-avatar]");
+ if(!host)return;
+ try{
+  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-avatar-20261114-1");
+  const renderer=await sakuraAvatarModulePromise;
+  if(!host.isConnected)return;
+  const dispose=await renderer.mountSakuraAvatar(host,publicId);
+  if(!host.isConnected&&typeof dispose==="function")dispose();
+ }catch(error){
+  if(!host.isConnected)return;
+  host.innerHTML='<span class="sakura-avatar-loading">3D avatar is unavailable</span>';
+  console.error("[Sakura avatar]",error);
+ }
+}
+
 async function profile(identifier=me?.username,byId=false){
  const view=beginView();
  renderSidebar("profile");
@@ -765,10 +805,10 @@ async function profile(identifier=me?.username,byId=false){
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
   const publicId=p.publicId??p.id,profileUrl="/#profile?id="+encodeURIComponent(publicId);
   if(!byId&&publicId){history.replaceState({page:"profile",publicId},"",profileUrl)}
-  const profileAvatar=avatar(p.username);
-  const profileRenderImage="";
+  const profileAvatar='<div class="sakura-avatar-fallback">'+avatar(p.username)+'</div>';
+  const profileRenderImage='<div class="sakura-avatar-render" data-sakura-avatar data-avatar-id="'+esc(publicId)+'"><span class="sakura-avatar-loading">Loading Sakura avatar…</span></div>';
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+profileRenderImage+'</div><div class="op-profile-info">'+
+   '<div class="op-profile-header"><div class="op-profile-avatar sakura-profile-avatar">'+profileAvatar+profileRenderImage+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
     '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
     '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
@@ -780,6 +820,7 @@ async function profile(identifier=me?.username,byId=false){
    '</section>'+
    '<section class="op-profile-section op-profile-badges-section"><h2>Badges</h2>'+profileBadgesMarkup(p)+'</section>'+
    '</div>';
+  mountSakuraProfileAvatar(publicId);
   if(!isSelf&&me)loadProfileFriendAction(p.username);
  }catch(e){if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
