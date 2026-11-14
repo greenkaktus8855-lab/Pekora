@@ -922,9 +922,158 @@ async function recordSiteAudit(env,event) {
   }catch(error){console.error("[Sakura Logs] Could not send audit event to Discord:",error);}
 }
 
+const avatarRenderCache = new Map();
+const avatarRenderInflight = new Map();
+const AVATAR_ASSET_TYPE_NAMES = Object.freeze({
+  2:"T-Shirt",8:"Hat",11:"Shirt",12:"Pants",17:"Head",18:"Face",19:"Gear",
+  27:"Torso",28:"Right Arm",29:"Left Arm",30:"Left Leg",31:"Right Leg",
+  41:"Hair Accessory",42:"Face Accessory",43:"Neck Accessory",44:"Shoulder Accessory",
+  45:"Front Accessory",46:"Back Accessory",47:"Waist Accessory",
+  48:"Climb Animation",49:"Death Animation",50:"Fall Animation",51:"Idle Animation",
+  52:"Jump Animation",53:"Run Animation",54:"Swim Animation"
+});
+
+async function getAvatarRenderProfile(env, publicId) {
+  const profile = await env.DB.prepare("SELECT id,public_id FROM users WHERE public_id=? AND is_banned=0")
+    .bind(Number(publicId)).first();
+  if (!profile) return null;
+  const [rows,settings] = await Promise.all([
+    env.DB.prepare("SELECT i.id,i.name,i.category,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC")
+      .bind(profile.id).all(),
+    loadAvatarSettings(env,profile.id)
+  ]);
+  return {profile,items:rows.results||[],settings};
+}
+
+function createRccAvatarAppearance(profileData, baseUrl) {
+  const settings = profileData.settings;
+  const items = profileData.items;
+  const assets = items
+    .filter(item => Number(item.asset_id)>0 && Number(item.asset_type_id)>0)
+    .map(item => ({
+      id:Number(item.asset_id),
+      name:String(item.name||""),
+      assetType:{
+        id:Number(item.asset_type_id),
+        name:AVATAR_ASSET_TYPE_NAMES[Number(item.asset_type_id)]||"Asset"
+      },
+      currentVersionId:Number(item.asset_id)
+    }));
+  const assetAndAssetTypeIds = assets.map(asset => ({
+    assetId:asset.id,
+    assetTypeId:asset.assetType.id
+  }));
+  const c = settings.bodyColors;
+  const bodyColors = {
+    ...c,
+    HeadColor:c.headColorId,
+    LeftArmColor:c.leftArmColorId,
+    LeftLegColor:c.leftLegColorId,
+    RightArmColor:c.rightArmColorId,
+    RightLegColor:c.rightLegColorId,
+    TorsoColor:c.torsoColorId
+  };
+  return {
+    resolvedAvatarType:settings.rigType,
+    accessoryVersionIds:[],
+    equippedGearVersionIds:assets.filter(asset=>asset.assetType.id===19).map(asset=>asset.id),
+    assetAndAssetTypeIds,
+    backpackGearVersionIds:[],
+    animationAssetIds:{},
+    playerAvatarType:settings.rigType,
+    scales:settings.scales,
+    bodyColorsUrl:baseUrl+"Asset/BodyColors.ashx?userId="+encodeURIComponent(profileData.profile.public_id),
+    bodyColors,
+    emotes:[],
+    assets
+  };
+}
+
 async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
+
+  // Private compatibility endpoints consumed by the OpenPekora RCC renderer.
+  // Set Config.BaseUrl in game-renderer/config.json to:
+  // https://sakura.mopcblox.online/_sakura-rcc/<AVATAR_RENDERER_SECRET>/
+  const rccBridgePrefix = "/_sakura-rcc/";
+  if (path.startsWith(rccBridgePrefix)) {
+    const remainder = path.slice(rccBridgePrefix.length);
+    const firstSlash = remainder.indexOf("/");
+    if (firstSlash<1) return fail("Invalid Sakura RCC bridge path.",404);
+    const suppliedSecret = decodeURIComponent(remainder.slice(0,firstSlash));
+    const configuredSecret = String(env.AVATAR_RENDERER_SECRET||"");
+    if (!configuredSecret || !constantTimeEqual(suppliedSecret,configuredSecret)) {
+      return fail("Sakura RCC bridge is not authorized.",403);
+    }
+    if (request.method !== "GET") return fail("RCC bridge only supports GET requests.",405);
+    if (!env.DB) return fail("D1 binding DB is missing.",503);
+    try { await ensureSiteSettings(env); }
+    catch (error) {
+      console.error("[Sakura RCC] Database setup failed:",error);
+      return fail("Sakura database is not ready.",503);
+    }
+
+    const bridgePath = remainder.slice(firstSlash+1).replace(/^\/+|\/+$/g,"").toLowerCase();
+    if (bridgePath === "v1.1/avatar-fetch" || bridgePath === "v1/avatar-fetch") {
+      const publicId = Number(url.searchParams.get("userId")||0);
+      if (!Number.isSafeInteger(publicId) || publicId<1) return fail("A valid Sakura userId is required.",400);
+      const profileData = await getAvatarRenderProfile(env,publicId);
+      if (!profileData) return fail("Sakura user not found.",404);
+      const baseUrl = url.origin + rccBridgePrefix + encodeURIComponent(configuredSecret) + "/";
+      return json(createRccAvatarAppearance(profileData,baseUrl));
+    }
+
+    if (bridgePath === "asset/bodycolors.ashx") {
+      const publicId = Number(url.searchParams.get("userId")||0);
+      if (!Number.isSafeInteger(publicId) || publicId<1) return fail("A valid Sakura userId is required.",400);
+      const profileData = await getAvatarRenderProfile(env,publicId);
+      if (!profileData) return fail("Sakura user not found.",404);
+      const c = profileData.settings.bodyColors;
+      const xml = '<?xml version="1.0" encoding="utf-8"?>' +
+        '<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">' +
+        '<External>null</External><External>nil</External><Item class="BodyColors"><Properties>' +
+        '<int name="HeadColor">'+c.headColorId+'</int>' +
+        '<int name="LeftArmColor">'+c.leftArmColorId+'</int>' +
+        '<int name="LeftLegColor">'+c.leftLegColorId+'</int>' +
+        '<int name="RightArmColor">'+c.rightArmColorId+'</int>' +
+        '<int name="RightLegColor">'+c.rightLegColorId+'</int>' +
+        '<int name="TorsoColor">'+c.torsoColorId+'</int>' +
+        '</Properties></Item></roblox>';
+      return new Response(xml,{headers:{
+        "content-type":"application/xml; charset=utf-8",
+        "cache-control":"private, max-age=30",
+        "x-content-type-options":"nosniff"
+      }});
+    }
+
+    if (bridgePath === "v1/asset" || bridgePath === "asset") {
+      const assetId = Number(url.searchParams.get("id")||url.searchParams.get("assetversionid")||0);
+      if (!Number.isSafeInteger(assetId) || assetId<1 || assetId>2147483647) return fail("A valid asset id is required.",400);
+      try {
+        const upstream = await fetch("https://assetdelivery.roblox.com/v1/asset/?id="+assetId,{
+          headers:{"accept":"*/*"}
+        });
+        if (!upstream.ok) {
+          console.error("[Sakura RCC] Asset source returned HTTP",upstream.status,"for asset",assetId);
+          return fail("Asset "+assetId+" could not be loaded by the OpenPekora renderer.",502);
+        }
+        const length = Number(upstream.headers.get("content-length")||0);
+        if (length>50*1024*1024) return fail("Asset is too large for the avatar renderer.",413);
+        return new Response(upstream.body,{headers:{
+          "content-type":upstream.headers.get("content-type")||"application/octet-stream",
+          "cache-control":"public, max-age=3600",
+          "x-content-type-options":"nosniff"
+        }});
+      } catch (error) {
+        console.error("[Sakura RCC] Asset fetch failed:",assetId,error);
+        return fail("Could not retrieve asset "+assetId+" for the OpenPekora renderer.",502);
+      }
+    }
+
+    return fail("Unsupported Sakura RCC bridge route.",404);
+  }
+
   const apiRoute = path.startsWith("/api/");
   if (apiRoute && path !== "/api/health" && !env.DB) {
     return json({ error:"D1 binding DB is missing." },503);
@@ -1616,12 +1765,92 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
+  const avatarRenderPrefix = "/api/avatar/render/";
+  const avatarRenderId = path.startsWith(avatarRenderPrefix) ? path.slice(avatarRenderPrefix.length) : "";
+  if (request.method === "GET" && /^[0-9]{1,12}$/.test(avatarRenderId)) {
+    const publicId = Number(avatarRenderId);
+    const rendererUrl = String(env.AVATAR_RENDERER_URL||"").replace(/\/+$/,"");
+    if (!rendererUrl || !env.AVATAR_RENDERER_SECRET) {
+      return fail("OpenPekora is not fully configured. Set AVATAR_RENDERER_URL and AVATAR_RENDERER_SECRET in the Sakura Worker.",503);
+    }
+    let rendererOrigin;
+    try {
+      const parsed = new URL(rendererUrl);
+      if (parsed.protocol !== "https:") return fail("AVATAR_RENDERER_URL must use HTTPS.",503);
+      rendererOrigin = parsed.origin;
+    } catch {
+      return fail("AVATAR_RENDERER_URL is invalid.",503);
+    }
+
+    const profileData = await getAvatarRenderProfile(env,publicId);
+    if (!profileData) return fail("User not found.",404);
+    const sourceHash = await digest(JSON.stringify({
+      settings:profileData.settings,
+      equipped:profileData.items.map(item=>({
+        id:item.id,asset_id:Number(item.asset_id||0),asset_type_id:Number(item.asset_type_id||0),model_url:item.model_url||""
+      }))
+    }));
+    const cacheKey = publicId+":"+sourceHash;
+    const cached = avatarRenderCache.get(cacheKey);
+    if (cached && cached.expiresAt>Date.now()) return json(cached.data,200,{"cache-control":"private, max-age=20"});
+
+    let renderPromise = avatarRenderInflight.get(cacheKey);
+    if (!renderPromise) {
+      renderPromise = (async()=>{
+        const response = await fetch(rendererOrigin+"/player/thumbnail-3d",{
+          method:"POST",
+          headers:{"content-type":"application/json","accept":"application/json"},
+          body:JSON.stringify({userId:publicId,jobExpiration:55})
+        });
+        const responseText = await response.text();
+        let envelope;
+        try { envelope = JSON.parse(responseText); }
+        catch { throw new Error("OpenPekora returned non-JSON response (HTTP "+response.status+")."); }
+        if (!response.ok || envelope?.success===false) {
+          throw new Error(String(envelope?.message||("OpenPekora returned HTTP "+response.status)).slice(0,300));
+        }
+        let renderData = envelope?.data;
+        if (typeof renderData === "string") {
+          try { renderData = JSON.parse(renderData); }
+          catch { throw new Error("OpenPekora returned an invalid 3D scene document."); }
+        }
+        const files = renderData?.files;
+        if (!renderData?.camera || !renderData?.AABB || !files?.["scene.obj"]?.content || !files?.["scene.mtl"]?.content) {
+          throw new Error("OpenPekora did not return scene.obj, scene.mtl, camera and AABB.");
+        }
+        const totalChars = Object.values(files).reduce((sum,file)=>sum+String(file?.content||"").length,0);
+        if (totalChars>28*1024*1024) throw new Error("OpenPekora 3D scene is too large.");
+        return {
+          camera:renderData.camera,
+          aabb:renderData.AABB,
+          files,
+          renderer:"OpenPekora RCC"
+        };
+      })();
+      avatarRenderInflight.set(cacheKey,renderPromise);
+    }
+    try {
+      const rendered = await renderPromise;
+      avatarRenderCache.set(cacheKey,{data:rendered,expiresAt:Date.now()+45000});
+      if (avatarRenderCache.size>100) {
+        for (const [key,value] of avatarRenderCache) if (value.expiresAt<=Date.now()) avatarRenderCache.delete(key);
+        if (avatarRenderCache.size>100) avatarRenderCache.delete(avatarRenderCache.keys().next().value);
+      }
+      return json(rendered,200,{"cache-control":"private, max-age=20"});
+    } catch (error) {
+      console.error("[Sakura OpenPekora renderer] Avatar render failed:",publicId,error);
+      return fail("OpenPekora could not render this Sakura avatar: "+String(error?.message||error).slice(0,240),502);
+    } finally {
+      avatarRenderInflight.delete(cacheKey);
+    }
+  }
+
   const publicAvatarMatch = path.match(/^\/api\/avatar\/public\/(\d{1,12})$/);
   if (publicAvatarMatch && request.method === "GET") {
     const profile = await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND is_banned=0").bind(Number(publicAvatarMatch[1])).first();
     if (!profile) return fail("User not found.",404);
     const [rows,settings] = await Promise.all([
-      env.DB.prepare("SELECT i.id,i.name,i.category,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND i.model_url<>'' ORDER BY e.equipped_at DESC").bind(profile.id).all(),
+      env.DB.prepare("SELECT i.id,i.name,i.category,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND (i.model_url<>'' OR (i.asset_id>0 AND i.asset_type_id>0)) ORDER BY e.equipped_at DESC").bind(profile.id).all(),
       loadAvatarSettings(env,profile.id)
     ]);
     return json({enabled:true,equipped:rows.results||[],...settings});
@@ -1630,7 +1859,7 @@ async function route(request, env) {
   if (path === "/api/avatar" && request.method === "GET") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const [rows,settings] = await Promise.all([env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND i.model_url<>'' ORDER BY e.equipped_at DESC").bind(user.id).all(),loadAvatarSettings(env,user.id)]);
+    const [rows,settings] = await Promise.all([env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND (i.model_url<>'' OR (i.asset_id>0 AND i.asset_type_id>0)) ORDER BY e.equipped_at DESC").bind(user.id).all(),loadAvatarSettings(env,user.id)]);
     return json({enabled:true,equipped:rows.results||[],...settings});
   }
 
@@ -1678,7 +1907,7 @@ async function route(request, env) {
 
     const itemId = String(data.itemId||"");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId) || !["wear","remove"].includes(action)) return fail("Choose an inventory item and a valid avatar action.");
-    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id,i.model_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
+    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id,i.asset_type_id,i.model_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
     if (!item) return fail("You can only equip items in your inventory.",404);
     if (!["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category)) return fail("This item category cannot be equipped on the avatar.");
     if (action === "remove") {
@@ -1686,11 +1915,15 @@ async function route(request, env) {
       return json({ok:true,action,equipped:false});
     }
     const modelUrl = String(item.model_url||"").trim();
-    if (!modelUrl) return fail("Only items with a Sakura 3D model can be equipped by this renderer.",409);
-    try {
-      if (new URL(modelUrl).protocol !== "https:") return fail("Sakura 3D model URLs must use HTTPS.",409);
-    } catch {
-      return fail("This item has an invalid Sakura 3D model URL.",409);
+    const hasRccAsset = Number(item.asset_id||0)>0 && Number(item.asset_type_id||0)>0;
+    if (!hasRccAsset && !modelUrl) return fail("This item has no Sakura 3D model or OpenPekora asset id.",409);
+    if (Number(item.asset_id||0)>0 && !Number(item.asset_type_id||0)) return fail("This item is missing its OpenPekora asset type.",409);
+    if (modelUrl) {
+      try {
+        if (new URL(modelUrl).protocol !== "https:") return fail("This item's 3D model URL must use HTTPS.",409);
+      } catch {
+        return fail("This item has an invalid 3D model URL.",409);
+      }
     }
     const statements = [];
     if (["Hair","Faces","Shirts","Pants"].includes(item.category)) {
