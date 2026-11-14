@@ -303,16 +303,28 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
         throw "RCCService did not open TCP $rccPort within 45 seconds. See $rccOut and $rccErr."
     }
 
-    # Use exactly the namespace OpenPekora uses for runtime BatchJob requests:
-    # Config.BaseUrl, which is the private Sakura bridge URL for this deployment.
+    # Probe the same BatchJob SOAP operation used by OpenPekora at render time.
+    # Its XML namespace must match Config.BaseUrl (the private Sakura bridge URL).
     # Keep the SOAP listener local and do not add a SOAPAction header.
     $soapNamespace = [System.Security.SecurityElement]::Escape($bridgeBaseUrl)
+    $probeJobId = [Guid]::NewGuid().ToString()
+    $probeScriptId = [Guid]::NewGuid().ToString()
     $probeXml = @"
 <?xml version="1.0" encoding="utf-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:rob="$soapNamespace">
   <soapenv:Header/>
   <soapenv:Body>
-    <rob:GetStatus/>
+    <rob:BatchJob>
+      <rob:job>
+        <rob:id>$probeJobId</rob:id>
+        <rob:expirationInSeconds>30</rob:expirationInSeconds>
+        <rob:cores>1</rob:cores>
+      </rob:job>
+      <rob:script>
+        <rob:name>$probeScriptId</rob:name>
+        <rob:script><![CDATA[return "Sakura RCC SOAP probe"]]></rob:script>
+      </rob:script>
+    </rob:BatchJob>
   </soapenv:Body>
 </soapenv:Envelope>
 "@
@@ -320,12 +332,12 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
     try {
         $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$rccPort" -Method Post -ContentType "text/xml" -Body $probeXml -UseBasicParsing -TimeoutSec 20
         $statusBody = [string]$statusResponse.Content
-        if ([int]$statusResponse.StatusCode -ne 200 -or $statusBody -notmatch "GetStatusResponse") {
-            throw "RCC returned HTTP $($statusResponse.StatusCode), but the body was not a valid GetStatus SOAP response: $($statusBody.Substring(0,[Math]::Min(700,$statusBody.Length)))"
+        if ([int]$statusResponse.StatusCode -ne 200 -or $statusBody -notmatch "BatchJobResponse") {
+            throw "RCC returned HTTP $($statusResponse.StatusCode), but the body was not a valid BatchJob SOAP response: $($statusBody.Substring(0,[Math]::Min(700,$statusBody.Length)))"
         }
         $preview = $statusBody.Substring(0,[Math]::Min(1500,$statusBody.Length))
-        [System.IO.File]::WriteAllText($probeLog, "SOAP GetStatus succeeded on 127.0.0.1:$rccPort." + [Environment]::NewLine + $preview, $utf8NoBom)
-        Write-Host "SOAP GetStatus succeeded on 127.0.0.1:$rccPort." -ForegroundColor Green
+        [System.IO.File]::WriteAllText($probeLog, "SOAP BatchJob succeeded on 127.0.0.1:$rccPort." + [Environment]::NewLine + $preview, $utf8NoBom)
+        Write-Host "SOAP BatchJob succeeded on 127.0.0.1:$rccPort." -ForegroundColor Green
     } catch {
         $probeError = $_.Exception.Message
         try {
@@ -338,7 +350,7 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
                 }
             }
         } catch {}
-        [System.IO.File]::WriteAllText($probeLog, "SOAP GetStatus failed: " + $probeError, $utf8NoBom)
+        [System.IO.File]::WriteAllText($probeLog, "SOAP BatchJob failed: " + $probeError, $utf8NoBom)
         throw "RCCService is listening but did not pass the SOAP test. $probeError. See $probeLog"
     }
 
