@@ -5,7 +5,7 @@ $candidateRoots = @(
     $env:SAKURA_OPENPEKORA_ROOT,
     $repoRoot,
     (Join-Path $repoRoot "OpenPekora"),
-    "C:\\Pekora-RCC-Host\\OpenPekora"
+    "C:\Pekora-RCC-Host\OpenPekora"
 ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 
 $openPekoraRoot = $null
@@ -17,19 +17,19 @@ foreach ($candidate in $candidateRoots) {
     }
 }
 if (-not $openPekoraRoot) {
-    throw "Could not find the OpenPekora checkout. Expected game-renderer\\package.json under C:\\Pekora-RCC-Host\\OpenPekora or beside this Sakura repository."
+    throw "Could not find the OpenPekora checkout. Expected game-renderer\package.json under C:\Pekora-RCC-Host\OpenPekora or beside this Sakura repository."
 }
 
 $rendererDir = Join-Path $openPekoraRoot "game-renderer"
 $configPath = Join-Path $rendererDir "config.json"
-$mainPath = Join-Path $rendererDir "src\\Main.ts"
-$playerControllerPath = Join-Path $rendererDir "src\\Controllers\\PlayerController.ts"
+$mainPath = Join-Path $rendererDir "src\Main.ts"
+$playerControllerPath = Join-Path $rendererDir "src\Controllers\PlayerController.ts"
 if (-not (Test-Path -LiteralPath $mainPath)) { throw "OpenPekora Renderer source was not found: $mainPath" }
 if (-not (Test-Path -LiteralPath $playerControllerPath)) { throw "OpenPekora PlayerController source was not found: $playerControllerPath" }
-if (-not (Test-Path -LiteralPath $configPath)) { throw "game-renderer\\config.json was not found: $configPath" }
+if (-not (Test-Path -LiteralPath $configPath)) { throw "game-renderer\config.json was not found: $configPath" }
 
 try { $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json }
-catch { throw "game-renderer\\config.json is invalid JSON: $($_.Exception.Message)" }
+catch { throw "game-renderer\config.json is invalid JSON: $($_.Exception.Message)" }
 
 $secret = [string]$env:PEKORA_RENDERER_SECRET
 if ([string]::IsNullOrWhiteSpace($secret)) {
