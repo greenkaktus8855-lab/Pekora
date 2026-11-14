@@ -2127,7 +2127,9 @@ async function owner(){
      saveOwnerItemDraft(form);
      if(autoSaveTimer!==null)clearTimeout(autoSaveTimer);
      autoSaveTimer=setTimeout(()=>{
-      if(!form.isConnected||form.dataset.saving==="1"||!form.checkValidity())return;
+      if(!form.isConnected)return;
+      if(form.dataset.saving==="1"){autoSaveTimer=setTimeout(scheduleSave,400);return;}
+      if(!form.checkValidity())return;
       const current=ownerItems.find(item=>item.id===id);
       if(Number(current?.is_gift)===1){
        try{
