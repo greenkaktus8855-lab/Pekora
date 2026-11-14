@@ -1869,11 +1869,11 @@ async function owner(){
    const d=await api("/api/owner/users/"+encodeURIComponent(userId));
    if(!isActiveView(view))return;
    const u=d.user;
-   userDetails.innerHTML='<div class="owner-user-card"><h3>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h3><div class="muted">User ID: '+esc(u.public_id)+'</div><p>Role: '+esc(u.role)+' · '+currencyMarkup(u.balance,"P$")+' · '+currencyMarkup(u.tix_balance,"Tix")+' · Status: '+(u.is_banned?'BANNED':'Active')+' · Verified: '+(u.is_verified?'Yes':'No')+' · IP: '+(u.is_ip_banned?'PERMANENTLY BLOCKED':'Not blocked')+'</p>'+(u.is_ip_banned?'<div class="ban-admin-summary"><strong>Permanent IP ban active</strong><p>New registrations and API access from this public IP are blocked. Other people using the same internet connection may also be affected.</p></div>':u.has_recorded_ip?'<p class="muted">Latest public IP recorded. Banning this account will also permanently block that IP.</p>':'<p class="muted">No IP has been recorded for this account yet. IP tracking starts after its next successful sign-in or authenticated visit.</p>')+(u.is_banned?'<div class="ban-admin-summary"><strong>Active ban</strong><p>Reason: '+esc(u.ban_reason||"Account banned by moderation")+'</p><span class="muted">Banned on: '+esc(u.banned_at?new Date(String(u.banned_at).replace(" ","T")+"Z").toLocaleString():"Date unavailable")+'</span></div>':'')+
+   userDetails.innerHTML='<div class="owner-user-card"><h3>'+esc(u.username)+(u.is_verified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h3><div class="muted">User ID: '+esc(u.public_id)+'</div><p>Role: '+esc(u.role)+' · '+currencyMarkup(u.balance,"P$")+' · '+currencyMarkup(u.tix_balance,"Tix")+' · Status: '+(u.is_banned?'BANNED':'Active')+' · Verified: '+(u.is_verified?'Yes':'No')+' · IP: '+(u.is_ip_banned?'PERMANENTLY BLOCKED':'Not blocked')+' · Network exception: '+(u.is_ip_ban_exempt?'Yes':'No')+'</p>'+(u.is_ip_banned?'<div class="ban-admin-summary"><strong>Permanent IP ban active</strong><p>New registrations and API access from this public IP are blocked. Other people using the same internet connection may also be affected.</p></div>':u.has_recorded_ip?'<p class="muted">Latest public IP recorded. Banning this account will also permanently block that IP.</p>':'<p class="muted">No IP has been recorded for this account yet. IP tracking starts after its next successful sign-in or authenticated visit.</p>')+(u.is_banned?'<div class="ban-admin-summary"><strong>Active ban</strong><p>Reason: '+esc(u.ban_reason||"Account banned by moderation")+'</p><span class="muted">Banned on: '+esc(u.banned_at?new Date(String(u.banned_at).replace(" ","T")+"Z").toLocaleString():"Date unavailable")+'</span></div>':'')+
     (u.role==="OWNER"?'<p class="muted">OWNER accounts cannot be modified.</p>':
     '<div class="owner-user-actions"><form id="ownerCreditForm" class="owner-item-form"><h4>Give Sakura currency</h4><label>Amount<input name="amount" type="number" min="1" max="1000000" required></label><label>Currency<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label><label>Note (optional)<input name="reason" maxlength="500"></label><button class="primary" type="submit">Give currency</button></form>'+
     '<form id="ownerWarnForm" class="owner-item-form"><h4>Issue warning</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button class="primary" type="submit">Send warning</button></form>'+
-    (u.is_banned?'<button type="button" class="button" id="ownerUnban">Unban account</button>':'<form id="ownerBanForm" class="owner-item-form"><h4>Ban account</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button type="submit" class="button secondary">' + (u.has_recorded_ip?'Ban account + IP':'Ban account · IP not recorded') + '</button></form>')+(u.is_ip_banned?'<button type="button" class="button secondary" id="ownerUnbanIp">Remove permanent IP ban</button>':'')+'</div>')+
+    (u.is_banned?'<button type="button" class="button" id="ownerUnban">Unban account</button>':'<form id="ownerBanForm" class="owner-item-form"><h4>Ban account</h4><label>Reason<textarea name="reason" minlength="3" maxlength="500" required></textarea></label><button type="submit" class="button secondary">' + (u.has_recorded_ip?'Ban account + IP':'Ban account · IP not recorded') + '</button></form>')+(!u.is_banned?(u.is_ip_ban_exempt?'<p class="muted">This account has an exception for network-level IP blocks.</p><button type="button" class="button secondary" id="ownerIpException">Remove network exception</button>':'<button type="button" class="button secondary" id="ownerIpException">Allow account through network blocks</button>'):'')+'</div>')+
 
     (u.role==="OWNER"?"":'<form id="ownerPublicIdForm" class="owner-item-form owner-id-form"><h4>Change public User ID</h4><p class="muted">Must be unique. Existing profile links using the old ID will stop working.</p><label>New numeric ID<input name="publicId" type="number" min="1" max="2147483647" step="1" value="'+Number(u.public_id||0)+'" required></label><button class="primary" type="submit">Save User ID</button></form>')+
     '<h4>Warnings</h4>'+(d.warnings.length?'<ul>'+d.warnings.map(x=>'<li>'+esc(x.reason)+' <span class="muted">('+new Date(x.created_at+"Z").toLocaleString()+')</span></li>').join("")+'</ul>':'<p class="muted">No warnings.</p>')+
@@ -1933,10 +1933,17 @@ async function owner(){
     try{await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:"unban"})});toast("Account unbanned; IP ban remains active");await loadOwnerUser(userId);}
     catch(err){toast(err.message)}
    });
-   document.getElementById("ownerUnbanIp")?.addEventListener("click",async()=>{
-    if(!confirm("Remove the permanent IP ban? This may restore access to everyone using that public internet connection."))return;
-    try{await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:"unban_ip"})});toast("Permanent IP ban removed");await loadOwnerUser(userId);}
-    catch(err){toast(err.message)}
+   document.getElementById("ownerIpException")?.addEventListener("click",async()=>{
+    const grant=!u.is_ip_ban_exempt;
+    const prompt=grant
+      ?"Allow "+u.username+" to access Sakura even from networks blocked because of another account? This exception applies only to this account; other accounts remain blocked."
+      :"Remove this account's exception from network-level IP blocks?";
+    if(!confirm(prompt))return;
+    try{
+     await api("/api/owner/users/"+encodeURIComponent(userId),{method:"POST",body:JSON.stringify({action:grant?"allow_ip":"revoke_ip"})});
+     toast(grant?"Network access exception enabled for this account":"Network access exception removed");
+     await loadOwnerUser(userId);
+    }catch(err){toast(err.message)}
    });
   }catch(e){userDetails.textContent=e.message}
  }
