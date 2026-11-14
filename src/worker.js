@@ -1795,7 +1795,7 @@ async function route(request, env) {
       renderPromise = (async()=>{
         const response = await fetch(rendererOrigin+"/player/thumbnail-3d",{
           method:"POST",
-          headers:{"content-type":"application/json","accept":"application/json"},
+          headers:{"content-type":"application/json","accept":"application/json","x-pekora-renderer-secret":String(env.AVATAR_RENDERER_SECRET).trim()},
           body:JSON.stringify({userId:publicId,jobExpiration:55})
         });
         const responseText = await response.text();
