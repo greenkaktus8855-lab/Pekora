@@ -121,6 +121,14 @@ async function saveAvatarSettings(env,userId,settings) {
     .bind(userId,JSON.stringify(settings.bodyColors),settings.rigType,JSON.stringify(settings.scales)).run();
 }
 
+async function loadPublicAvatar(env,userId) {
+  const [rows,settings] = await Promise.all([
+    env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(userId).all(),
+    loadAvatarSettings(env,userId)
+  ]);
+  return {equipped:rows.results||[],...settings};
+}
+
 
 const MEMBERSHIP_REWARDS = Object.freeze({
   None:0,
@@ -1599,12 +1607,13 @@ async function route(request, env) {
     const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.public_id=? AND u.is_banned=0`).bind(Number(profileIdMatch[1])).first();
     if (!profile) return fail("User not found.",404);
-    const [count,badgeRows,totalRap] = await Promise.all([
+    const [count,badgeRows,totalRap,avatarData] = await Promise.all([
       env.DB.prepare("SELECT COALESCE(SUM(quantity),0) AS n FROM inventory WHERE user_id=? AND quantity>0").bind(profile.id).first(),
       env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all(),
-      getProfileTotalRap(env,profile.id)
+      getProfileTotalRap(env,profile.id),
+      loadPublicAvatar(env,profile.id)
     ]);
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key),avatar:avatarData} });
   }
 
   const profileInventoryMatch = path.match(/^\/api\/profile\/([A-Za-z0-9_]{1,20})\/inventory$/);
@@ -1674,7 +1683,7 @@ async function route(request, env) {
       await env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=?").bind(user.id,itemId).run();
       return json({ok:true,action,equipped:false});
     }
-    if (!Number(item.asset_id||0)) return fail("This item has no Roblox asset ID, so the 3D renderer cannot equip it.",409);
+    if (!String(item.model_url||"").trim() && !String(item.image_url||"").trim()) return fail("This item needs a Sakura 3D model or preview image before it can be equipped.",409);
     const statements = [];
     if (["Hair","Faces","Shirts","Pants"].includes(item.category)) {
       statements.push(env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND category=?").bind(user.id,item.category));
@@ -1682,69 +1691,6 @@ async function route(request, env) {
     statements.push(env.DB.prepare("INSERT OR IGNORE INTO equipped_items (user_id,item_id,category) VALUES (?,?,?)").bind(user.id,item.id,item.category));
     await env.DB.batch(statements);
     return json({ok:true,action,equipped:true});
-  }
-
-  if (request.method === "GET" && path === "/api/avatar/render") {
-    const username = String(url.searchParams.get("username") || "").trim();
-    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return fail("Enter a valid username.",400);
-
-    try {
-      const lookupResponse = await fetch("https://users.roblox.com/v1/usernames/users", {
-        method:"POST",
-        headers:{"content-type":"application/json","accept":"application/json"},
-        body:JSON.stringify({usernames:[username],excludeBannedUsers:true}),
-        signal:AbortSignal.timeout(8000)
-      });
-      if (!lookupResponse.ok) {
-        console.error("[Sakura avatar render] Roblox username lookup returned",lookupResponse.status);
-        return fail("Roblox account lookup is temporarily unavailable.",502);
-      }
-
-      const lookupData = await lookupResponse.json().catch(()=>null);
-      const robloxUser = Array.isArray(lookupData?.data)
-        ? lookupData.data.find(entry=>String(entry?.name||"").toLowerCase()===username.toLowerCase())
-        : null;
-      if (!robloxUser || !/^\d+$/.test(String(robloxUser.id||""))) {
-        return json({available:false,reason:"No exact Roblox username match."},200,{"cache-control":"public, max-age=300"});
-      }
-
-      const thumbnailUrl = new URL("https://thumbnails.roblox.com/v1/users/avatar");
-      thumbnailUrl.searchParams.set("userIds",String(robloxUser.id));
-      thumbnailUrl.searchParams.set("size","420x420");
-      thumbnailUrl.searchParams.set("format","Png");
-      thumbnailUrl.searchParams.set("isCircular","false");
-
-      const thumbnailResponse = await fetch(thumbnailUrl.toString(), {
-        headers:{"accept":"application/json"},
-        signal:AbortSignal.timeout(8000)
-      });
-      if (!thumbnailResponse.ok) {
-        console.error("[Sakura avatar render] Roblox thumbnail request returned",thumbnailResponse.status);
-        return fail("Roblox avatar rendering is temporarily unavailable.",502);
-      }
-
-      const thumbnailData = await thumbnailResponse.json().catch(()=>null);
-      const thumbnail = Array.isArray(thumbnailData?.data)
-        ? thumbnailData.data.find(entry=>String(entry?.targetId)===String(robloxUser.id))
-        : null;
-      if (!thumbnail || thumbnail.state!=="Completed" || !thumbnail.imageUrl) {
-        return json({available:false,pending:true},200,{"cache-control":"public, max-age=30"});
-      }
-
-      let imageUrl;
-      try { imageUrl = new URL(String(thumbnail.imageUrl)); }
-      catch { return fail("Roblox returned an invalid avatar image.",502); }
-      const imageHost = imageUrl.hostname.toLowerCase();
-      if (imageUrl.protocol!=="https:" || !(imageHost==="rbxcdn.com" || imageHost.endsWith(".rbxcdn.com"))) {
-        console.error("[Sakura avatar render] Rejected unexpected image host:",imageHost);
-        return fail("Roblox returned an unsupported avatar image URL.",502);
-      }
-
-      return json({available:true,imageUrl:imageUrl.href},200,{"cache-control":"public, max-age=300"});
-    } catch (error) {
-      console.error("[Sakura avatar render] Request failed:",error);
-      return fail("Roblox avatar rendering is temporarily unavailable.",502);
-    }
   }
 
   if (request.method === "GET" && path.startsWith("/api/banned-account/")) {
@@ -1768,12 +1714,13 @@ async function route(request, env) {
     const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const [count,badgeRows,totalRap] = await Promise.all([
+    const [count,badgeRows,totalRap,avatarData] = await Promise.all([
       env.DB.prepare("SELECT COALESCE(SUM(quantity),0) AS n FROM inventory WHERE user_id=? AND quantity>0").bind(profile.id).first(),
       env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all(),
-      getProfileTotalRap(env,profile.id)
+      getProfileTotalRap(env,profile.id),
+      loadPublicAvatar(env,profile.id)
     ]);
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key),avatar:avatarData} });
   }
 
   if (request.method === "PUT" && path === "/api/profile") {
