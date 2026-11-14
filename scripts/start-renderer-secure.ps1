@@ -104,8 +104,8 @@ $playerChanged = $false
 if (-not $playerSource.Contains("&sakuraRender=")) {
     $oldAvatarUrl = 'const charAppUrl = `${Config.BaseUrl}v1.1/avatar-fetch?placeId=0&userId=${req.body.userId}`;'
     $newAvatarUrl = 'const charAppUrl = `${Config.BaseUrl}v1.1/avatar-fetch?placeId=0&userId=${req.body.userId}&sakuraRender=${Date.now()}-${Math.random().toString(36).slice(2)}`;'
-    $matches = [regex]::Matches($playerSource, [regex]::Escape($oldAvatarUrl)).Count
-    if ($matches -lt 1) {
+    $avatarUrlMatchCount = [regex]::Matches($playerSource, [regex]::Escape($oldAvatarUrl)).Count
+    if ($avatarUrlMatchCount -lt 1) {
         throw "PlayerController.ts avatar-fetch URL did not match the expected OpenPekora source. No cache-busting patch was applied."
     }
     $playerSource = $playerSource.Replace($oldAvatarUrl, $newAvatarUrl)
