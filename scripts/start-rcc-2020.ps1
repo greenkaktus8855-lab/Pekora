@@ -199,8 +199,9 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
     try {
         const headers = {
             "Content-Type": "text/xml; charset=utf-8",
+            "SOAPAction": "http://roblox.com/BatchJob",
         };
-        const xml = SOAP(Config.BaseUrl, jobExpiration, JSON.stringify(data));
+        const xml = SOAP("http://roblox.com/", jobExpiration, JSON.stringify(data));
         const response = await axios.request({
             method: HttpMethod.POST,
             url: Config.RCCUrl + ":" + port,
@@ -306,7 +307,7 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
     # Probe the same BatchJob SOAP operation used by OpenPekora at render time.
     # Its XML namespace must match Config.BaseUrl (the private Sakura bridge URL).
     # Keep the SOAP listener local and do not add a SOAPAction header.
-    $soapNamespace = [System.Security.SecurityElement]::Escape($bridgeBaseUrl)
+    $soapNamespace = "http://roblox.com/"
     $probeJobId = [Guid]::NewGuid().ToString()
     $probeScriptId = [Guid]::NewGuid().ToString()
     $probeXml = @"
@@ -330,7 +331,7 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
 "@
 
     try {
-        $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$rccPort" -Method Post -ContentType "text/xml" -Body $probeXml -UseBasicParsing -TimeoutSec 20
+        $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$rccPort" -Method Post -ContentType "text/xml; charset=utf-8" -Headers @{ SOAPAction = "http://roblox.com/BatchJob" } -Body $probeXml -UseBasicParsing -TimeoutSec 20
         $statusBody = [string]$statusResponse.Content
         if ([int]$statusResponse.StatusCode -ne 200 -or $statusBody -notmatch "BatchJobResponse") {
             throw "RCC returned HTTP $($statusResponse.StatusCode), but the body was not a valid BatchJob SOAP response: $($statusBody.Substring(0,[Math]::Min(700,$statusBody.Length)))"
