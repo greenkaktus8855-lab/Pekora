@@ -1258,11 +1258,10 @@ async function avatarPage(){
    const label=action==="remove"?"Remove":"Wear";
    const button=renderable
     ? '<button class="button '+(action==="remove"?'secondary':'primary')+' avatar-item-toggle" type="button" data-avatar-item="'+esc(item.id)+'" data-avatar-action="'+action+'">'+label+'</button>'
-    : '<button class="button secondary" type="button" disabled title="This item needs a Roblox asset ID and asset type ID">No asset ID</button>';
+    : '<button class="button secondary" type="button" disabled title="This item needs a Roblox asset ID and asset type ID">Temporarily unavailable</button>';
    return '<article class="op-avatar-item">'+
     '<div class="op-avatar-item-image">'+itemPreview(item)+'</div>'+
     '<div class="op-avatar-item-info"><strong>'+esc(item.name)+'</strong><span>'+esc(item.category)+(Number(item.quantity)>1?' · ×'+Number(item.quantity):'')+'</span>'+(wearing?'<span class="sakura-avatar-wearing">Currently wearing</span>':'')+'</div>'+
-    (renderable?'<div class="op-avatar-item-tools"><button type="button" class="button secondary" data-copy-avatar-id="'+Number(item.asset_id)+'">ID</button><button type="button" class="button secondary" data-copy-avatar-link="'+Number(item.asset_id)+'">Link</button></div>':'')+
     button+
    '</article>';
   };
@@ -1275,11 +1274,11 @@ async function avatarPage(){
   }).join("");
 
   app.innerHTML='<div class="sakura-avatar-editor-page op-avatar-editor">'+
-   '<div class="op-avatar-editor-heading"><div><h1 class="page-title">Avatar Editor</h1><p class="muted">Customize your character, choose clothes and save your look.</p></div><button class="button secondary" id="refreshSakuraAvatar" type="button">Redraw avatar</button></div>'+
+   '<div class="op-avatar-editor-heading"><div><h1 class="page-title">Avatar Editor</h1><p class="muted">Customize your character and choose clothes.</p></div><button class="button secondary" id="refreshSakuraAvatar" type="button">Redraw avatar</button></div>'+
    '<div class="op-avatar-editor-layout">'+
     '<section class="op-avatar-preview-panel">'+
-     '<div class="op-avatar-preview-heading"><h2>Preview</h2><span class="muted">3D · OpenPekora RCC</span></div>'+
-     '<div class="sakura-profile-avatar sakura-avatar-editor-preview"><div class="sakura-avatar-fallback">'+avatar(me.username)+'</div><div class="sakura-avatar-render" data-sakura-avatar data-avatar-id="'+esc(me.publicId||"")+'"><span class="sakura-avatar-loading">Loading OpenPekora avatar...</span></div></div>'+
+     '<div class="op-avatar-preview-heading"><h2>Preview</h2><span class="muted">3D Preview</span></div>'+
+     '<div class="sakura-profile-avatar sakura-avatar-editor-preview"><div class="sakura-avatar-fallback">'+avatar(me.username)+'</div><div class="sakura-avatar-render" data-sakura-avatar data-avatar-id="'+esc(me.publicId||"")+'"><span class="sakura-avatar-loading">Loading avatar...</span></div></div>'+
      '<div class="op-avatar-rig-toggle"><span>Avatar type</span><div><button class="op-avatar-rig-button '+(rigType==="R6"?'active':'')+'" type="button" data-avatar-rig="R6" aria-pressed="'+(rigType==="R6")+'">R6</button><button class="op-avatar-rig-button '+(rigType==="R15"?'active':'')+'" type="button" data-avatar-rig="R15" aria-pressed="'+(rigType==="R15")+'">R15</button></div></div>'+
      '<a class="button secondary op-avatar-inventory-link" href="/#inventory" data-page="inventory">Open Inventory</a>'+
     '</section>'+
@@ -1295,7 +1294,7 @@ async function avatarPage(){
       '<div id="opAvatarWardrobeGrid" class="op-avatar-wardrobe-grid"></div>'+
      '</section>'+
      '<section id="opAvatarWearingPanel" class="op-avatar-panel" hidden>'+
-      '<div class="op-avatar-wardrobe-heading"><div><h2>Currently Wearing</h2><p class="muted">Remove an item to take it off your character.</p></div><div class="op-avatar-wearing-actions"><span class="op-avatar-count">'+equipped.length+' items</span><button type="button" class="button secondary" id="copyWearingAvatarIds">Copy IDs</button></div></div>'+
+      '<div class="op-avatar-wardrobe-heading"><div><h2>Currently Wearing</h2><p class="muted">Remove an item to take it off your character.</p></div><span class="op-avatar-count">'+equipped.length+' items</span></div>'+
       '<div id="opAvatarWearingGrid" class="op-avatar-wardrobe-grid"></div>'+
      '</section>'+
      '<section id="opAvatarBodyPanel" class="op-avatar-panel" hidden>'+
@@ -1306,7 +1305,7 @@ async function avatarPage(){
      '</section>'+
     '</section>'+
    '</div>'+
-   '<p class="op-avatar-editor-note">The wardrobe currently shows items from your Sakura inventory. Buy an item from the Catalog first, then wear it here. Roblox clothing that is not in Sakura inventory is not connected yet.</p>'+
+   ''+
   '</div>';
 
   const wardrobeGrid=document.getElementById("opAvatarWardrobeGrid");
@@ -1315,20 +1314,6 @@ async function avatarPage(){
    const filtered=selectedCategory==="All"?eligible:eligible.filter(item=>item.category===selectedCategory);
    wardrobeGrid.innerHTML=filtered.length?filtered.map(item=>itemMarkup(item,"wardrobe")).join(""):'<div class="op-profile-empty">No '+esc(selectedCategory==="All"?"avatar items":selectedCategory)+" in your inventory.</div>";
    wearingGrid.innerHTML=equipped.length?equipped.map(item=>itemMarkup(item,"wearing")).join(""):'<div class="op-profile-empty">You are not wearing any items.</div>';
-   app.querySelectorAll("[data-copy-avatar-id]").forEach(button=>{
-    if(button.dataset.copyBound==="1")return;
-    button.dataset.copyBound="1";
-    button.addEventListener("click",()=>copyToClipboard(button.dataset.copyAvatarId,"Asset ID copied"));
-   });
-   app.querySelectorAll("[data-copy-avatar-link]").forEach(button=>{
-    if(button.dataset.copyBound==="1")return;
-    button.dataset.copyBound="1";
-    button.addEventListener("click",()=>copyToClipboard("https://www.roblox.com/catalog/"+encodeURIComponent(button.dataset.copyAvatarLink),"Catalog link copied"));
-   });
-   document.getElementById("copyWearingAvatarIds")?.addEventListener("click",()=>{
-    const ids=equipped.filter(item=>Number(item.asset_id)>0).map(item=>Number(item.asset_id)).join(", ");
-    copyToClipboard(ids,"Avatar asset IDs copied");
-   });
   };
   const setPanel=panel=>{
    selectedPanel=panel;
