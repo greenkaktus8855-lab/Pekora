@@ -1460,3 +1460,34 @@ body{color:#f0eaf8!important}
  .inventory-management-heading{align-items:stretch;flex-direction:column}
  .inventory-management-heading>#clearInventoryButton{width:100%}
 }
+
+
+/* Sakura's own profile avatar renderer */
+.sakura-profile-avatar{
+ position:relative!important;
+ width:178px!important;
+ height:228px!important;
+ flex:0 0 178px!important;
+ overflow:hidden;
+ background:#17131d!important;
+ border:1px solid rgba(255,255,255,.08);
+ box-shadow:0 2px 12px rgba(0,0,0,.28);
+}
+.sakura-avatar-render{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;background:#17131d}
+.sakura-avatar-canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.sakura-avatar-canvas:active{cursor:grabbing}
+.sakura-avatar-loading{
+ position:absolute;inset:0;display:grid;place-items:center;
+ padding:14px;color:#c8c0d0;font-size:12px;text-align:center;
+}
+.sakura-avatar-fallback{
+ position:absolute;inset:0;z-index:2;display:grid;place-items:center;
+ background:#211b2b;pointer-events:none;
+}
+.sakura-profile-avatar.has-rendered-avatar .sakura-avatar-fallback{display:none}
+.inventory-item-actions{flex-wrap:wrap}
+.inventory-item-actions .avatar-equip-button{width:100%;min-height:34px}
+@media(max-width:620px){
+ .sakura-profile-avatar{width:142px!important;height:190px!important;flex-basis:142px!important}
+ .op-profile-header{gap:12px}
+}
