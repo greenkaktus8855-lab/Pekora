@@ -1428,3 +1428,21 @@ body{color:#f0eaf8!important}
 }
 
 .item-gift-odds{margin-top:7px;padding:7px;background:#f5efff;border-left:3px solid #7b2cbf;color:#342444;font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+
+
+/* Recent creator sales on the currency page */
+.currency-sales-summary{display:flex;flex-wrap:wrap;gap:10px 22px;margin:0 0 12px;padding:10px 12px;background:#282330;border:1px solid #49375e;border-radius:4px;color:#f0eaf8}
+.currency-sales-summary strong{font-weight:700}
+.currency-sales-list{display:flex;flex-direction:column}
+.currency-sale-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid #ddd}
+.currency-sale-main{display:flex;flex-direction:column;min-width:0;gap:3px}
+.currency-sale-main strong{overflow-wrap:anywhere}
+.currency-sale-main .muted{font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+.currency-sale-quantity{white-space:nowrap;color:#b8afc1;font-size:13px}
+.currency-sale-row>b{white-space:nowrap;color:#02b757}
+@media(max-width:767px){
+ .currency-sale-row{grid-template-columns:minmax(0,1fr) auto;gap:6px 10px}
+ .currency-sale-main{grid-column:1/-1}
+ .currency-sale-quantity{justify-self:start}
+ .currency-sale-row>b{justify-self:end}
+}
