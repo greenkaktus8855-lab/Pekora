@@ -185,15 +185,15 @@ try {
         $requestSource = $requestSource.Replace($soapImport, $soapImport + [Environment]::NewLine + $configImport)
         Write-Host "Restored the missing Config import in Request.ts."
     }
-    $standardSoapCall = 'const xml = SOAP("http://roblox.com/", jobExpiration, JSON.stringify(data));'
-    $legacySoapCall = 'const xml = SOAP(Config.BaseUrl, jobExpiration, JSON.stringify(data));'
-    if ($requestSource.Contains($legacySoapCall)) {
-        $requestSource = $requestSource.Replace($legacySoapCall, $standardSoapCall)
-    } elseif (-not $requestSource.Contains($standardSoapCall)) {
-        throw "Request.ts SOAP namespace call was not recognized. No Request.ts patch was made."
+    # OpenPekora forks use slightly different SOAP call formatting and
+    # namespaces. Replace the whole RCCRequest implementation by its stable
+    # function boundaries instead of matching one fragile line of source.
+    $requestStart = $requestSource.IndexOf("export const RCCRequest")
+    $requestEnd = $requestSource.IndexOf("export enum HttpMethod", [Math]::Max(0,$requestStart))
+    if ($requestStart -lt 0 -or $requestEnd -lt 0 -or $requestEnd -le $requestStart) {
+        throw "Could not safely locate RCCRequest and HttpMethod in Request.ts. No Request.ts patch was made."
     }
 
-    $requestFunctionPattern = '(?s)export const RCCRequest = async <T>\(.*?\n\};(?=\s*\nexport enum HttpMethod)'
     $newRequestFunction = @'
 export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration: number): Promise<T> => {
     try {
@@ -233,17 +233,19 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
 };
 '@
 
-    $newRequestSource = [regex]::Replace($requestSource, $requestFunctionPattern, $newRequestFunction.TrimEnd(), 1)
-    if ($newRequestSource -eq $requestSource) {
-        if (-not $requestSource.Contains("RCCService connection failed")) {
-            throw "Could not safely locate the RCCRequest function in Request.ts."
-        }
-    } else {
+    $requestPrefix = $requestSource.Substring(0,$requestStart)
+    $requestSuffix = $requestSource.Substring($requestEnd)
+    $newRequestSource = $requestPrefix + $newRequestFunction.TrimEnd() + [Environment]::NewLine + [Environment]::NewLine + $requestSuffix
+
+    if ($newRequestSource -ne $requestSource) {
         $requestBackup = "$requestPath.sakura-backup"
         if (-not (Test-Path -LiteralPath $requestBackup)) {
             Copy-Item -LiteralPath $requestPath -Destination $requestBackup
         }
         [System.IO.File]::WriteAllText($requestPath, $newRequestSource, $utf8NoBom)
+        Write-Host "Updated RCCRequest using the stable OpenPekora function boundaries."
+    } else {
+        Write-Host "RCCRequest already uses the Sakura-compatible SOAP implementation."
     }
 
     # RCCService has no built-in authentication. Keep the SOAP listener
