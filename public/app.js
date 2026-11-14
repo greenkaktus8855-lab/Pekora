@@ -660,7 +660,7 @@ function inventoryItemCard(item,equippedIds=new Set()){
  const canOpenGift=isGift&&!opened&&!item.active_listing_id&&Number.isFinite(giftDate)&&Date.now()>=giftDate;
  const giftStatus=isGift?(opened?'<div class="inventory-gift-status">Gift opened · '+esc(item.gift_reward_name||"Reward received")+'</div>':Number.isFinite(giftDate)?'<div class="inventory-gift-status">Opens '+esc(new Date(giftDate).toLocaleString())+'</div>':'<div class="inventory-gift-status">Gift opening date unavailable</div>'):"";
  const giftButton=canOpenGift?'<button class="primary inventory-open-gift" type="button" data-open-gift="'+esc(item.id)+'">Open Gift</button>':"";
- const canWear=Number(item.asset_id)>0&&Number(item.asset_type_id)>0&&["Accessories","Hats","Hair","Faces","Shirts","Pants"].includes(item.category);
+ const canWear=Number(item.asset_id)>0&&avatarAssetTypeId(item)>0&&["Accessories","Hats","Hair","Faces","T-Shirts","Shirts","Pants"].includes(item.category);
  const isEquipped=equippedIds.has(item.id);
  const avatarButton=canWear?'<button class="button avatar-equip-button" type="button" data-avatar-wear-item="'+esc(item.id)+'" data-equipped="'+(isEquipped?"1":"0")+'">'+(isEquipped?"Remove from avatar":"Wear on avatar")+'</button>':"";
  return '<article class="item-card inventory-item-card">'+
@@ -786,7 +786,7 @@ async function mountSakuraProfileAvatar(publicId){
    host.sakuraAvatarDispose();
    host.sakuraAvatarDispose=null;
   }
-  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-sakura-20261114-5");
+  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-sakura-20261114-6");
   const renderer=await sakuraAvatarModulePromise;
   if(!host.isConnected||host.dataset.avatarMountId!==String(mountId))return;
   const dispose=await renderer.mountSakuraAvatar(host,publicId);
