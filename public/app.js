@@ -661,19 +661,57 @@ function inventoryItemCard(item){
   '<a class="item-image" href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+itemPreview(item)+itemBadgeMarkup(item)+'</a>'+
   '<h3><a href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+esc(item.name)+'</a></h3>'+
   '<div class="muted">'+esc(item.category)+'</div>'+(Number(item.quantity)>1?'<div class="muted">Quantity: '+Number(item.quantity)+'</div>':"")+status+giftStatus+giftButton+
+  '<div class="inventory-item-actions"><button class="button danger-button inventory-remove-button" type="button" data-remove-inventory-item="'+esc(item.id)+'">Remove from inventory</button></div>'+
   '</article>';
 }
 async function inventory(){
  const view=beginView();
  renderSidebar("inventory");
  if(!me){app.innerHTML='<div class="empty">Please <a href="/#login" data-page="login">log in</a> to view your inventory.</div>';return}
- app.innerHTML='<h1 class="page-title">Inventory</h1><p class="inventory-sell-intro">Select an item to view its details and available actions.</p><div id="inventoryGrid" class="item-grid">Loading...</div>';
+ app.innerHTML='<div class="inventory-management-heading"><div><h1 class="page-title">Inventory</h1><p class="inventory-sell-intro">Remove individual items or clear your entire inventory. These actions do not issue refunds.</p></div><button class="button danger-button" id="clearInventoryButton" type="button" disabled>Clear inventory</button></div><div id="inventoryGrid" class="item-grid">Loading...</div>';
  const grid=document.getElementById("inventoryGrid");
  try{
   const d=await api("/api/inventory");
   if(!isActiveView(view)||!grid?.isConnected)return;
   const ownedItems=Array.isArray(d.items)?d.items:[];
   grid.innerHTML=ownedItems.length?ownedItems.map(inventoryItemCard).join(""):'<div class="empty">Your inventory is empty. <a href="/#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+  const clearInventoryButton=document.getElementById("clearInventoryButton");
+  if(clearInventoryButton){
+   clearInventoryButton.disabled=ownedItems.length===0;
+   clearInventoryButton.addEventListener("click",async()=>{
+    const copies=ownedItems.reduce((sum,item)=>sum+Math.max(0,Number(item.quantity)||0),0);
+    if(!confirm("Permanently remove all "+ownedItems.length+" item types ("+copies+" copies) from your inventory? Active resale listings will be cancelled and pending trades involving your items will be cancelled. Purchases will not be refunded."))return;
+    clearInventoryButton.disabled=true;
+    clearInventoryButton.textContent="Clearing...";
+    try{
+     const result=await api("/api/inventory",{method:"DELETE"});
+     toast("Inventory cleared · "+Number(result.removedTypes||0)+" item types removed");
+     await inventory();
+    }catch(error){
+     toast(error.message);
+     clearInventoryButton.disabled=false;
+     clearInventoryButton.textContent="Clear inventory";
+    }
+   });
+  }
+  grid.querySelectorAll("[data-remove-inventory-item]").forEach(button=>button.addEventListener("click",async()=>{
+   const itemId=button.dataset.removeInventoryItem;
+   const item=ownedItems.find(entry=>entry.id===itemId);
+   if(!item)return;
+   const quantity=Math.max(1,Number(item.quantity)||1);
+   if(!confirm("Remove "+item.name+" and all "+quantity+" owned cop"+(quantity===1?"y":"ies")+" from your inventory? Any active resale listing and pending trade involving this item will be cancelled. No refund will be issued."))return;
+   button.disabled=true;
+   button.textContent="Removing...";
+   try{
+    await api("/api/inventory/"+encodeURIComponent(itemId),{method:"DELETE"});
+    toast(item.name+" removed from inventory");
+    await inventory();
+   }catch(error){
+    toast(error.message);
+    button.disabled=false;
+    button.textContent="Remove from inventory";
+   }
+  }));
   grid.querySelectorAll("[data-open-gift]").forEach(button=>button.addEventListener("click",async()=>{
    button.disabled=true;button.textContent="Opening...";
    try{
