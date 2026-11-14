@@ -199,7 +199,7 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
     try {
         const headers = {
             "Content-Type": "text/xml; charset=utf-8",
-            "SOAPAction": "http://roblox.com/BatchJob",
+            "SOAPAction": '"http://roblox.com/BatchJob"',
         };
         const xml = SOAP("http://roblox.com/", jobExpiration, JSON.stringify(data));
         const response = await axios.request({
@@ -304,59 +304,30 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
         throw "RCCService did not open TCP $rccPort within 45 seconds. See $rccOut and $rccErr."
     }
 
-    # Record the RCC binary identity and query its own WSDL before sending SOAP.
-    # If this RCC build publishes WSDL, use its exact target namespace and action.
+    # RCCService does not have to publish WSDL over HTTP; GET /?wsdl may return 500.
+    # Use the documented RCC SOAP 1.1 contract directly and quote the SOAPAction header.
     $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($rccExe)
-    $versionSummary = "RCC executable: " + $rccExe + [Environment]::NewLine +
-        "File version: " + $versionInfo.FileVersion + [Environment]::NewLine +
-        "Product version: " + $versionInfo.ProductVersion
-    $soapNamespace = "http://roblox.com/"
-    $getStatusAction = "http://roblox.com/GetStatus"
-    $wsdlLog = Join-Path $logDir "rcc-service-wsdl.xml"
-    $wsdlStatus = "WSDL endpoint was not queried."
-    try {
-        $wsdlResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$rccPort/?wsdl" -Method Get -UseBasicParsing -TimeoutSec 10
-        $wsdlText = [string]$wsdlResponse.Content
-        [System.IO.File]::WriteAllText($wsdlLog, $wsdlText, $utf8NoBom)
-        $wsdlDoc = [xml]$wsdlText
-        $targetNamespace = [string]$wsdlDoc.DocumentElement.GetAttribute("targetNamespace")
-        if (-not [string]::IsNullOrWhiteSpace($targetNamespace)) {
-            $soapNamespace = $targetNamespace
-        }
-        $nsManager = New-Object System.Xml.XmlNamespaceManager($wsdlDoc.NameTable)
-        $nsManager.AddNamespace("wsdl", "http://schemas.xmlsoap.org/wsdl/")
-        $nsManager.AddNamespace("soap", "http://schemas.xmlsoap.org/wsdl/soap/")
-        $actionNode = $wsdlDoc.SelectSingleNode("//wsdl:binding/wsdl:operation[@name='GetStatus']/soap:operation", $nsManager)
-        if ($actionNode -and -not [string]::IsNullOrWhiteSpace([string]$actionNode.GetAttribute("soapAction"))) {
-            $getStatusAction = [string]$actionNode.GetAttribute("soapAction")
-        }
-        $wsdlStatus = "WSDL retrieved; namespace and GetStatus SOAPAction read from RCC."
-    } catch {
-        $wsdlStatus = "RCC did not provide WSDL at /?wsdl: $($_.Exception.Message)"
-        [System.IO.File]::WriteAllText($wsdlLog, $wsdlStatus, $utf8NoBom)
-    }
-
     $probeLogText = @(
-        $versionSummary,
-        $wsdlStatus,
-        "SOAP namespace: $soapNamespace",
-        "SOAPAction: $getStatusAction"
+        "RCC executable: $rccExe",
+        "File version: $($versionInfo.FileVersion)",
+        "Product version: $($versionInfo.ProductVersion)",
+        "HTTP WSDL discovery: skipped (not required for RCC SOAP)",
+        "SOAP namespace: http://roblox.com/",
+        'SOAPAction: "http://roblox.com/GetStatus"'
     ) -join [Environment]::NewLine
 
-    # GetStatus is a harmless health check and does not execute a render script.
-    $soapNamespaceXml = [System.Security.SecurityElement]::Escape($soapNamespace)
-    $probeXml = @"
+    $probeXml = @'
 <?xml version="1.0" encoding="utf-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:rob="$soapNamespaceXml">
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:rob="http://roblox.com/">
   <soapenv:Header/>
   <soapenv:Body>
     <rob:GetStatus/>
   </soapenv:Body>
 </soapenv:Envelope>
-"@
+'@
 
     try {
-        $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$rccPort" -Method Post -ContentType "text/xml; charset=utf-8" -Headers @{ SOAPAction = $getStatusAction } -Body $probeXml -UseBasicParsing -TimeoutSec 20
+        $statusResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$rccPort" -Method Post -ContentType "text/xml; charset=utf-8" -Headers @{ SOAPAction = '"http://roblox.com/GetStatus"' } -Body $probeXml -UseBasicParsing -TimeoutSec 20
         $statusBody = [string]$statusResponse.Content
         if ([int]$statusResponse.StatusCode -ne 200 -or $statusBody -notmatch "GetStatusResponse") {
             throw "RCC returned HTTP $($statusResponse.StatusCode), but the body was not a valid GetStatus SOAP response: $($statusBody.Substring(0,[Math]::Min(700,$statusBody.Length)))"
@@ -379,7 +350,7 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
         } catch {}
         $probeLogText += [Environment]::NewLine + "SOAP GetStatus failed: " + $probeError
         [System.IO.File]::WriteAllText($probeLog, $probeLogText, $utf8NoBom)
-        throw "RCCService is listening but its SOAP interface test failed. $probeError. See $probeLog and $wsdlLog"
+        throw "RCCService is listening but its SOAP interface test failed. $probeError. See $probeLog"
     }
 
     Write-Host "RCCService startup and SOAP test completed successfully." -ForegroundColor Green
