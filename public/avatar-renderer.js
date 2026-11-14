@@ -226,7 +226,6 @@ export async function mountSakuraAvatar(host, publicId) {
   scene.add(character);
 
   const equipped = Array.isArray(avatarData.equipped) ? avatarData.equipped : [];
-  await Promise.all(equipped.slice(0, 12).map(item => attachAccessory(character, loader, item)));
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 1.02, 0);
@@ -290,5 +289,7 @@ export async function mountSakuraAvatar(host, publicId) {
 
   host.dataset.avatarReady = "true";
   host.parentElement?.classList.add("has-rendered-avatar");
+  Promise.all(equipped.slice(0, 12).map(item => attachAccessory(character, loader, item)))
+    .catch(error => console.warn("[Sakura avatar] Some accessories could not be loaded.", error));
   return dispose;
 }
