@@ -1766,7 +1766,7 @@ async function route(request, env) {
     const publicId = Number(avatarRenderId);
     const rendererUrl = String(env.AVATAR_RENDERER_URL||"").replace(/\/+$/,"");
     if (!rendererUrl || !env.AVATAR_RENDERER_SECRET) {
-      return fail("OpenPekora is not fully configured. Set AVATAR_RENDERER_URL and AVATAR_RENDERER_SECRET in the Sakura Worker.",503);
+      return fail("The Sakura avatar renderer is not fully configured. Check its Worker settings.",503);
     }
     let rendererOrigin;
     try {
@@ -1788,7 +1788,7 @@ async function route(request, env) {
     const cacheKey = publicId+":"+sourceHash;
     const cached = avatarRenderCache.get(cacheKey);
     const forceRefresh = url.searchParams.get("refresh")==="1";
-    if (!forceRefresh && cached && cached.expiresAt>Date.now()) return json(cached.data,200,{"cache-control":"private, max-age=20"});
+    if (!forceRefresh && cached && cached.expiresAt>Date.now()) return json(cached.data,200,{"cache-control":"private, no-store"});
 
     let renderPromise = avatarRenderInflight.get(cacheKey);
     if (!renderPromise) {
@@ -1834,7 +1834,7 @@ async function route(request, env) {
           camera:renderData.camera,
           aabb:renderData.AABB,
           files,
-          renderer:"OpenPekora RCC"
+          renderer:"Sakura RCC"
         };
       })();
       avatarRenderInflight.set(cacheKey,renderPromise);
@@ -1846,10 +1846,10 @@ async function route(request, env) {
         for (const [key,value] of avatarRenderCache) if (value.expiresAt<=Date.now()) avatarRenderCache.delete(key);
         if (avatarRenderCache.size>100) avatarRenderCache.delete(avatarRenderCache.keys().next().value);
       }
-      return json(rendered,200,{"cache-control":"private, max-age=20"});
+      return json(rendered,200,{"cache-control":"private, no-store"});
     } catch (error) {
       console.error("[Sakura OpenPekora renderer] Avatar render failed:",publicId,error);
-      return fail("OpenPekora could not render this Sakura avatar: "+String(error?.message||error).slice(0,240),502);
+      return fail("The Sakura avatar renderer could not complete this avatar: "+String(error?.message||error).slice(0,240),502);
     } finally {
       avatarRenderInflight.delete(cacheKey);
     }
@@ -1881,6 +1881,41 @@ async function route(request, env) {
     if (!data || typeof data !== "object" || Array.isArray(data)) return fail("Invalid avatar update.");
     const action = String(data.action||"");
     const settings = await loadAvatarSettings(env,user.id);
+
+    if (action === "settings") {
+      if (!["R6","R15"].includes(data.rigType)) return fail("Choose R6 or R15.");
+      if (!data.bodyColors || typeof data.bodyColors !== "object" || Array.isArray(data.bodyColors)) {
+        return fail("Choose valid body colors.");
+      }
+      if (!data.scales || typeof data.scales !== "object" || Array.isArray(data.scales)) {
+        return fail("Choose valid body proportions.");
+      }
+
+      const nextBodyColors = {...settings.bodyColors};
+      for (const [key,value] of Object.entries(data.bodyColors)) {
+        const colorId = Number(value);
+        if (!AVATAR_COLOR_KEYS.includes(key) || !Number.isSafeInteger(colorId) || !AVATAR_COLOR_IDS.has(colorId)) {
+          return fail("Choose a skin tone from the Sakura palette.");
+        }
+        nextBodyColors[key] = colorId;
+      }
+
+      const ranges = {height:[0.9,1.05],width:[0.7,1],head:[0.95,1],depth:[0.7,1],proportion:[0,1],bodyType:[0,1]};
+      const nextScales = {...settings.scales};
+      for (const [key,value] of Object.entries(data.scales)) {
+        const range = ranges[key], number = Number(value);
+        if (!range || !Number.isFinite(number) || number < range[0] || number > range[1]) {
+          return fail("Avatar scale is outside the allowed range.");
+        }
+        nextScales[key] = Math.round(number * 100) / 100;
+      }
+
+      settings.rigType = data.rigType;
+      settings.bodyColors = nextBodyColors;
+      settings.scales = nextScales;
+      await saveAvatarSettings(env,user.id,settings);
+      return json({ok:true,rigType:settings.rigType,bodyColors:settings.bodyColors,scales:settings.scales});
+    }
 
     if (action === "colors") {
       if (!data.bodyColors || typeof data.bodyColors !== "object" || Array.isArray(data.bodyColors)) return fail("Choose a valid body color.");
@@ -1926,7 +1961,7 @@ async function route(request, env) {
     }
     const modelUrl = String(item.model_url||"").trim();
     const hasRccAsset = Number(item.asset_id||0)>0 && Number(item.asset_type_id||0)>0;
-    if (!hasRccAsset && !modelUrl) return fail("This item has no Sakura 3D model or OpenPekora asset id.",409);
+    if (!hasRccAsset) return fail("Wearing this item is temporarily unavailable.",409);
     if (Number(item.asset_id||0)>0 && !Number(item.asset_type_id||0)) return fail("This item is missing its OpenPekora asset type.",409);
     if (modelUrl) {
       try {
