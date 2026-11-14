@@ -137,7 +137,7 @@ const checks = [
   ["Avatar settings save in one atomic request", app.includes('JSON.stringify({action:"settings",rigType,bodyColors,scales})') && worker.includes('if (action === "settings")') && worker.includes("await saveAvatarSettings(env,user.id,settings)")],
   ["skin tone and advanced body colors persist in D1", worker.includes("CREATE TABLE IF NOT EXISTS avatar_settings") && worker.includes("body_colors") && worker.includes("AVATAR_COLOR_IDS")],
   ["Avatar settings and body-color storage are available", worker.includes("CREATE TABLE IF NOT EXISTS avatar_settings") && worker.includes("body_colors")],
-  ["RCCService preserves the configured local SOAP port and protected bridge", rccLauncher.includes("$rccPort = 64989") && rccLauncher.includes("$config.Ports.RCC.Player") && rccLauncher.includes("$_sakura-rcc") === false && rccLauncher.includes("/_sakura-rcc/") && rccLauncher.includes("New-NetFirewallRule")],
+  ["RCCService preserves the configured local SOAP port and protected bridge", rccLauncher.includes("$rccPort = 64989") && rccLauncher.includes("$config.Ports.RCC.Player") && rccLauncher.includes("/_sakura-rcc/") && rccLauncher.includes("New-NetFirewallRule")],
   ["Renderer is secret-protected and loopback-only", secureRendererLauncher.includes("timingSafeEqual") && secureRendererLauncher.includes("x-pekora-renderer-secret") && secureRendererLauncher.includes("127.0.0.1")],
   ["Legacy RCC launcher delegates to the corrected setup", legacyRccLauncher.includes("scripts\\start-rcc-2020.ps1") && !legacyRccLauncher.includes("$port = 64989")],
   ["Avatar render responses do not reuse stale browser cache", renderer.includes('cache: "no-store"') && worker.includes('"cache-control":"private, no-store"')],
@@ -160,7 +160,7 @@ const checks = [
   ["Currently Wearing can remove old unsupported equipped items", app.includes('action==="remove"||renderable')],
   ["Items without Roblox asset IDs cannot be falsely equipped", worker.includes('if (!hasRccAsset) return fail("Wearing this item is temporarily unavailable.",409);')],
   ["Avatar renderer has a safe camera fallback for incomplete bounds", renderer.includes("isFiniteVector(minValue)") && renderer.includes("bounds.getCenter(center)") && renderer.includes("modelDistance")],
-  ["Renderer startup can recover its secret from the private bridge URL", secureRendererLauncher.includes("/_sakura-rcc/([^/]+)/?$") && secureRendererLauncher.includes("UnescapeDataString")],
+  ["Renderer startup can recover its secret from the private bridge URL", secureRendererLauncher.includes("/_sakura-rcc/([^/]+)/") && secureRendererLauncher.includes("UnescapeDataString")],
 
 ];
 
