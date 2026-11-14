@@ -121,14 +121,6 @@ async function saveAvatarSettings(env,userId,settings) {
     .bind(userId,JSON.stringify(settings.bodyColors),settings.rigType,JSON.stringify(settings.scales)).run();
 }
 
-async function loadPublicAvatar(env,userId) {
-  const [rows,settings] = await Promise.all([
-    env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(userId).all(),
-    loadAvatarSettings(env,userId)
-  ]);
-  return {equipped:rows.results||[],...settings};
-}
-
 
 const MEMBERSHIP_REWARDS = Object.freeze({
   None:0,
@@ -1607,13 +1599,12 @@ async function route(request, env) {
     const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.public_id=? AND u.is_banned=0`).bind(Number(profileIdMatch[1])).first();
     if (!profile) return fail("User not found.",404);
-    const [count,badgeRows,totalRap,avatarData] = await Promise.all([
+    const [count,badgeRows,totalRap] = await Promise.all([
       env.DB.prepare("SELECT COALESCE(SUM(quantity),0) AS n FROM inventory WHERE user_id=? AND quantity>0").bind(profile.id).first(),
       env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all(),
-      getProfileTotalRap(env,profile.id),
-      loadPublicAvatar(env,profile.id)
+      getProfileTotalRap(env,profile.id)
     ]);
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key),avatar:avatarData} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
   }
 
   const profileInventoryMatch = path.match(/^\/api\/profile\/([A-Za-z0-9_]{1,20})\/inventory$/);
@@ -1676,14 +1667,14 @@ async function route(request, env) {
 
     const itemId = String(data.itemId||"");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId) || !["wear","remove"].includes(action)) return fail("Choose an inventory item and a valid avatar action.");
-    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id,i.model_url,i.image_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
+    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
     if (!item) return fail("You can only equip items in your inventory.",404);
     if (!["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category)) return fail("This item category cannot be equipped on the avatar.");
     if (action === "remove") {
       await env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=?").bind(user.id,itemId).run();
       return json({ok:true,action,equipped:false});
     }
-    if (!String(item.model_url||"").trim() && !String(item.image_url||"").trim()) return fail("This item needs a Sakura 3D model or preview image before it can be equipped.",409);
+    if (!Number(item.asset_id||0)) return fail("This item has no Roblox asset ID, so the 3D renderer cannot equip it.",409);
     const statements = [];
     if (["Hair","Faces","Shirts","Pants"].includes(item.category)) {
       statements.push(env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND category=?").bind(user.id,item.category));
@@ -1714,13 +1705,12 @@ async function route(request, env) {
     const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const [count,badgeRows,totalRap,avatarData] = await Promise.all([
+    const [count,badgeRows,totalRap] = await Promise.all([
       env.DB.prepare("SELECT COALESCE(SUM(quantity),0) AS n FROM inventory WHERE user_id=? AND quantity>0").bind(profile.id).first(),
       env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all(),
-      getProfileTotalRap(env,profile.id),
-      loadPublicAvatar(env,profile.id)
+      getProfileTotalRap(env,profile.id)
     ]);
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key),avatar:avatarData} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
   }
 
   if (request.method === "PUT" && path === "/api/profile") {
@@ -3027,7 +3017,7 @@ export default {
           headers.set("X-Frame-Options","DENY");
           headers.set("Referrer-Policy","strict-origin-when-cross-origin");
           headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
-          headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com 'sha256-+S5cjrE2kA9WKYoBqOcm8PSjn1mZpTjpO5Uc7USBpj0='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
+          headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
           return new Response(html,{status:200,headers});
         }
       }
@@ -3038,7 +3028,7 @@ export default {
     headers.set("X-Frame-Options","DENY");
     headers.set("Referrer-Policy","strict-origin-when-cross-origin");
     headers.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");
-    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com 'sha256-+S5cjrE2kA9WKYoBqOcm8PSjn1mZpTjpO5Uc7USBpj0='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
+    headers.set("Content-Security-Policy","default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://ajax.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests");
     return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   }
 };
