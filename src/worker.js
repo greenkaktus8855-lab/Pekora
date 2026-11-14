@@ -1811,8 +1811,18 @@ async function route(request, env) {
         }
         let renderData = envelope?.data;
         if (typeof renderData === "string") {
-          try { renderData = JSON.parse(renderData); }
-          catch { throw new Error("OpenPekora returned an invalid 3D scene document."); }
+          try {
+            renderData = JSON.parse(renderData);
+          } catch {
+            // Some RCC wrappers return the serialized scene as base64 text.
+            try {
+              const binary = atob(renderData.replace(/\\s+/g,""));
+              const bytes = Uint8Array.from(binary,character=>character.charCodeAt(0));
+              renderData = JSON.parse(new TextDecoder().decode(bytes));
+            } catch {
+              throw new Error("OpenPekora returned an invalid 3D scene document.");
+            }
+          }
         }
         const files = renderData?.files;
         if (!renderData?.camera || !renderData?.AABB || !files?.["scene.obj"]?.content || !files?.["scene.mtl"]?.content) {
