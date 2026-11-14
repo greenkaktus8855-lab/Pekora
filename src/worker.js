@@ -1520,6 +1520,68 @@ async function route(request, env) {
     return json({items:(rows.results||[]).map(item=>({...item,gift_rewards:rewardsByGift.get(item.id)||[]}))});
   }
 
+  if (request.method === "DELETE" && path === "/api/inventory") {
+    const user=await requireUser(request,env);
+    if(!user)return fail("Please sign in.",401);
+    const summary=await env.DB.prepare("SELECT COUNT(*) AS item_types,COALESCE(SUM(quantity),0) AS copies FROM inventory WHERE user_id=? AND quantity>0").bind(user.id).first();
+    if(!Number(summary?.item_types||0))return json({ok:true,removedTypes:0,removedCopies:0});
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE trades SET status='CANCELLED',responded_at=datetime('now')
+        WHERE status='PENDING' AND (sender_id=? OR recipient_id=?)
+          AND (
+            EXISTS (SELECT 1 FROM json_each(trades.offered_items) off WHERE off.value IN (SELECT item_id FROM inventory WHERE user_id=?))
+            OR EXISTS (SELECT 1 FROM json_each(trades.requested_items) req WHERE req.value IN (SELECT item_id FROM inventory WHERE user_id=?))
+          )`).bind(user.id,user.id,user.id,user.id),
+      env.DB.prepare(`DELETE FROM trade_locks
+        WHERE trade_id IN (
+          SELECT t.id FROM trades t
+          WHERE t.status='CANCELLED' AND (t.sender_id=? OR t.recipient_id=?)
+            AND (
+              EXISTS (SELECT 1 FROM json_each(t.offered_items) off WHERE off.value IN (SELECT item_id FROM inventory WHERE user_id=?))
+              OR EXISTS (SELECT 1 FROM json_each(t.requested_items) req WHERE req.value IN (SELECT item_id FROM inventory WHERE user_id=?))
+            )
+        )`).bind(user.id,user.id,user.id,user.id),
+      env.DB.prepare("UPDATE resale_listings SET status='CANCELLED' WHERE seller_id=? AND status='ACTIVE' AND item_id IN (SELECT item_id FROM inventory WHERE user_id=?)").bind(user.id,user.id),
+      env.DB.prepare("DELETE FROM trade_locks WHERE owner_id=? AND item_id IN (SELECT item_id FROM inventory WHERE user_id=?)").bind(user.id,user.id),
+      env.DB.prepare("DELETE FROM equipped_items WHERE user_id=?").bind(user.id),
+      env.DB.prepare("DELETE FROM gift_openings WHERE user_id=? AND gift_item_id IN (SELECT item_id FROM inventory WHERE user_id=?)").bind(user.id,user.id),
+      env.DB.prepare("DELETE FROM inventory WHERE user_id=?").bind(user.id)
+    ]);
+    return json({ok:true,removedTypes:Number(summary.item_types||0),removedCopies:Number(summary.copies||0)});
+  }
+
+  const inventoryItemDeleteMatch=path.match(/^\/api\/inventory\/([A-Za-z0-9_-]{1,80})$/);
+  if (request.method === "DELETE" && inventoryItemDeleteMatch) {
+    const user=await requireUser(request,env);
+    if(!user)return fail("Please sign in.",401);
+    const itemId=inventoryItemDeleteMatch[1];
+    const owned=await env.DB.prepare("SELECT v.quantity,i.name FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND v.item_id=? AND v.quantity>0").bind(user.id,itemId).first();
+    if(!owned)return fail("This item is not in your inventory.",404);
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE trades SET status='CANCELLED',responded_at=datetime('now')
+        WHERE status='PENDING' AND (sender_id=? OR recipient_id=?)
+          AND (
+            EXISTS (SELECT 1 FROM json_each(trades.offered_items) off WHERE off.value=?)
+            OR EXISTS (SELECT 1 FROM json_each(trades.requested_items) req WHERE req.value=?)
+          )`).bind(user.id,user.id,itemId,itemId),
+      env.DB.prepare(`DELETE FROM trade_locks
+        WHERE trade_id IN (
+          SELECT t.id FROM trades t
+          WHERE t.status='CANCELLED' AND (t.sender_id=? OR t.recipient_id=?)
+            AND (
+              EXISTS (SELECT 1 FROM json_each(t.offered_items) off WHERE off.value=?)
+              OR EXISTS (SELECT 1 FROM json_each(t.requested_items) req WHERE req.value=?)
+            )
+        )`).bind(user.id,user.id,itemId,itemId),
+      env.DB.prepare("UPDATE resale_listings SET status='CANCELLED' WHERE seller_id=? AND item_id=? AND status='ACTIVE'").bind(user.id,itemId),
+      env.DB.prepare("DELETE FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId),
+      env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=?").bind(user.id,itemId),
+      env.DB.prepare("DELETE FROM gift_openings WHERE user_id=? AND gift_item_id=?").bind(user.id,itemId),
+      env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,itemId)
+    ]);
+    return json({ok:true,itemName:owned.name,removedCopies:Number(owned.quantity||0)});
+  }
+
   if (request.method === "POST" && path === "/api/inventory/sell") {
     return fail("Direct inventory selling is disabled. Create a player resale listing instead.",410);
   }
