@@ -117,7 +117,7 @@ function disposeScene(scene) {
 
 export async function mountSakuraAvatar(host, publicId) {
   if (!host || !publicId) throw new Error("Avatar profile is missing.");
-  host.innerHTML = '<span class="sakura-avatar-loading">Loading OpenPekora avatar…</span>';
+  host.innerHTML = '<span class="sakura-avatar-loading">Loading avatar…</span>';
 
   const response = await fetch("/api/avatar/render/" + encodeURIComponent(publicId), {
     credentials: "same-origin",
@@ -125,14 +125,14 @@ export async function mountSakuraAvatar(host, publicId) {
   });
   const renderData = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(renderData.error || "OpenPekora could not render this avatar.");
+    throw new Error(renderData.error || "Sakura could not render this avatar.");
   }
 
   const files = renderData.files || {};
   const objFile = files["scene.obj"];
   const mtlFile = files["scene.mtl"];
   if (!objFile?.content || !mtlFile?.content) {
-    throw new Error("OpenPekora returned an incomplete 3D scene.");
+    throw new Error("The avatar renderer returned an incomplete 3D scene.");
   }
 
   const objectUrls = new Map();
@@ -149,7 +149,7 @@ export async function mountSakuraAvatar(host, publicId) {
   });
 
   const bounds = new THREE.Box3().setFromObject(avatarObject);
-  if (bounds.isEmpty()) throw new Error("OpenPekora returned an empty avatar model.");
+  if (bounds.isEmpty()) throw new Error("The avatar renderer returned an empty model.");
   const min = vectorFrom(renderData.aabb?.min);
   const max = vectorFrom(renderData.aabb?.max);
   const center = min.clone().add(max).multiplyScalar(0.5);
@@ -188,7 +188,7 @@ export async function mountSakuraAvatar(host, publicId) {
   }
 
   renderer.domElement.className = "sakura-avatar-canvas";
-  renderer.domElement.setAttribute("aria-label", "Interactive OpenPekora 3D avatar");
+  renderer.domElement.setAttribute("aria-label", "Interactive Sakura 3D avatar");
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
   renderer.setSize(width, height, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
