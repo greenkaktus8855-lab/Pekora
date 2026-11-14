@@ -1616,10 +1616,21 @@ async function route(request, env) {
     return json({ items:rows.results || [] });
   }
 
+  const publicAvatarMatch = path.match(/^\/api\/avatar\/public\/(\d{1,12})$/);
+  if (publicAvatarMatch && request.method === "GET") {
+    const profile = await env.DB.prepare("SELECT id FROM users WHERE public_id=? AND is_banned=0").bind(Number(publicAvatarMatch[1])).first();
+    if (!profile) return fail("User not found.",404);
+    const [rows,settings] = await Promise.all([
+      env.DB.prepare("SELECT i.id,i.name,i.category,i.model_url FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND i.model_url<>'' ORDER BY e.equipped_at DESC").bind(profile.id).all(),
+      loadAvatarSettings(env,profile.id)
+    ]);
+    return json({enabled:true,equipped:rows.results||[],...settings});
+  }
+
   if (path === "/api/avatar" && request.method === "GET") {
     const user = await requireUser(request,env);
     if (!user) return fail("Please sign in.",401);
-    const [rows,settings] = await Promise.all([env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? ORDER BY e.equipped_at DESC").bind(user.id).all(),loadAvatarSettings(env,user.id)]);
+    const [rows,settings] = await Promise.all([env.DB.prepare("SELECT i.id,i.name,i.category,i.image_url,i.model_url,i.asset_id,i.asset_type_id FROM equipped_items e JOIN items i ON i.id=e.item_id WHERE e.user_id=? AND i.model_url<>'' ORDER BY e.equipped_at DESC").bind(user.id).all(),loadAvatarSettings(env,user.id)]);
     return json({enabled:true,equipped:rows.results||[],...settings});
   }
 
@@ -1667,14 +1678,20 @@ async function route(request, env) {
 
     const itemId = String(data.itemId||"");
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(itemId) || !["wear","remove"].includes(action)) return fail("Choose an inventory item and a valid avatar action.");
-    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
+    const item = await env.DB.prepare("SELECT i.id,i.category,i.asset_id,i.model_url FROM inventory v JOIN items i ON i.id=v.item_id WHERE v.user_id=? AND i.id=?").bind(user.id,itemId).first();
     if (!item) return fail("You can only equip items in your inventory.",404);
     if (!["Hats","Hair","Faces","Shirts","Pants","Accessories"].includes(item.category)) return fail("This item category cannot be equipped on the avatar.");
     if (action === "remove") {
       await env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=?").bind(user.id,itemId).run();
       return json({ok:true,action,equipped:false});
     }
-    if (!Number(item.asset_id||0)) return fail("This item has no Roblox asset ID, so the 3D renderer cannot equip it.",409);
+    const modelUrl = String(item.model_url||"").trim();
+    if (!modelUrl) return fail("Only items with a Sakura 3D model can be equipped by this renderer.",409);
+    try {
+      if (new URL(modelUrl).protocol !== "https:") return fail("Sakura 3D model URLs must use HTTPS.",409);
+    } catch {
+      return fail("This item has an invalid Sakura 3D model URL.",409);
+    }
     const statements = [];
     if (["Hair","Faces","Shirts","Pants"].includes(item.category)) {
       statements.push(env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND category=?").bind(user.id,item.category));
