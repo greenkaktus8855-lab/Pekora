@@ -28,6 +28,7 @@ for (const file of files) {
 
 const app = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 const worker = fs.readFileSync(path.join(root, "src/worker.js"), "utf8");
+const renderer = fs.readFileSync(path.join(root, "public/avatar-renderer.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "public/style.css"), "utf8");
 const globals = fs.readFileSync(path.join(root, "public/openpekora-globals.css"), "utf8");
 const components = fs.readFileSync(path.join(root, "public/openpekora-components.css"), "utf8");
