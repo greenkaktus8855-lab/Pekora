@@ -1792,7 +1792,8 @@ async function route(request, env) {
     }));
     const cacheKey = publicId+":"+sourceHash;
     const cached = avatarRenderCache.get(cacheKey);
-    if (cached && cached.expiresAt>Date.now()) return json(cached.data,200,{"cache-control":"private, max-age=20"});
+    const forceRefresh = url.searchParams.get("refresh")==="1";
+    if (!forceRefresh && cached && cached.expiresAt>Date.now()) return json(cached.data,200,{"cache-control":"private, max-age=20"});
 
     let renderPromise = avatarRenderInflight.get(cacheKey);
     if (!renderPromise) {
@@ -1816,7 +1817,7 @@ async function route(request, env) {
           } catch {
             // Some RCC wrappers return the serialized scene as base64 text.
             try {
-              const binary = atob(renderData.replace(/\\s+/g,""));
+              const binary = atob(renderData.replace(/\s+/g,""));
               const bytes = Uint8Array.from(binary,character=>character.charCodeAt(0));
               renderData = JSON.parse(new TextDecoder().decode(bytes));
             } catch {
@@ -1825,8 +1826,12 @@ async function route(request, env) {
           }
         }
         const files = renderData?.files;
-        if (!renderData?.camera || !renderData?.AABB || !files?.["scene.obj"]?.content || !files?.["scene.mtl"]?.content) {
-          throw new Error("OpenPekora did not return scene.obj, scene.mtl, camera and AABB.");
+        if (!renderData || typeof renderData !== "object") {
+          throw new Error("OpenPekora response did not contain a 3D scene object.");
+        }
+        if (!renderData.camera || !renderData.AABB || !files?.["scene.obj"]?.content || !files?.["scene.mtl"]?.content) {
+          const returnedFiles = files && typeof files === "object" ? Object.keys(files).join(", ") : "none";
+          throw new Error("OpenPekora scene is incomplete. Returned files: "+returnedFiles+". Required: scene.obj and scene.mtl.");
         }
         const totalChars = Object.values(files).reduce((sum,file)=>sum+String(file?.content||"").length,0);
         if (totalChars>28*1024*1024) throw new Error("OpenPekora 3D scene is too large.");
