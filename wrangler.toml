@@ -19,3 +19,4 @@ crons = ["0 21 * * *", "0 22 * * *"]
 
 [vars]
 SITE_NAME = "Sakura"
+AVATAR_RENDERER_URL = "https://renderer.mopcblox.online"
