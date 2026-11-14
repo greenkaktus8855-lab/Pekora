@@ -243,6 +243,7 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_user_ip_addresses_hash ON user_ip_addresses(ip_hash)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS banned_ip_addresses (ip_hash TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, ban_reason TEXT NOT NULL DEFAULT '', banned_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(ip_hash,user_id))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_banned_ip_addresses_hash ON banned_ip_addresses(ip_hash)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS ip_ban_exemptions (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, granted_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_files (id TEXT PRIMARY KEY, model_data BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS equipped_items (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, category TEXT NOT NULL, equipped_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,item_id))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS avatar_render_cache (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, source_hash TEXT NOT NULL, thumbnail_data BLOB NOT NULL, rendered_at TEXT NOT NULL DEFAULT (datetime('now')))"),
@@ -970,11 +971,14 @@ async function route(request, env) {
     }
   }
 
-  if (path !== "/api/health" && path !== "/api/logout") {
+  if (path !== "/api/health" && path !== "/api/logout" && path !== "/api/login") {
     const ipHash = await requestIpHash(request);
     if (await isIpBanned(env,ipHash)) {
       const sessionUser = await currentUser(request,env);
-      if (sessionUser?.role !== "OWNER") {
+      const hasIpExemption = sessionUser
+        ? Boolean(await env.DB.prepare("SELECT 1 AS allowed FROM ip_ban_exemptions WHERE user_id=?").bind(sessionUser.id).first())
+        : false;
+      if (sessionUser?.role !== "OWNER" && !hasIpExemption) {
         return json({error:"This network is permanently blocked from Sakura following a moderation decision.",ipBanned:true},403);
       }
     }
@@ -1918,7 +1922,8 @@ async function route(request, env) {
     const targetId = userMatch[1];
     const target = await env.DB.prepare(`SELECT id,public_id,username,role,balance,tix_balance,created_at,is_banned,is_verified,banned_at,ban_reason,
       EXISTS(SELECT 1 FROM user_ip_addresses ua WHERE ua.user_id=users.id) AS has_recorded_ip,
-      EXISTS(SELECT 1 FROM user_ip_addresses ua JOIN banned_ip_addresses bi ON bi.ip_hash=ua.ip_hash WHERE ua.user_id=users.id) AS is_ip_banned
+      EXISTS(SELECT 1 FROM user_ip_addresses ua JOIN banned_ip_addresses bi ON bi.ip_hash=ua.ip_hash WHERE ua.user_id=users.id) AS is_ip_banned,
+      EXISTS(SELECT 1 FROM ip_ban_exemptions e WHERE e.user_id=users.id) AS is_ip_ban_exempt
       FROM users WHERE id=?`).bind(targetId).first();
     if (!target) return fail("User not found.",404);
 
@@ -1964,11 +1969,20 @@ async function route(request, env) {
         env.DB.prepare("INSERT INTO moderation_warnings (id,user_id,moderator_id,reason) VALUES (?,?,?,?)").bind(id(),targetId,actor.id,details),
         env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"WARNING",details)
       ]);
-    } else if (action === "unban_ip") {
-      await env.DB.batch([
-        env.DB.prepare("DELETE FROM banned_ip_addresses WHERE user_id=? OR ip_hash IN (SELECT ip_hash FROM user_ip_addresses WHERE user_id=?)").bind(targetId,targetId),
-        env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"IP_UNBAN","Permanent IP ban removed by owner")
-      ]);
+    } else if (action === "allow_ip" || action === "revoke_ip") {
+      if (target.is_banned) return fail("Unban the account before changing its network access exception.",409);
+      if (action === "allow_ip") {
+        await env.DB.batch([
+          env.DB.prepare("DELETE FROM banned_ip_addresses WHERE user_id=? OR ip_hash IN (SELECT ip_hash FROM user_ip_addresses WHERE user_id=?)").bind(targetId,targetId),
+          env.DB.prepare("INSERT INTO ip_ban_exemptions (user_id,granted_by) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET granted_by=excluded.granted_by,created_at=datetime('now')").bind(targetId,actor.id),
+          env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"IP_EXCEPTION_GRANTED","Owner allowed this unbanned account to access Sakura from otherwise blocked networks")
+        ]);
+      } else {
+        await env.DB.batch([
+          env.DB.prepare("DELETE FROM ip_ban_exemptions WHERE user_id=?").bind(targetId),
+          env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)").bind(id(),actor.id,targetId,"IP_EXCEPTION_REMOVED","Owner removed the account network access exception")
+        ]);
+      }
     } else if (action === "ban" || action === "unban") {
       if (action === "ban" && details.length < 3) return fail("Enter a ban reason (at least 3 characters).");
       await env.DB.batch([
