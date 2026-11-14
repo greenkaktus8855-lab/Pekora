@@ -3221,7 +3221,7 @@ export default {
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/")) {
+    if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_sakura-rcc/")) {
       const auditEnabled = url.pathname.startsWith("/api/") && ["POST","PUT","PATCH","DELETE"].includes(request.method.toUpperCase()) && Boolean(env.DB);
       const auditRequest = auditEnabled ? request.clone() : null;
       const auditActorPromise = auditEnabled ? currentUser(request,env).catch(()=>null) : Promise.resolve(null);
