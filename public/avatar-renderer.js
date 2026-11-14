@@ -1,5 +1,5 @@
-import * as THREE from "https://esm.sh/three@0.170.0";
-import { GLTFLoader } from "https://esm.sh/three@0.170.0/examples/jsm/loaders/GLTFLoader.js";
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const SKIN_COLORS = Object.freeze({
   1: 0xf5f5f5,
