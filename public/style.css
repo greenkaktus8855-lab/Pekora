@@ -344,8 +344,6 @@ button,input,textarea,select{font:inherit}
 .op-profile-header{display:flex;align-items:flex-start;gap:20px;padding:12px 0 18px}
 .op-profile-avatar{width:150px;height:150px;flex:0 0 150px;background:#211b2b;box-shadow:0 1px 4px rgba(25,25,25,.3);overflow:hidden}
 .op-profile-avatar img{display:block;width:100%;height:100%;object-fit:cover}
-.op-profile-avatar img.profile-render-image{object-fit:contain;background:#211b2b}
-.profile-render-image[hidden]{display:none!important}
 .op-profile-info{min-width:0}
 .op-profile-info h1{font-size:32px;font-weight:700;line-height:1.2;margin:0 0 4px;color:#f0eaf8}
 .op-profile-meta{font-size:13px;color:#b8afc1}
@@ -1461,38 +1459,4 @@ body{color:#f0eaf8!important}
 @media(max-width:560px){
  .inventory-management-heading{align-items:stretch;flex-direction:column}
  .inventory-management-heading>#clearInventoryButton{width:100%}
-}
-
-
-/* Native Sakura avatar renderer */
-.sakura-profile-avatar{width:184px;height:228px;flex:0 0 184px;background:#21172d!important;overflow:hidden}
-.sakura-profile-render{position:relative;width:100%;height:100%;min-height:180px;overflow:hidden;background:#21172d}
-.sakura-avatar-3d{display:block;width:100%;height:100%;min-height:180px;touch-action:none;cursor:grab;outline:none}
-.sakura-avatar-3d:active{cursor:grabbing}
-.avatar-render-status[hidden]{display:none!important}
-.sakura-avatar-editor{max-width:1040px;margin:10px auto 28px}
-.sakura-avatar-layout{display:grid;grid-template-columns:minmax(280px,1.05fr) minmax(300px,.95fr);gap:16px;align-items:start}
-.sakura-avatar-stage{overflow:hidden;background:#21172d;border:1px solid #4d4059;border-radius:5px}
-.sakura-avatar-canvas{position:relative;width:100%;height:470px;min-height:360px;background:#21172d}
-.sakura-avatar-hint{margin:0;padding:9px 12px;background:#2a2035;color:#d5cada;font-size:12px;text-align:center}
-.sakura-avatar-controls{display:grid;gap:12px}
-.sakura-avatar-control-group{padding:14px;background:#211b2b;border:1px solid #51465d;color:#f0eaf8}
-.sakura-avatar-control-group h2{margin:0 0 9px;font-size:17px}
-.sakura-avatar-control-group>.muted{margin:0 0 10px;font-size:12px;color:#c1b6ce}
-.sakura-avatar-choice-row{display:flex;gap:8px;flex-wrap:wrap}
-.sakura-avatar-field{display:grid;gap:5px;margin:0 0 9px;font-size:13px}
-.sakura-avatar-field select{width:100%;padding:8px;background:#17141e;color:#f0eaf8;border:1px solid #81738f}
-.sakura-avatar-wardrobe-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
-.sakura-avatar-wardrobe-item{min-width:0;padding:8px;background:#17141e;border:1px solid #4d4059}
-.sakura-avatar-wardrobe-thumb{height:92px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#282131;margin-bottom:7px}
-.sakura-avatar-wardrobe-thumb img{max-width:100%;max-height:100%;object-fit:contain}
-.sakura-avatar-wardrobe-model{font-size:24px;font-weight:800;color:#c79cf3}
-.sakura-avatar-wardrobe-name{font-size:13px;font-weight:700;overflow-wrap:anywhere}
-.sakura-avatar-wardrobe-item .muted{font-size:11px}
-.sakura-avatar-wardrobe-item button{width:100%;margin-top:7px}
-@media(max-width:767px){
- .sakura-profile-avatar{width:126px;height:174px;flex-basis:126px}
- .sakura-avatar-layout{grid-template-columns:1fr}
- .sakura-avatar-canvas{height:390px;min-height:320px}
- .sakura-avatar-wardrobe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
