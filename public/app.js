@@ -8,6 +8,8 @@ function ownedItemCount(itemId){return Number(ownedItemCounts.get(itemId)||0);}
 function canBuyItem(item){const count=ownedItemCount(item.id);return Number(item.is_limited)===1?count<10:count===0;}
 let activeView=0;
 const ITEM_CATEGORIES=["Hats","Hair","Faces","T-Shirts","Shirts","Pants","Accessories"];
+const AVATAR_ASSET_TYPE_BY_CATEGORY={"Hats":8,"Hair":41,"Faces":18,"T-Shirts":2,"Shirts":11,"Pants":12};
+function avatarAssetTypeId(item){return Number(item?.asset_type_id)||Number(AVATAR_ASSET_TYPE_BY_CATEGORY[item?.category]||0);}
 const CREATABLE_CATEGORIES=["T-Shirts","Shirts","Pants"];
 const MEMBERSHIP_PLANS=[
  {type:"None",name:"None",short:"None",daily:0,description:"No membership or daily reward"},
@@ -777,15 +779,25 @@ let sakuraAvatarModulePromise=null;
 async function mountSakuraProfileAvatar(publicId){
  const host=app.querySelector("[data-sakura-avatar]");
  if(!host)return;
+ const mountId=(Number(host.dataset.avatarMountId)||0)+1;
+ host.dataset.avatarMountId=String(mountId);
  try{
-  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-sakura-20261114-4");
+  if(typeof host.sakuraAvatarDispose==="function"){
+   host.sakuraAvatarDispose();
+   host.sakuraAvatarDispose=null;
+  }
+  sakuraAvatarModulePromise ||= import("/avatar-renderer.js?v=sakura-sakura-20261114-5");
   const renderer=await sakuraAvatarModulePromise;
-  if(!host.isConnected)return;
+  if(!host.isConnected||host.dataset.avatarMountId!==String(mountId))return;
   const dispose=await renderer.mountSakuraAvatar(host,publicId);
-  if(!host.isConnected&&typeof dispose==="function")dispose();
+  if(!host.isConnected||host.dataset.avatarMountId!==String(mountId)){
+   if(typeof dispose==="function")dispose();
+   return;
+  }
+  host.sakuraAvatarDispose=dispose;
  }catch(error){
   sakuraAvatarModulePromise=null;
-  if(!host.isConnected)return;
+  if(!host.isConnected||host.dataset.avatarMountId!==String(mountId))return;
   host.innerHTML='<span class="sakura-avatar-loading">'+esc(error?.message||"3D avatar is unavailable")+'</span>';
   console.error("[Sakura avatar]",error);
  }
@@ -1254,7 +1266,7 @@ async function avatarPage(){
   };
   const itemMarkup=(item,mode)=>{
    const wearing=equippedIds.has(String(item.id));
-   const renderable=Number(item.asset_id)>0&&Number(item.asset_type_id)>0;
+   const renderable=Number(item.asset_id)>0&&avatarAssetTypeId(item)>0;
    const action=mode==="wearing"?"remove":(wearing?"remove":"wear");
    const label=action==="remove"?"Remove":"Wear";
    const button=action==="remove"||renderable
@@ -1358,6 +1370,31 @@ async function avatarPage(){
   };
   bindWearButtons();
 
+  let avatarSaveQueue=Promise.resolve();
+  let avatarSaveRevision=0;
+  const persistAvatarSettings=(button=null)=>{
+   const revision=++avatarSaveRevision;
+   const snapshot={action:"settings",rigType,bodyColors:{...bodyColors},scales:{...scales}};
+   const status=document.getElementById("opAvatarSaveStatus");
+   if(status)status.textContent="Saving avatar settings...";
+   if(button){button.disabled=true;button.textContent="Saving...";}
+   const request=avatarSaveQueue.catch(()=>{}).then(()=>api("/api/avatar",{method:"PUT",body:JSON.stringify(snapshot)}));
+   avatarSaveQueue=request;
+   request.then(async()=>{
+    if(button&&button.isConnected){button.disabled=false;button.textContent="Save Changes";}
+    if(revision!==avatarSaveRevision||!isActiveView(view))return;
+    if(status?.isConnected)status.textContent="Saved. Updating preview...";
+    await mountSakuraProfileAvatar(me.publicId);
+    if(status?.isConnected)status.textContent="Saved.";
+   }).catch(error=>{
+    if(button&&button.isConnected){button.disabled=false;button.textContent="Save Changes";}
+    if(revision!==avatarSaveRevision)return;
+    toast(error.message);
+    if(status?.isConnected)status.textContent="Could not save avatar settings.";
+   });
+   return request;
+  };
+
   app.querySelectorAll("[data-avatar-rig]").forEach(button=>button.addEventListener("click",()=>{
    rigType=button.dataset.avatarRig;
    app.querySelectorAll("[data-avatar-rig]").forEach(option=>{
@@ -1366,33 +1403,25 @@ async function avatarPage(){
     option.setAttribute("aria-pressed",String(active));
    });
    document.getElementById("opAvatarScaleSection").hidden=rigType==="R6";
-   document.getElementById("opAvatarSaveStatus").textContent="Avatar type changed. Save your changes.";
+   persistAvatarSettings();
   }));
 
   app.querySelectorAll("[data-avatar-color]").forEach(select=>select.addEventListener("change",()=>{
    bodyColors[select.dataset.avatarColor]=Number(select.value);
-   document.getElementById("opAvatarSaveStatus").textContent="Body colors changed. Save your changes.";
+   persistAvatarSettings();
   }));
-  app.querySelectorAll("[data-avatar-scale]").forEach(input=>input.addEventListener("input",()=>{
-   const key=input.dataset.avatarScale;
-   scales[key]=Number(input.value);
-   const output=app.querySelector('[data-avatar-scale-value="'+key+'"]');
-   if(output)output.textContent=Number(input.value).toFixed(2);
-   document.getElementById("opAvatarSaveStatus").textContent="Body proportions changed. Save your changes.";
-  }));
+  app.querySelectorAll("[data-avatar-scale]").forEach(input=>{
+   input.addEventListener("input",()=>{
+    const key=input.dataset.avatarScale;
+    scales[key]=Number(input.value);
+    const output=app.querySelector('[data-avatar-scale-value="'+key+'"]');
+    if(output)output.textContent=Number(input.value).toFixed(2);
+   });
+   input.addEventListener("change",()=>persistAvatarSettings());
+  });
 
-  document.getElementById("saveAvatarSettings")?.addEventListener("click",async event=>{
-   const button=event.currentTarget;
-   button.disabled=true;
-   button.textContent="Saving...";
-   try{
-    await api("/api/avatar",{method:"PUT",body:JSON.stringify({action:"settings",rigType,bodyColors,scales})});
-    document.getElementById("opAvatarSaveStatus").textContent="Saved. Refreshing your avatar...";
-    if(isActiveView(view))await avatarPage();
-   }catch(error){
-    toast(error.message);
-    if(isActiveView(view)){button.disabled=false;button.textContent="Save Changes";}
-   }
+  document.getElementById("saveAvatarSettings")?.addEventListener("click",event=>{
+   persistAvatarSettings(event.currentTarget);
   });
 
   document.getElementById("refreshSakuraAvatar")?.addEventListener("click",async event=>{
