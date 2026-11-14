@@ -1,5 +1,5 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";
-import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js";
+import * as THREE from "https://esm.sh/three@0.170.0";
+import { GLTFLoader } from "https://esm.sh/three@0.170.0/examples/jsm/loaders/GLTFLoader.js";
 
 const SKIN_COLORS = Object.freeze({
   1: 0xf5f5f5,
@@ -148,10 +148,10 @@ function buildBody(data) {
     addBox(root, 0.72, 0.34, 0.39, 0, 1.40, 0, shirtMat, "LowerTorso");
     for (const side of [-1, 1]) {
       const armMat = side < 0 ? leftArmMat : rightArmMat;
-      addBox(root, 0.30, 0.48, 0.34, side * 0.59, 1.89, 0, shirtMat || armMat, "UpperArm");
+      addBox(root, 0.30, 0.48, 0.34, side * 0.59, 1.89, 0, (shirt ? shirtMat : armMat), "UpperArm");
       addBox(root, 0.28, 0.47, 0.32, side * 0.61, 1.40, 0, armMat, "LowerArm");
       const legMat = side < 0 ? leftLegMat : rightLegMat;
-      addBox(root, 0.34, 0.62, 0.36, side * 0.22, 0.98, 0, pantsMat || legMat, "UpperLeg");
+      addBox(root, 0.34, 0.62, 0.36, side * 0.22, 0.98, 0, (pants ? pantsMat : legMat), "UpperLeg");
       addBox(root, 0.33, 0.58, 0.35, side * 0.22, 0.38, 0, pantsMat || legMat, "LowerLeg");
       if (!pants && side < 0) {
         // Keep the original body color when no pants are equipped.
@@ -183,6 +183,9 @@ function buildBody(data) {
     addImagePlane(root, pants.image_url, 0.30, 0.70, -0.22, y, 0.221);
     addImagePlane(root, pants.image_url, 0.30, 0.70, 0.22, y, 0.221);
   }
+  for (const accessory of equipped.filter(item => item.category === "Accessories" && !item.model_url && item.image_url)) {
+    addImagePlane(root, accessory.image_url, 0.42, 0.42, 0, torsoY + 0.28, 0.245);
+  }
   if (hair?.image_url && !hair.model_url) {
     addImagePlane(root, hair.image_url, 0.60, 0.45, 0, headY + 0.35, 0.22);
   }
@@ -209,7 +212,7 @@ async function loadEquippedModels(root, equipped, headY, torsoY) {
     try {
       parsed = new URL(modelUrl, window.location.href);
       if (parsed.protocol !== "https:" && parsed.origin !== window.location.origin) continue;
-      if (!/\.glb(?:$|[?#])/i.test(parsed.href)) continue;
+      if (!/\.(?:glb|gltf)(?:$|[?#])/i.test(parsed.href)) continue;
     } catch {
       continue;
     }
