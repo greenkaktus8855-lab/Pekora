@@ -145,6 +145,8 @@ const checks = [
   ["Avatar settings and body-color storage are available", worker.includes("CREATE TABLE IF NOT EXISTS avatar_settings") && worker.includes("body_colors")],
   ["RCCService preserves the configured local SOAP port and protected bridge", rccLauncher.includes("$rccPort = 64989") && rccLauncher.includes("$config.Ports.RCC.Player") && rccLauncher.includes("/_sakura-rcc/") && rccLauncher.includes("New-NetFirewallRule")],
   ["Renderer is secret-protected and loopback-only", secureRendererLauncher.includes("timingSafeEqual") && secureRendererLauncher.includes("x-pekora-renderer-secret") && secureRendererLauncher.includes("127.0.0.1")],
+  ["RCC CharacterAppearance URL is cache-busted for every render", secureRendererLauncher.includes("sakuraRender=") && secureRendererLauncher.includes("Date.now()") && secureRendererLauncher.includes("Math.random()")],
+  ["Avatar editor palette includes every selectable BrickColor", worker.includes(",208,1,2,1001]);")],
   ["Legacy RCC launcher delegates to the corrected setup", legacyRccLauncher.includes("scripts\\start-rcc-2020.ps1") && !legacyRccLauncher.includes("$port = 64989")],
   ["Avatar render responses do not reuse stale browser cache", renderer.includes('cache: "no-store"') && worker.includes('"cache-control":"private, no-store"')],
   ["Profile badges read assigned database badges", app.includes("const assigned=new Set(Array.isArray(profileData?.badges)?profileData.badges:[])") && app.includes("assigned.has(key)") && app.includes("ASSET_MODERATOR")],
