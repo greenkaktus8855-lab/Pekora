@@ -84,7 +84,8 @@ if ($previousSecretHash -ne $secretHash) {
     $wranglerCommand = '"' + $npxCmd + '" wrangler secret put AVATAR_RENDERER_SECRET --name sakura --config "' + $wranglerConfig + '"'
     $psi.Arguments = '/d /s /c "' + $wranglerCommand + '"'
     $psi.UseShellExecute = $false
-    $psi.CreateNoWindow = $false
+    $psi.CreateNoWindow = $true
+    $psi.WorkingDirectory = $repoRoot
     $psi.RedirectStandardInput = $true
 
     $wranglerProcess = New-Object System.Diagnostics.Process
