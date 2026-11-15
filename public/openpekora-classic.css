@@ -461,3 +461,176 @@ body{font-size:14px}
   #app .op-profile-items{grid-template-columns:repeat(2,minmax(0,1fr))}
   #app .op-profile-stats{gap:10px}
 }
+
+
+/* Continue the same classic light treatment on every Sakura page. */
+#app .people-results,
+#app .catalog-layout,
+#app .catalog-container,
+#app .catalog-results,
+#app .owner-section,
+#app .owner-item-form,
+#app .owner-verify-form,
+#app .owner-user-card,
+#app .owner-user-actions .owner-item-form,
+#app .item-detail-card,
+#app .info-page,
+#app .game-card,
+#app .trade-card,
+#app .trade-pick-list,
+#app .group-card,
+#app .group-detail-card,
+#app .group-members-list,
+#app .group-member,
+#app .group-create-form,
+#app .group-settings-form,
+#app .group-members-section,
+#app .resale-section,
+#app .resale-create-form,
+#app .resale-market-card,
+#app .asset-submission-card,
+#app .asset-tutorial,
+#app .owner-badge-manager,
+#app .membership-current-panel,
+#app .membership-plan,
+#app .membership-openpekora-card,
+#app .promocode-redeem-panel,
+#app .promocode-history-section,
+#app .owner-promocode-row{
+  background:#fff!important;
+  color:#191919!important;
+  border-color:#d4d4d4!important;
+  box-shadow:0 1px 4px rgba(0,0,0,.12)!important;
+}
+#app .catalog-input,
+#app .catalog-select,
+#app .catalog-sort,
+#app .owner-item-form input,
+#app .owner-item-form select,
+#app .owner-item-form textarea,
+#app .owner-item-fields input,
+#app .owner-item-fields select,
+#app .owner-item-fields textarea,
+#app .group-create-form input,
+#app .group-create-form textarea,
+#app .group-settings-form input,
+#app .group-settings-form textarea,
+#app .trade-target-form input,
+#app .resale-create-form input,
+#app .owner-promo-form input,
+#app .owner-promo-form select,
+#app .owner-promo-form textarea,
+#app .membership-openpekora-card select{
+  background:#fff!important;
+  color:#191919!important;
+  border-color:#bbb!important;
+}
+#app .catalog-categories a{
+  color:#333!important;
+  border-color:#ddd!important;
+}
+#app .catalog-categories a.active,
+#app .catalog-categories a:hover{
+  background:#eaf6fd!important;
+  color:#006eb8!important;
+}
+#app .catalog-results .item-image,
+#app .item-detail-image,
+#app .people-avatar,
+#app .owner-item-thumb,
+#app .owner-game-thumb,
+#app .game-thumbnail,
+#app .game-thumbnail-empty,
+#app .trade-select-item,
+#app .trade-item-chip,
+#app .resale-market-image,
+#app .asset-submission-preview,
+#app .creator-review-image-preview{
+  background:#f3f3f3!important;
+  color:#666!important;
+  border-color:#ddd!important;
+}
+#app .people-user,
+#app .owner-user-result,
+#app .trade-select-item,
+#app .trade-item-chip,
+#app .resale-own-listing,
+#app .resale-offer-row,
+#app .group-owner-row,
+#app .owner-toggle,
+#app .owner-inline-check,
+#app .inventory-sell-card{
+  background:#fff!important;
+  color:#191919!important;
+  border-color:#ddd!important;
+}
+#app .owner-user-result:hover,
+#app .owner-user-result:focus,
+#app .inventory-sell-card.is-selected{
+  background:#edf8ff!important;
+  border-color:#8bcff6!important;
+  color:#191919!important;
+}
+#app .trade-status{
+  background:#f1f1f1!important;
+  color:#555!important;
+  border-color:#ddd!important;
+}
+#app .trade-status-accepted,
+#app .owner-promocode-status.is-active,
+#app .status-confirm{
+  background:#e8f7ed!important;
+  color:#176c38!important;
+  border-color:#a8d7b7!important;
+}
+#app .trade-status-declined,
+#app .trade-status-cancelled,
+#app .owner-promocode-status.is-disabled,
+#app .status-error{
+  background:#fff0f0!important;
+  color:#9c3333!important;
+  border-color:#e2b5b5!important;
+}
+#app .notice,
+#app .offsale-notice,
+#app .inventory-listing-status,
+#app .inventory-resale-hint,
+#app .trade-invalid-note,
+#app .membership-locked-note,
+#app .membership-openpekora-lock-note,
+#app .ban-admin-summary{
+  background:#edf8ff!important;
+  color:#24516c!important;
+  border-color:#b9def2!important;
+}
+#app .danger-button,
+#app .ban-pill,
+#app .ban-status-label{
+  background:#fff0f0!important;
+  color:#9c3333!important;
+  border-color:#e2b5b5!important;
+}
+#app .avatar-initials,
+#sidebar .avatar-initials,
+#app .people-avatar .avatar-initials,
+#app .group-detail-avatar .avatar-initials,
+#app .banned-account-avatar .avatar-initials{
+  background:linear-gradient(145deg,#b9e5fb,#65b8e5)!important;
+  color:#fff!important;
+}
+#app .membership-plan-mark,
+#app .group-card-mark,
+#app .group-owner-tag,
+#app .asset-submission-kind,
+#app .trade-limited-tag{
+  background:#edf8ff!important;
+  color:#006eb8!important;
+  border-color:#b9def2!important;
+}
+#app .account-warning-panel{
+  background:#fff8e7!important;
+  color:#654b12!important;
+  border-color:#ead9a8!important;
+}
+#app .account-warning-panel strong,
+#app .account-warning-panel p{color:#654b12!important}
