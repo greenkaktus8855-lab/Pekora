@@ -8,7 +8,7 @@ function ownedItemCount(itemId){return Number(ownedItemCounts.get(itemId)||0);}
 function canBuyItem(item){const count=ownedItemCount(item.id);return Number(item.is_limited)===1?count<10:count===0;}
 let activeView=0;
 const ITEM_CATEGORIES=["Hats","Hair","Faces","T-Shirts","Shirts","Pants","Accessories"];
-const CREATABLE_CATEGORIES=["T-Shirts","Shirts","Pants"];
+const CREATABLE_CATEGORIES=["Shirts","Pants"];
 const MEMBERSHIP_PLANS=[
  {type:"None",name:"None",short:"None",daily:0,description:"No membership or daily reward"},
  {type:"BuildersClub",name:"Builders Club",short:"BC",daily:15,description:"Basic membership and daily reward"},
