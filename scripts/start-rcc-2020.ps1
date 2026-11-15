@@ -198,7 +198,7 @@ try {
 export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration: number): Promise<T> => {
     try {
         const headers = {
-            "Content-Type": "text/xml",
+            "Content-Type": "application/xml",
         };
         const xml = SOAP("http://roblox.com/", jobExpiration, JSON.stringify(data));
         const response = await axios.request({
@@ -303,18 +303,16 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
         throw "RCCService did not open TCP $rccPort within 45 seconds. See $rccOut and $rccErr."
     }
 
-    # Match OpenPekora's own SOAP.ts output exactly: SOAP 1.1, ns1 prefix,
-    # http://roblox.com/ operation namespace, text/xml, and no SOAPAction header.
-    # WSDL discovery is intentionally skipped; many RCC builds return HTTP 500 for GET /?wsdl.
+    # Use the RCC reference client's connection check: HelloWorld, application/xml,
+    # standard namespace declarations, and no SOAPAction header.
     $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($rccExe)
     $probeXml = @'
-<?xml version="1.0" encoding="utf-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://roblox.com/">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <ns1:GetStatus/>
-  </soapenv:Body>
-</soapenv:Envelope>
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:ns1="http://roblox.com/" xmlns:ns2="http://roblox.com/RCCServiceSoap" xmlns:ns3="http://roblox.com/RCCServiceSoap12">
+  <SOAP-ENV:Body>
+    <ns1:HelloWorld></ns1:HelloWorld>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>
 '@
 
     $probeLogText = @(
@@ -322,79 +320,50 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
         "File version: $($versionInfo.FileVersion)",
         "Product version: $($versionInfo.ProductVersion)",
         "HTTP WSDL discovery: skipped",
+        "SOAP method: HelloWorld",
         "SOAP namespace: http://roblox.com/",
-        "SOAP operation prefix: ns1",
-        "SOAPAction: not sent (same as original OpenPekora client)",
+        "Content-Type: application/xml",
+        "SOAPAction: not sent",
         "Request XML:",
         $probeXml
     ) -join [Environment]::NewLine
 
+    $httpClient = $null
+    $httpContent = $null
+    $httpResponse = $null
     try {
-        $httpRequest = [System.Net.HttpWebRequest]::Create("http://127.0.0.1:$rccPort")
-        $httpRequest.Method = "POST"
-        $httpRequest.ContentType = "text/xml"
-        $httpRequest.Timeout = 20000
-        $httpRequest.ReadWriteTimeout = 20000
-        $httpRequest.Proxy = $null
-        $probeBytes = [System.Text.Encoding]::UTF8.GetBytes($probeXml)
-        $httpRequest.ContentLength = $probeBytes.Length
-        $requestStream = $httpRequest.GetRequestStream()
-        try {
-            $requestStream.Write($probeBytes, 0, $probeBytes.Length)
-        } finally {
-            $requestStream.Dispose()
-        }
+        $httpHandler = [System.Net.Http.HttpClientHandler]::new()
+        $httpHandler.UseProxy = $false
+        $httpClient = [System.Net.Http.HttpClient]::new($httpHandler)
+        $httpClient.Timeout = [TimeSpan]::FromSeconds(20)
+        $httpContent = [System.Net.Http.StringContent]::new($probeXml, [System.Text.Encoding]::UTF8, "application/xml")
+        $httpResponse = $httpClient.PostAsync("http://127.0.0.1:$rccPort/", $httpContent).GetAwaiter().GetResult()
+        $statusCode = [int]$httpResponse.StatusCode
+        $statusBody = $httpResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
 
-        $httpResponse = $null
-        $statusBody = ""
-        $statusCode = 0
-        try {
-            $httpResponse = $httpRequest.GetResponse()
-            $statusCode = [int]$httpResponse.StatusCode
-            $responseReader = New-Object System.IO.StreamReader($httpResponse.GetResponseStream())
-            try { $statusBody = $responseReader.ReadToEnd() }
-            finally { $responseReader.Dispose() }
-        } catch {
-            $webError = $_
-            if ($webError.Exception.Response) {
-                $httpResponse = $webError.Exception.Response
-                try { $statusCode = [int]$httpResponse.StatusCode } catch {}
-                try {
-                    $responseReader = New-Object System.IO.StreamReader($httpResponse.GetResponseStream())
-                    try { $statusBody = $responseReader.ReadToEnd() }
-                    finally { $responseReader.Dispose() }
-                } catch {}
-            }
-            $message = "HTTP " + $statusCode + ": " + $webError.Exception.Message
+        if ($statusCode -ne 200 -or $statusBody -notmatch "HelloWorldResponse") {
+            $message = "RCC returned HTTP $statusCode for HelloWorld."
             if (-not [string]::IsNullOrWhiteSpace($statusBody)) {
                 $message += [Environment]::NewLine + "RCC SOAP response body:" + [Environment]::NewLine + $statusBody
-            }
-            $probeLogText += [Environment]::NewLine + "SOAP GetStatus failed:" + [Environment]::NewLine + $message
-            [System.IO.File]::WriteAllText($probeLog, $probeLogText, $utf8NoBom)
-            throw $message
-        } finally {
-            if ($httpResponse) { $httpResponse.Dispose() }
-        }
-
-        if ($statusCode -ne 200 -or $statusBody -notmatch "GetStatusResponse") {
-            $message = "RCC returned HTTP $statusCode but no GetStatusResponse."
-            if (-not [string]::IsNullOrWhiteSpace($statusBody)) {
-                $message += [Environment]::NewLine + "RCC SOAP response body:" + [Environment]::NewLine + $statusBody
+            } else {
+                $message += [Environment]::NewLine + "RCC returned an empty response body."
             }
             throw $message
         }
 
-        $probeLogText += [Environment]::NewLine + "SOAP GetStatus succeeded on 127.0.0.1:$rccPort." +
+        $probeLogText += [Environment]::NewLine + "SOAP HelloWorld succeeded on 127.0.0.1:$rccPort." +
             [Environment]::NewLine + "Response:" + [Environment]::NewLine + $statusBody
         [System.IO.File]::WriteAllText($probeLog, $probeLogText, $utf8NoBom)
-        Write-Host "SOAP GetStatus succeeded on 127.0.0.1:$rccPort." -ForegroundColor Green
+        Write-Host "SOAP HelloWorld succeeded on 127.0.0.1:$rccPort." -ForegroundColor Green
     } catch {
         $probeError = $_.Exception.Message
-        if ($probeLogText -notmatch "SOAP GetStatus failed:") {
-            $probeLogText += [Environment]::NewLine + "SOAP GetStatus failed:" + [Environment]::NewLine + $probeError
-            [System.IO.File]::WriteAllText($probeLog, $probeLogText, $utf8NoBom)
-        }
-        throw "RCCService is listening but its SOAP interface test failed. $probeError. See $probeLog"
+        $probeLogText += [Environment]::NewLine + "SOAP HelloWorld failed:" + [Environment]::NewLine + $probeError
+        [System.IO.File]::WriteAllText($probeLog, $probeLogText, $utf8NoBom)
+        throw "RCCService is listening but its SOAP HelloWorld test failed. $probeError. See $probeLog"
+    } finally {
+        if ($httpResponse) { $httpResponse.Dispose() }
+        if ($httpContent) { $httpContent.Dispose() }
+        if ($httpClient) { $httpClient.Dispose() }
     }
 
     Write-Host "RCCService startup and SOAP test completed successfully." -ForegroundColor Green
