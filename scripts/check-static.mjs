@@ -28,18 +28,15 @@ for (const file of files) {
 
 const app = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 const worker = fs.readFileSync(path.join(root, "src/worker.js"), "utf8");
-const renderer = fs.readFileSync(path.join(root, "public/avatar-renderer.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "public/style.css"), "utf8");
 const globals = fs.readFileSync(path.join(root, "public/openpekora-globals.css"), "utf8");
 const components = fs.readFileSync(path.join(root, "public/openpekora-components.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
 const icons = fs.readFileSync(path.join(root, "public/openpekora-icons.css"), "utf8");
 const wrangler = fs.readFileSync(path.join(root, "wrangler.toml"), "utf8");
-const rccLauncher = fs.readFileSync(path.join(root, "scripts/start-rcc-2020.ps1"), "utf8");
-const secureRendererLauncher = fs.readFileSync(path.join(root, "scripts/start-renderer-secure.ps1"), "utf8");
-const legacyRccLauncher = fs.readFileSync(path.join(root, "tools/windows-rcc-host/start-rcc-fixed.ps1"), "utf8");
 const checks = [
   ["API body limit", worker.includes("const maxBytes = 16 * 1024")],
+  ["Avatar editor and renderer are removed", !app.includes("async function avatarPage()") && !app.includes("/api/avatar") && !worker.includes("AVATAR_RENDERER_URL") && !worker.includes("_sakura-rcc/") && !index.includes('data-page="avatar"')],
   ["HTTPS-only new catalog images", worker.includes("Image URL must use HTTPS.")],
   ["owner-only catalog writes", worker.includes('user.role !== "OWNER"')],
   ["owner moderation API is protected", worker.includes('path.startsWith("/api/owner/users")') && worker.includes('actor.role !== "OWNER"')],
@@ -53,16 +50,7 @@ const checks = [
   ["owner game creation API", worker.includes('path === "/api/owner/games" && request.method === "POST"')],
   ["locked game cards", app.includes("game-locked-button") && app.includes("game-lock-icon")],
   ["trade UI", app.includes("tradeTargetForm") && app.includes("tradeList")],
-  ["avatar renderer uses HTTPS and a shared secret", worker.includes("AVATAR_RENDERER_URL") && worker.includes("AVATAR_RENDERER_SECRET") && worker.toLowerCase().includes("x-pekora-renderer-secret") && worker.includes('parsed.protocol !== "https:"')],
 
-  ["Sakura avatar editor mounts a real 3D preview and refresh control", app.includes("async function avatarPage()") && app.includes("data-sakura-avatar") && app.includes("mountSakuraProfileAvatar") && app.includes("refreshSakuraAvatar")],
-  ["Avatar preview uses opaque textured materials and a rendered-state fallback", renderer.includes("material.transparent = false") && renderer.includes("material.alphaTest = 0.02") && renderer.includes("material.map.colorSpace = THREE.SRGBColorSpace") && renderer.includes("has-rendered-avatar")],
-  ["Avatar editor hides ID/link tools and explains unsupported wear actions", !app.includes("data-copy-avatar-link") && !app.includes("data-copy-avatar-id") && !app.includes("copyAvatarItemIds") && app.includes("Temporarily unavailable to wear")],
-  ["Avatar editor is reachable from the sidebar and route", app.includes('["avatar","icon-nav-profile","Avatar"]') && app.includes('else if(name==="avatar")await avatarPage();')],
-  ["Avatar render API is configured with the protected renderer URL", worker.includes("/api/avatar/render/") && worker.includes("AVATAR_RENDERER_URL") && worker.includes("AVATAR_RENDERER_SECRET")],
-  ["RCC avatar appearance and asset routes are present", worker.includes("v1.1/avatar-fetch") && worker.includes("asset/bodycolors.ashx") && worker.includes("assetdelivery.roblox.com/v1/asset/")],
-  ["RCC support routes are dispatched through the private Worker bridge", worker.includes('const rccBridgePrefix = "/_sakura-rcc/"') && worker.includes("const bridgePath = remainder") && worker.includes("bridgePath === \"v1.1/avatar-fetch\"") && worker.includes('bridgePath === "asset/bodycolors.ashx"')],
-  ["Body color and scale changes invalidate render cache", worker.includes("settings:profileData.settings") && worker.includes("equipped:profileData.items.map")],
   ["Sakura Home dashboard no longer has white panels", components.includes("#app .sakura-home-card{") && components.includes("background:#15151c!important") && components.includes("background:#202027!important")],
   ["no old procedural avatar renderer", !app.includes("render3DAvatar") && !app.includes("avatar3d.js")],
   ["no fake wearable CSS", !/avatar-artwork|avatar-worn-chip|avatar-wearing-label/.test(css)],
@@ -78,7 +66,7 @@ const checks = [
   ["trade picker only displays Limited or Off Sale items", app.includes("items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1)") && app.includes("ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target)")],
   ["Sakura Home panels use dark surfaces", components.includes("#app .sakura-home-card{") && components.includes("background:#15151c!important") && components.includes("background:#202027!important")],
   ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
-  ["Sakura app and stylesheet cache versions are refreshed", index.includes("app.js?v=sakura-avatar-editor-20261114-7") && index.includes("style.css?v=sakura-avatar-editor-20261114-6")],
+  ["Sakura app and stylesheet cache versions are refreshed", index.includes("app.js?v=sakura-no-avatar-20261115-1") && index.includes("style.css?v=sakura-no-avatar-20261115-1")],
   ["Group avatars are uploaded as validated image files and stored in D1", worker.includes("CREATE TABLE IF NOT EXISTS group_image_files") && worker.includes("request.arrayBuffer()") && worker.includes("The selected file does not match its image format.") && worker.includes("/api/group-images/")],
   ["Group image BLOBs are converted to browser-readable bytes", worker.includes("Array.isArray(storedImage)") && worker.includes("Uint8Array.from(storedImage)") && worker.includes("new Response(imageBytes")],
   ["Group avatar upload is restricted to the group owner", worker.includes("Only the group owner can change its image.") && worker.includes('groupAvatarUploadMatch && request.method === "PUT"')],
@@ -134,24 +122,7 @@ const checks = [
   ["promo codes can only be claimed once per user", worker.includes("PRIMARY KEY(code,user_id)") && worker.includes("ON CONFLICT(code,user_id) DO NOTHING")],
   ["promo code page and sidebar link exist", app.includes("async function promocodesPage()") && app.includes("side-promo-button")],
   ["Premium and OBC require accounts older than three days", worker.includes("Date.now() - createdAtMs <= 3 * 24 * 60 * 60 * 1000") && worker.includes("datetime(u.created_at)<datetime('now','-3 days')") && app.includes("canUseAdvancedMemberships") && app.includes("OBC and Premium unlock")],
-  ["Avatar settings save in one atomic request", app.includes('const snapshot={action:"settings",rigType,bodyColors:{...bodyColors},scales:{...scales}}') && app.includes("avatarSaveQueue") && worker.includes('if (action === "settings")') && worker.includes("await saveAvatarSettings(env,user.id,settings)")],
   ["Modern Roblox asset IDs are accepted beyond signed 32-bit range", worker.includes("assetId > Number.MAX_SAFE_INTEGER") && worker.includes("assetId>Number.MAX_SAFE_INTEGER")],
-  ["RCC AvatarFetch v1 uses explicit R6/R15 type and lower-camel scale fields", worker.includes('resolvedAvatarType:settings.rigType === "R15" ? "R15" : "R6"') && worker.includes("height:Number(s.height)") && worker.includes("width:Number(s.width)") && worker.includes("bodyType:Number(s.bodyType)") && !worker.includes("playerAvatarType:settings.rigType")],
-  ["RCC AvatarFetch v1 includes asset/type pairs, animations and emotes", worker.includes("assetAndAssetTypeIds,") && worker.includes("assetId:asset.id") && worker.includes("assetTypeId:Number(asset.assetType.id)") && worker.includes("animationAssetIds,") && worker.includes("emotes\n  };")],
-  ["RCC body colors use BrickColor IDs and a cache-busted compatibility URL", worker.includes("rightLegColorId:Number(c.rightLegColorId)") && worker.includes('renderCacheTag ? "&sakuraRender="') && worker.includes('"cache-control":"private, no-store"')],
-  ["Legacy clothing asset types are inferred consistently in UI, equip API and RCC", app.includes("AVATAR_ASSET_TYPE_BY_CATEGORY") && app.includes("avatarAssetTypeId(item)") && worker.includes("WHEN 'T-Shirts' THEN 2") && worker.includes("WHEN 'Shirts' THEN 11") && worker.includes("WHEN 'Pants' THEN 12") && worker.includes("WHEN 'Hats' THEN 8") && worker.includes("WHEN 'Hair' THEN 41") && worker.includes("WHEN 'Faces' THEN 18")],
-  ["Inventory wear buttons support inferred legacy types and T-Shirts", app.includes('const canWear=Number(item.asset_id)>0&&avatarAssetTypeId(item)>0&&["Accessories","Hats","Hair","Faces","T-Shirts","Shirts","Pants"].includes(item.category);')],
-  ["Avatar preview can safely reload after every settings change", app.includes("host.sakuraAvatarDispose()") && app.includes("host.dataset.avatarMountId") && app.includes("await mountSakuraProfileAvatar(me.publicId)")],
-  ["skin tone and advanced body colors persist in D1", worker.includes("CREATE TABLE IF NOT EXISTS avatar_settings") && worker.includes("body_colors") && worker.includes("AVATAR_COLOR_IDS")],
-  ["Avatar settings and body-color storage are available", worker.includes("CREATE TABLE IF NOT EXISTS avatar_settings") && worker.includes("body_colors")],
-  ["RCC Worker returns the v1 asset/type payload instead of invalid legacy version IDs", worker.includes("assetAndAssetTypeIds,") && !worker.includes("accessoryVersionIds:") && !worker.includes("currentVersionId:Number(item.asset_id)")],
-  ["Avatar repair deploys Worker and switches the local RCC bridge to AvatarFetch v1", secureRendererLauncher.includes("wrangler deploy --config $wranglerConfig") && secureRendererLauncher.includes("v1.1/avatar-fetch?") && secureRendererLauncher.includes("v1/avatar-fetch?") && secureRendererLauncher.includes("Switched CharacterAppearance to the v1 avatar-fetch contract.")],
-  ["RCCService preserves the configured local SOAP port and protected bridge", rccLauncher.includes("$rccPort = 64989") && rccLauncher.includes("$config.Ports.RCC.Player") && rccLauncher.includes("/_sakura-rcc/") && rccLauncher.includes("New-NetFirewallRule")],
-  ["Renderer is secret-protected and loopback-only", secureRendererLauncher.includes("timingSafeEqual") && secureRendererLauncher.includes("x-pekora-renderer-secret") && secureRendererLauncher.includes("127.0.0.1")],
-  ["RCC CharacterAppearance URL is cache-busted for every render", secureRendererLauncher.includes("sakuraRender=") && secureRendererLauncher.includes("Date.now()") && secureRendererLauncher.includes("Math.random()")],
-  ["Avatar editor palette includes every selectable BrickColor", worker.includes(",208,1,2,1001]);")],
-  ["Legacy RCC launcher delegates to the corrected setup", legacyRccLauncher.includes("scripts\\start-rcc-2020.ps1") && !legacyRccLauncher.includes("$port = 64989")],
-  ["Avatar render responses do not reuse stale browser cache", renderer.includes('cache: "no-store"') && worker.includes('"cache-control":"private, no-store"')],
   ["Profile badges read assigned database badges", app.includes("const assigned=new Set(Array.isArray(profileData?.badges)?profileData.badges:[])") && app.includes("assigned.has(key)") && app.includes("ASSET_MODERATOR")],
   ["Profile Badges section lists Administrator and Verified badges in a larger grid", app.includes("function profileBadgesMarkup(profileData)") && app.includes('op-profile-badges-section"><h2>Badges</h2>') && app.includes("profileBadgesMarkup(p)") && css.includes("minmax(190px,1fr)") && css.includes("min-height:168px")],
   ["Friends menu route has a page handler and working friends list", app.includes('else if(name==="friends")await friends();') && app.includes("async function friends()") && app.includes("await loadFriendsList(view)") && app.includes("data-friend-action")],
@@ -168,10 +139,6 @@ const checks = [
   ["3D model queue approves or rejects Accessories", worker.includes("/api/asset-moderation/models") && worker.includes("'Accessories'") && worker.includes("ASSET_APPROVE") && worker.includes("ASSET_REJECT")],
   ["Approved 3D models grant a free copy to the creator", worker.includes("INSERT OR IGNORE INTO inventory (id,user_id,item_id) SELECT ?,user_id,? FROM model_submissions") && worker.includes("created_item_id")],
   ["Profile badges display assigned keys including Asset Moderator", app.includes("ASSET_MODERATOR") && app.includes("profileBadgesMarkup(p)") && app.includes("profile-badge-symbol")],
-  ["Currently Wearing can remove old unsupported equipped items", app.includes('action==="remove"||renderable')],
-  ["Items without Roblox asset IDs cannot be falsely equipped", worker.includes('if (!hasRccAsset) return fail("Wearing this item is temporarily unavailable.",409);')],
-  ["Avatar renderer has a safe camera fallback for incomplete bounds", renderer.includes("isFiniteVector(minValue)") && renderer.includes("bounds.getCenter(center)") && renderer.includes("modelDistance")],
-  ["Renderer startup can recover its secret from the private bridge URL", secureRendererLauncher.includes("/_sakura-rcc/([^/]+)/") && secureRendererLauncher.includes("UnescapeDataString")],
 
 ];
 
