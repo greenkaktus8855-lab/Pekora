@@ -219,8 +219,13 @@ try {
                 const assetResponse = await fetch(`${Config.BaseUrl}v1/asset?id=${assetId}`, { headers: { accept: "*/*" } });
                 const status = assetResponse.status;
                 const contentType = assetResponse.headers.get("content-type") ?? "unknown";
-                if (assetResponse.body) await assetResponse.body.cancel();
-                return `${assetId}:${status}:${contentType}`;
+                const responseText = status === 200 ? "" : (await assetResponse.text().catch(() => "")).replace(/\\s+/g, " ").slice(0, 180);
+                let responseDetail = responseText;
+                try {
+                    const parsed = JSON.parse(responseText);
+                    responseDetail = `${parsed?.upstreamStatus ? "upstream=" + parsed.upstreamStatus + ";" : ""}${parsed?.upstreamMessage ?? parsed?.error ?? responseText}`;
+                } catch {}
+                return `${assetId}:${status}:${contentType}${responseDetail ? ":" + responseDetail : ""}`;
             } catch (assetError) {
                 return `${assetId}:error:${String(assetError)}`;
             }
