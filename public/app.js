@@ -757,28 +757,82 @@ async function profile(identifier=me?.username,byId=false){
  try{
   const profilePath=byId?"/api/profile/id/"+encodeURIComponent(identifier):"/api/profile/"+encodeURIComponent(identifier);
   const inventoryPath=profilePath+"/inventory";
-  const [d,inventoryData]=await Promise.all([
+  const [d,inventoryData,catalogData]=await Promise.all([
    api(profilePath),
-   api(inventoryPath)
+   api(inventoryPath),
+   api("/api/catalog").catch(()=>({items:[]}))
   ]);
   if(!isActiveView(view))return;
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
   const publicId=p.publicId??p.id,profileUrl="/#profile?id="+encodeURIComponent(publicId);
+  const creations=(catalogData.items||[]).filter(item=>String(item.creator_public_id||"")===String(publicId));
   if(!byId&&publicId){history.replaceState({page:"profile",publicId},"",profileUrl)}
-  const profileAvatar=avatar(p.username);
+
+  const renderProfileTab=tab=>{
+   const host=document.getElementById("opProfileTabContent");
+   if(!host)return;
+   document.querySelectorAll("[data-profile-tab]").forEach(button=>{
+    const active=button.dataset.profileTab===tab;
+    button.classList.toggle("active",active);
+    button.setAttribute("aria-selected",String(active));
+   });
+   if(tab==="creations"){
+    host.innerHTML='<section class="op-profile-section"><div class="op-profile-creations-title"><h2>Creations</h2><span class="muted">'+creations.length+' public items</span></div>'+
+     (creations.length?'<div class="op-profile-items">'+creations.map(itemCard).join("")+'</div>':'<div class="op-profile-created-empty">This user has no public catalog creations yet.</div>')+
+     '</section>';
+    return;
+   }
+   host.innerHTML=
+    '<section class="op-profile-section"><h2>About</h2><div class="op-profile-about-box"><p>'+esc(p.description||"This user has not added a description.")+'</p></div></section>'+
+    '<section class="op-profile-section"><div class="op-profile-creations-title"><h2>Inventory</h2>'+(isSelf?'<a href="/#inventory" data-page="inventory">View Inventory</a>':'')+'</div>'+
+     (owned.length?'<div class="op-profile-items">'+owned.slice(0,12).map(itemCard).join("")+'</div>':'<div class="op-profile-created-empty">This user has no items in their inventory.</div>')+
+    '</section>'+
+    '<section class="op-profile-section op-profile-badges-section"><h2>Badges</h2>'+profileBadgesMarkup(p)+'</section>';
+  };
+
   app.innerHTML='<div class="op-profile">'+
-   '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
-    '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
-    '<p>'+esc(p.description||"This user has not added a description.")+'</p>'+
-    '<div class="op-profile-stats"><span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span><span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> Total RAP</span></div>'+
-    '<a class="button secondary op-profile-rap-link" href="/#rap" data-page="rap">RAP Leaderboard</a>'+
-    (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
-   '</div></div>'+
-   '<section class="op-profile-section"><h2>Inventory</h2>'+
-    (owned.length?'<div class="op-profile-items">'+owned.map(itemCard).join("")+'</div>':'<div class="op-profile-empty">This user has no items to display.</div>')+
-   '</section>'+
-   '<section class="op-profile-section op-profile-badges-section"><h2>Badges</h2>'+profileBadgesMarkup(p)+'</section>'+
-   '</div>';
+   '<header class="op-profile-header">'+
+    '<div class="op-profile-avatar">'+avatar(p.username)+'</div>'+
+    '<div class="op-profile-info">'+
+     '<div class="op-profile-name-line"><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1></div>'+
+     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong><a class="op-profile-copy-link" id="copyProfileLink" href="'+profileUrl+'">Copy profile link</a></div>'+
+     '<div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
+     '<div class="op-profile-stats">'+
+      '<span><b>'+Number(p.friendCount||0).toLocaleString()+'</b> Friends</span>'+
+      '<span><b>'+Number(p.itemCount||0).toLocaleString()+'</b> Items</span>'+
+      '<span><b>'+currencyMarkup(p.totalRap,"P$")+'</b> RAP</span>'+
+     '</div>'+
+    '</div>'+
+    '<div class="op-profile-actions">'+
+     (isSelf?'<button type="button" class="button" id="profileUpdateStatus">Update Status</button><a class="button secondary" href="/#inventory" data-page="inventory">Inventory</a>':'')+
+     (!isSelf&&me?'<div id="profileFriendAction" class="profile-friend-action">Loading...</div>':'')+
+    '</div>'+
+   '</header>'+
+   '<nav class="op-profile-tabs" role="tablist" aria-label="Profile sections">'+
+    '<button type="button" class="op-profile-tab active" data-profile-tab="about" role="tab" aria-selected="true">About</button>'+
+    '<button type="button" class="op-profile-tab" data-profile-tab="creations" role="tab" aria-selected="false">Creations</button>'+
+   '</nav>'+
+   '<div class="op-profile-tab-panel" id="opProfileTabContent"></div>'+
+  '</div>';
+
+  document.querySelectorAll("[data-profile-tab]").forEach(button=>{
+   button.addEventListener("click",()=>renderProfileTab(button.dataset.profileTab));
+  });
+  renderProfileTab("about");
+  document.getElementById("copyProfileLink")?.addEventListener("click",async event=>{
+   event.preventDefault();
+   await copyToClipboard(location.origin+profileUrl,"Profile link copied");
+  });
+  document.getElementById("profileUpdateStatus")?.addEventListener("click",async()=>{
+   const next=window.prompt("Update your profile description (500 characters maximum):",p.description||"");
+   if(next===null)return;
+   try{
+    await api("/api/profile",{method:"PUT",body:JSON.stringify({description:next})});
+    p.description=next;
+    renderProfileTab("about");
+    toast("Profile updated");
+   }catch(error){toast(error.message)}
+  });
   if(!isSelf&&me)loadProfileFriendAction(p.username);
  }catch(e){if(isActiveView(view))app.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
