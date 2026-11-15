@@ -158,7 +158,8 @@ function validItem(data, allowLegacyHttp = false) {
   const assetTypeId = suppliedAssetTypeId > 0
     ? suppliedAssetTypeId
     : (assetId ? (defaultAssetTypes[data.category] || 0) : 0);
-  if (!Number.isSafeInteger(assetId) || assetId < 0 || assetId > 2147483647) return "Roblox asset ID must be a positive whole number.";
+  if (!Number.isSafeInteger(assetId) || assetId < 0 || assetId > Number.MAX_SAFE_INTEGER) return "Roblox asset ID must be a positive whole number.";
+  // Catalog asset IDs can exceed signed 32-bit limits; keep them as safe JS integers.
   if (!Number.isSafeInteger(assetTypeId) || assetTypeId < 0 || assetTypeId > 2147483647) return "Roblox asset type ID must be a positive whole number.";
   if ((assetId > 0) !== (assetTypeId > 0)) return "Enter both a Roblox asset ID and its asset type ID.";
   const model = String(data.model_url ?? "").trim();
@@ -1082,7 +1083,7 @@ async function route(request, env) {
 
     if (bridgePath === "v1/asset" || bridgePath === "asset") {
       const assetId = Number(url.searchParams.get("id")||url.searchParams.get("assetversionid")||0);
-      if (!Number.isSafeInteger(assetId) || assetId<1 || assetId>2147483647) return fail("A valid asset id is required.",400);
+      if (!Number.isSafeInteger(assetId) || assetId<1 || assetId>Number.MAX_SAFE_INTEGER) return fail("A valid asset id is required.",400);
       try {
         const upstream = await fetch("https://assetdelivery.roblox.com/v1/asset/?id="+assetId,{
           headers:{"accept":"*/*"}
