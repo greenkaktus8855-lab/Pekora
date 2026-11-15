@@ -119,7 +119,11 @@ if ($port -lt 1 -or $port -gt 65535) { throw "Ports.Process in config.json is in
 $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($listener) {
     $owner = Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue
-    throw "Port $port is already in use by $($owner.ProcessName) (PID $($listener.OwningProcess)). Stop the old Renderer process first, then run this script again."
+    if ($owner -and $owner.ProcessName -eq "node") {
+        Write-Host "Renderer is already running on port $port. Cloudflare authentication has been synchronized; keeping the existing Renderer running."
+        return
+    }
+    throw "Port $port is already in use by $($owner.ProcessName) (PID $($listener.OwningProcess)). It was not stopped."
 }
 
 $mainSource = [System.IO.File]::ReadAllText($mainPath)
