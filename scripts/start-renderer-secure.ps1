@@ -113,6 +113,16 @@ if ($previousSecretHash -ne $secretHash) {
     Write-Host "Sakura Worker secret is already synchronized with the local renderer config."
 }
 
+# GitHub updates do not deploy Cloudflare Workers by themselves. Publish the
+# current Sakura source before starting RCC/Renderer so avatar fixes are live.
+$npxCmd = (Get-Command "npx.cmd" -ErrorAction Stop).Source
+Write-Host "Deploying the updated Sakura Worker to Cloudflare..."
+& $npxCmd wrangler deploy --config $wranglerConfig
+if ($LASTEXITCODE -ne 0) {
+    throw "Sakura Worker deployment failed (exit code $LASTEXITCODE). The Renderer was not restarted."
+}
+Write-Host "Sakura Worker deployment completed."
+
 $port = [int]$config.Ports.Process
 if ($port -lt 1 -or $port -gt 65535) { throw "Ports.Process in config.json is invalid." }
 
