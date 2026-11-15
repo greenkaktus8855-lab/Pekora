@@ -210,10 +210,22 @@ if (-not $playerSource.Contains($avatarDiagnosticMarker)) {
 try {
         const avatarResponse = await fetch(charAppUrl, { headers: { accept: "application/json" } });
         const avatarData: any = await avatarResponse.json();
-        const avatarAssetTypes = Array.isArray(avatarData?.assetAndAssetTypeIds)
-            ? [...new Set(avatarData.assetAndAssetTypeIds.map((asset: any) => Number(asset.assetTypeId)).filter(Number.isFinite))]
-            : [];
-        Console.Debug(`[Sakura AvatarFetch diagnostic] HTTP ${avatarResponse.status}; rig=${avatarData?.resolvedAvatarType ?? avatarData?.playerAvatarType ?? "unknown"}; assets=${Array.isArray(avatarData?.assetAndAssetTypeIds) ? avatarData.assetAndAssetTypeIds.length : 0}; assetTypes=${avatarAssetTypes.join(",") || "none"}; colors=${JSON.stringify(avatarData?.bodyColors ?? null)}; scales=${JSON.stringify(avatarData?.scales ?? null)}`);
+        const avatarAssetRows = Array.isArray(avatarData?.assetAndAssetTypeIds) ? avatarData.assetAndAssetTypeIds : [];
+        const avatarAssetTypes = [...new Set(avatarAssetRows.map((asset: any) => Number(asset.assetTypeId)).filter(Number.isFinite))];
+        const assetDeliveryChecks = await Promise.all(avatarAssetRows.map(async (asset: any) => {
+            const assetId = Number(asset?.assetId);
+            if (!Number.isSafeInteger(assetId) || assetId < 1) return "invalid-id";
+            try {
+                const assetResponse = await fetch(`${Config.BaseUrl}v1/asset?id=${assetId}`, { headers: { accept: "*/*" } });
+                const status = assetResponse.status;
+                const contentType = assetResponse.headers.get("content-type") ?? "unknown";
+                if (assetResponse.body) await assetResponse.body.cancel();
+                return `${assetId}:${status}:${contentType}`;
+            } catch (assetError) {
+                return `${assetId}:error:${String(assetError)}`;
+            }
+        }));
+        Console.Debug(`[Sakura AvatarFetch diagnostic] HTTP ${avatarResponse.status}; rig=${avatarData?.resolvedAvatarType ?? avatarData?.playerAvatarType ?? "unknown"}; assets=${avatarAssetRows.length}; assetTypes=${avatarAssetTypes.join(",") || "none"}; assetFiles=${assetDeliveryChecks.join(";") || "none"}; colors=${JSON.stringify(avatarData?.bodyColors ?? null)}; scales=${JSON.stringify(avatarData?.scales ?? null)}`);
     } catch (avatarError) {
         Console.Debug(`[Sakura AvatarFetch diagnostic] Request failed: ${String(avatarError)}`);
     }
