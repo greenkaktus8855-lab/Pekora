@@ -203,6 +203,28 @@ if ($playerSource.Contains("v1.1/avatar-fetch?")) {
 
 # RCC may cache CharacterAppearance responses by URL. Give every render a
 # unique URL so rig, body colors, scales and worn items are always re-fetched.
+$avatarDiagnosticMarker = "[Sakura AvatarFetch diagnostic]"
+if (-not $playerSource.Contains($avatarDiagnosticMarker)) {
+    $diagnosticNeedle = 'Console.Debug(`Queueing 3D Player thumbnail request with UserId ${req.body.userId}`);'
+    $diagnosticCode = @'
+try {
+        const avatarResponse = await fetch(charAppUrl, { headers: { accept: "application/json" } });
+        const avatarData: any = await avatarResponse.json();
+        const avatarAssetTypes = Array.isArray(avatarData?.assetAndAssetTypeIds)
+            ? [...new Set(avatarData.assetAndAssetTypeIds.map((asset: any) => Number(asset.assetTypeId)).filter(Number.isFinite))]
+            : [];
+        Console.Debug(`[Sakura AvatarFetch diagnostic] HTTP ${avatarResponse.status}; rig=${avatarData?.resolvedAvatarType ?? avatarData?.playerAvatarType ?? "unknown"}; assets=${Array.isArray(avatarData?.assetAndAssetTypeIds) ? avatarData.assetAndAssetTypeIds.length : 0}; assetTypes=${avatarAssetTypes.join(",") || "none"}; colors=${JSON.stringify(avatarData?.bodyColors ?? null)}; scales=${JSON.stringify(avatarData?.scales ?? null)}`);
+    } catch (avatarError) {
+        Console.Debug(`[Sakura AvatarFetch diagnostic] Request failed: ${String(avatarError)}`);
+    }
+'@
+    if (-not $playerSource.Contains($diagnosticNeedle)) {
+        throw "Could not find the OpenPekora 3D thumbnail request for avatar diagnostics. No diagnostic patch was applied."
+    }
+    $playerSource = $playerSource.Replace($diagnosticNeedle, $diagnosticCode + "`r`n    " + $diagnosticNeedle)
+    $playerChanged = $true
+}
+
 if (-not $playerSource.Contains("&sakuraRender=")) {
     $oldAvatarUrl = 'const charAppUrl = `${Config.BaseUrl}v1/avatar-fetch?placeId=0&userId=${req.body.userId}`;'
     $newAvatarUrl = 'const charAppUrl = `${Config.BaseUrl}v1/avatar-fetch?placeId=0&userId=${req.body.userId}&sakuraRender=${Date.now()}-${Math.random().toString(36).slice(2)}`;'
