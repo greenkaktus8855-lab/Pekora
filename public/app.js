@@ -782,10 +782,15 @@ async function profile(identifier=me?.username,byId=false){
      '</section>';
     return;
    }
+   const previewAvatar=avatar(p.username);
    host.innerHTML=
     '<section class="op-profile-section"><h2>About</h2><div class="op-profile-about-box"><p>'+esc(p.description||"This user has not added a description.")+'</p></div></section>'+
-    '<section class="op-profile-section"><div class="op-profile-creations-title"><h2>Inventory</h2>'+(isSelf?'<a href="/#inventory" data-page="inventory">View Inventory</a>':'')+'</div>'+
-     (owned.length?'<div class="op-profile-items">'+owned.slice(0,12).map(itemCard).join("")+'</div>':'<div class="op-profile-created-empty">This user has no items in their inventory.</div>')+
+    '<section class="op-profile-section">'+
+     '<div class="op-profile-creations-title"><h2>Inventory</h2>'+(isSelf?'<a href="/#inventory" data-page="inventory">View Inventory</a>':'')+'</div>'+
+     '<div class="op-profile-inventory-layout">'+
+      '<div class="op-profile-avatar-placeholder">'+previewAvatar+'<span class="op-profile-avatar-note">3D avatar preview is currently unavailable</span></div>'+
+      (owned.length?'<div class="op-profile-wearing-grid">'+owned.slice(0,6).map(itemCard).join("")+'</div>':'<div class="op-profile-inventory-empty">This user has no items in their inventory.</div>')+
+     '</div>'+
     '</section>'+
     '<section class="op-profile-section op-profile-badges-section"><h2>Badges</h2>'+profileBadgesMarkup(p)+'</section>';
   };
