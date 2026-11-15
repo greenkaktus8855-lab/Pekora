@@ -1089,8 +1089,14 @@ async function route(request, env) {
           headers:{"accept":"*/*"}
         });
         if (!upstream.ok) {
-          console.error("[Sakura RCC] Asset source returned HTTP",upstream.status,"for asset",assetId);
-          return fail("Asset "+assetId+" could not be loaded by the OpenPekora renderer.",502);
+          const upstreamMessage = (await upstream.text().catch(() => "")).replace(/\\s+/g," ").slice(0,240);
+          console.error("[Sakura RCC] Asset source returned HTTP",upstream.status,"for asset",assetId,upstreamMessage);
+          return json({
+            error:"Roblox Asset Delivery rejected the asset request.",
+            assetId,
+            upstreamStatus:upstream.status,
+            upstreamMessage
+          },502,{"cache-control":"private, no-store"});
         }
         const length = Number(upstream.headers.get("content-length")||0);
         if (length>50*1024*1024) return fail("Asset is too large for the avatar renderer.",413);
