@@ -191,12 +191,24 @@ if (-not $mainSource.Contains('App.listen(ProcessPort, "127.0.0.1"')) {
 # unique URL so rig, body colors, scales and worn items are always re-fetched.
 $playerSource = [System.IO.File]::ReadAllText($playerControllerPath)
 $playerChanged = $false
+
+# The v1.1 response expects accessory VERSION IDs. Sakura stores catalog ASSET
+# IDs, so the renderer must call v1/avatar-fetch, whose contract accepts
+# assetAndAssetTypeIds and BrickColor/scales data directly.
+if ($playerSource.Contains("v1.1/avatar-fetch?")) {
+    $playerSource = $playerSource.Replace("v1.1/avatar-fetch?", "v1/avatar-fetch?")
+    $playerChanged = $true
+    Write-Host "Switched CharacterAppearance to the v1 avatar-fetch contract."
+}
+
+# RCC may cache CharacterAppearance responses by URL. Give every render a
+# unique URL so rig, body colors, scales and worn items are always re-fetched.
 if (-not $playerSource.Contains("&sakuraRender=")) {
-    $oldAvatarUrl = 'const charAppUrl = `${Config.BaseUrl}v1.1/avatar-fetch?placeId=0&userId=${req.body.userId}`;'
-    $newAvatarUrl = 'const charAppUrl = `${Config.BaseUrl}v1.1/avatar-fetch?placeId=0&userId=${req.body.userId}&sakuraRender=${Date.now()}-${Math.random().toString(36).slice(2)}`;'
+    $oldAvatarUrl = 'const charAppUrl = `${Config.BaseUrl}v1/avatar-fetch?placeId=0&userId=${req.body.userId}`;'
+    $newAvatarUrl = 'const charAppUrl = `${Config.BaseUrl}v1/avatar-fetch?placeId=0&userId=${req.body.userId}&sakuraRender=${Date.now()}-${Math.random().toString(36).slice(2)}`;'
     $avatarUrlMatchCount = [regex]::Matches($playerSource, [regex]::Escape($oldAvatarUrl)).Count
     if ($avatarUrlMatchCount -lt 1) {
-        throw "PlayerController.ts avatar-fetch URL did not match the expected OpenPekora source. No cache-busting patch was applied."
+        throw "PlayerController.ts v1 avatar-fetch URL did not match the expected OpenPekora source. No cache-busting patch was applied."
     }
     $playerSource = $playerSource.Replace($oldAvatarUrl, $newAvatarUrl)
     $playerChanged = $true
