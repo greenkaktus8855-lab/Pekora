@@ -51,6 +51,64 @@ if ([string]::IsNullOrWhiteSpace($secret) -or $secret.Length -lt 24) {
     throw "The renderer secret must contain at least 24 characters. Nothing was started."
 }
 
+# The same secret must protect both the private Sakura bridge and the
+# Cloudflare Worker -> Renderer request. Sync it automatically from the
+# existing private BaseUrl so nobody has to copy a secret by hand.
+$wranglerConfig = Join-Path $repoRoot "wrangler.toml"
+if (-not (Test-Path -LiteralPath $wranglerConfig)) {
+    throw "Sakura wrangler.toml was not found at $wranglerConfig. Cannot synchronize renderer authentication."
+}
+
+$syncStateDir = Join-Path $env:LOCALAPPDATA "Sakura"
+$syncStateFile = Join-Path $syncStateDir "renderer-secret.sha256"
+$sha256 = [System.Security.Cryptography.SHA256]::Create()
+try {
+    $secretHash = [Convert]::ToBase64String($sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($secret)))
+} finally {
+    $sha256.Dispose()
+}
+
+$previousSecretHash = ""
+if (Test-Path -LiteralPath $syncStateFile) {
+    $previousSecretHash = (Get-Content -LiteralPath $syncStateFile -Raw).Trim()
+}
+
+if ($previousSecretHash -ne $secretHash) {
+    Write-Host "Synchronizing the Sakura Worker renderer secret from the existing local config..."
+    $npxCmd = (Get-Command "npx.cmd" -ErrorAction Stop).Source
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $env:ComSpec
+    $wranglerCommand = '"' + $npxCmd + '" wrangler secret put AVATAR_RENDERER_SECRET --name sakura --config "' + $wranglerConfig + '"'
+    $psi.Arguments = '/d /s /c "' + $wranglerCommand + '"'
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $false
+    $psi.RedirectStandardInput = $true
+
+    $wranglerProcess = New-Object System.Diagnostics.Process
+    $wranglerProcess.StartInfo = $psi
+    try {
+        if (-not $wranglerProcess.Start()) {
+            throw "Could not start Wrangler to synchronize AVATAR_RENDERER_SECRET."
+        }
+        $wranglerProcess.StandardInput.WriteLine($secret)
+        $wranglerProcess.StandardInput.Close()
+        $wranglerProcess.WaitForExit()
+        if ($wranglerProcess.ExitCode -ne 0) {
+            throw "Wrangler could not update the Sakura Worker secret (exit code $($wranglerProcess.ExitCode)). Check that Wrangler is logged in to the correct Cloudflare account."
+        }
+    } finally {
+        $wranglerProcess.Dispose()
+    }
+
+    if (-not (Test-Path -LiteralPath $syncStateDir)) {
+        New-Item -ItemType Directory -Path $syncStateDir -Force | Out-Null
+    }
+    [System.IO.File]::WriteAllText($syncStateFile, $secretHash, [System.Text.UTF8Encoding]::new($false))
+    Write-Host "Sakura Worker secret synchronized successfully."
+} else {
+    Write-Host "Sakura Worker secret is already synchronized with the local renderer config."
+}
+
 $port = [int]$config.Ports.Process
 if ($port -lt 1 -or $port -gt 65535) { throw "Ports.Process in config.json is invalid." }
 
