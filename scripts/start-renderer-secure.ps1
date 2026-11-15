@@ -119,11 +119,25 @@ if ($port -lt 1 -or $port -gt 65535) { throw "Ports.Process in config.json is in
 $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($listener) {
     $owner = Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue
-    if ($owner -and $owner.ProcessName -eq "node") {
-        Write-Host "Renderer is already running on port $port. Cloudflare authentication has been synchronized; keeping the existing Renderer running."
-        return
+    $ownerInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)" -ErrorAction SilentlyContinue
+    if (-not $owner -or $owner.ProcessName -ne "node" -or $ownerInfo.CommandLine -notmatch 'dist[\\/]Main\.js') {
+        $ownerName = if ($owner) { $owner.ProcessName } else { "unknown" }
+        throw "Port $port is occupied by $ownerName (PID $($listener.OwningProcess)), not the expected Sakura Renderer. It was not stopped."
     }
-    throw "Port $port is already in use by $($owner.ProcessName) (PID $($listener.OwningProcess)). It was not stopped."
+
+    # The running Node process still has the previous secret in its environment.
+    # Restart this exact Renderer process so the newly synchronized secret takes effect.
+    Write-Host "Restarting the existing Sakura Renderer to load the synchronized secret..."
+    Stop-Process -Id $listener.OwningProcess -Force
+    $released = $false
+    for ($attempt = 0; $attempt -lt 15; $attempt++) {
+        Start-Sleep -Seconds 1
+        $remaining = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $remaining) { $released = $true; break }
+    }
+    if (-not $released) {
+        throw "The previous Sakura Renderer did not release port $port. Close its old console window and run this repair again."
+    }
 }
 
 $mainSource = [System.IO.File]::ReadAllText($mainPath)
