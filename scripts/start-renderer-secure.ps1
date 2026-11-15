@@ -204,7 +204,7 @@ if ($playerSource.Contains("v1.1/avatar-fetch?")) {
 # RCC may cache CharacterAppearance responses by URL. Give every render a
 # unique URL so rig, body colors, scales and worn items are always re-fetched.
 $avatarDiagnosticMarker = "[Sakura AvatarFetch diagnostic]"
-if (-not $playerSource.Contains("assetFiles=")) {
+if (-not $playerSource.Contains("assetFilesDetail=")) {
     $diagnosticNeedle = 'Console.Debug(`Queueing 3D Player thumbnail request with UserId ${req.body.userId}`);'
     $diagnosticCode = @'
 try {
@@ -230,7 +230,7 @@ try {
                 return `${assetId}:error:${String(assetError)}`;
             }
         }));
-        Console.Debug(`[Sakura AvatarFetch diagnostic] HTTP ${avatarResponse.status}; rig=${avatarData?.resolvedAvatarType ?? avatarData?.playerAvatarType ?? "unknown"}; assets=${avatarAssetRows.length}; assetTypes=${avatarAssetTypes.join(",") || "none"}; assetFiles=${assetDeliveryChecks.join(";") || "none"}; colors=${JSON.stringify(avatarData?.bodyColors ?? null)}; scales=${JSON.stringify(avatarData?.scales ?? null)}`);
+        Console.Debug(`[Sakura AvatarFetch diagnostic] HTTP ${avatarResponse.status}; rig=${avatarData?.resolvedAvatarType ?? avatarData?.playerAvatarType ?? "unknown"}; assets=${avatarAssetRows.length}; assetTypes=${avatarAssetTypes.join(",") || "none"}; assetFilesDetail=${assetDeliveryChecks.join(";") || "none"}; colors=${JSON.stringify(avatarData?.bodyColors ?? null)}; scales=${JSON.stringify(avatarData?.scales ?? null)}`);
     } catch (avatarError) {
         Console.Debug(`[Sakura AvatarFetch diagnostic] Request failed: ${String(avatarError)}`);
     }
