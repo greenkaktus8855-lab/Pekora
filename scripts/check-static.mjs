@@ -36,7 +36,7 @@ const icons = fs.readFileSync(path.join(root, "public/openpekora-icons.css"), "u
 const wrangler = fs.readFileSync(path.join(root, "wrangler.toml"), "utf8");
 const checks = [
   ["API body limit", worker.includes("const maxBytes = 16 * 1024")],
-  ["Avatar editor and renderer are removed", !app.includes("async function avatarPage()") && !app.includes("/api/avatar") && !worker.includes("AVATAR_RENDERER_URL") && !worker.includes("_sakura-rcc/") && !index.includes('data-page="avatar"') && !fs.existsSync(path.join(root,"public/avatar-renderer.js")) && !fs.existsSync(path.join(root,"renderer")) && !fs.existsSync(path.join(root,"scripts/start-rcc-2020.ps1"))],
+  ["Avatar editor and renderer are removed", !app.includes("async function avatarPage()") && !app.includes("/api/avatar") && !worker.includes("AVATAR_RENDERER_URL") && !worker.includes("_sakura-rcc/") && !index.includes('data-page="avatar"') && !fs.existsSync(path.join(root,"public/avatar-renderer.js")) && !fs.existsSync(path.join(root,"renderer")) && !fs.existsSync(path.join(root,"scripts/start-rcc-2020.ps1")) && !worker.includes("equipped_items") && !css.includes("op-avatar-") && !css.includes(".avatar-render-frame")],
   ["HTTPS-only new catalog images", worker.includes("Image URL must use HTTPS.")],
   ["owner-only catalog writes", worker.includes('user.role !== "OWNER"')],
   ["owner moderation API is protected", worker.includes('path.startsWith("/api/owner/users")') && worker.includes('actor.role !== "OWNER"')],
@@ -66,7 +66,7 @@ const checks = [
   ["trade picker only displays Limited or Off Sale items", app.includes("items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1)") && app.includes("ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target)")],
   ["Sakura Home panels use dark surfaces", components.includes("#app .sakura-home-card{") && components.includes("background:#15151c!important") && components.includes("background:#202027!important")],
   ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
-  ["Sakura app and stylesheet cache versions are refreshed", index.includes("app.js?v=sakura-no-avatar-20261115-2") && index.includes("style.css?v=sakura-no-avatar-20261115-2")],
+  ["Sakura app and stylesheet cache versions are refreshed", index.includes("app.js?v=sakura-no-avatar-20261115-2") && index.includes("style.css?v=sakura-no-avatar-20261115-3")],
   ["Group avatars are uploaded as validated image files and stored in D1", worker.includes("CREATE TABLE IF NOT EXISTS group_image_files") && worker.includes("request.arrayBuffer()") && worker.includes("The selected file does not match its image format.") && worker.includes("/api/group-images/")],
   ["Group image BLOBs are converted to browser-readable bytes", worker.includes("Array.isArray(storedImage)") && worker.includes("Uint8Array.from(storedImage)") && worker.includes("new Response(imageBytes")],
   ["Group avatar upload is restricted to the group owner", worker.includes("Only the group owner can change its image.") && worker.includes('groupAvatarUploadMatch && request.method === "PUT"')],
