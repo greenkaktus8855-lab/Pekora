@@ -385,7 +385,6 @@ button,input,textarea,select{font:inherit}
 .catalog-sort{height:28px;max-width:180px;padding:2px 5px;border:1px solid #a7a7a7;background:#211b2b;color:#f0eaf8;font-size:12px}
 @media(max-width:767px){.catalog-results-header{align-items:flex-start;flex-direction:column}.catalog-sort-label{margin-bottom:8px}.catalog-sort{max-width:160px}}
 
-.avatar-preview-panel,.avatar-wardrobe{padding:14px;background:#211b2b;box-shadow:0 1px 4px rgba(25,25,25,.3)}
 .profile-friend-action{margin-top:12px}
 .friends-section{margin:18px 0}
 .friends-section h2{font-size:21px;font-weight:700;margin:0 0 8px;padding-bottom:5px;border-bottom:1px solid #c3c3c3}
