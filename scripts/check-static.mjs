@@ -31,7 +31,6 @@ const worker = fs.readFileSync(path.join(root, "src/worker.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "public/style.css"), "utf8");
 const globals = fs.readFileSync(path.join(root, "public/openpekora-globals.css"), "utf8");
 const components = fs.readFileSync(path.join(root, "public/openpekora-components.css"), "utf8");
-const classic = fs.readFileSync(path.join(root, "public/openpekora-classic.css"), "utf8");
 const index = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
 const icons = fs.readFileSync(path.join(root, "public/openpekora-icons.css"), "utf8");
 const wrangler = fs.readFileSync(path.join(root, "wrangler.toml"), "utf8");
@@ -52,7 +51,7 @@ const checks = [
   ["Owner game management clearly marks all game cards as non-launchable", app.includes("Game Management") && app.includes("All games remain locked and cannot be launched.")],
   ["trade UI", app.includes("tradeTargetForm") && app.includes("tradeList")],
 
-  ["Classic theme gives the Sakura Home dashboard light surfaces", classic.includes("#app .sakura-home-card") && classic.includes("background:#fff!important")],
+  ["Sakura Home dashboard retains the existing dark panels", components.includes("#app .sakura-home-card{") && components.includes("background:#15151c!important") && components.includes("background:#202027!important")],
   ["no old procedural avatar renderer", !app.includes("render3DAvatar") && !app.includes("avatar3d.js")],
   ["no fake wearable CSS", !/avatar-artwork|avatar-worn-chip|avatar-wearing-label/.test(css)],
   ["no missing legacy loading GIF", !/\/img\/loading(?:_old)?\.gif/.test(fs.readFileSync(path.join(root,"public/openpekora-globals.css"),"utf8"))],
@@ -65,9 +64,9 @@ const checks = [
   ["trade creation checks both players own eligible Limited items", worker.includes("WHERE v.user_id=? AND (i.is_limited=1)") && worker.includes("You can only offer Limited or Off Sale items that are in your inventory.")],
   ["trade acceptance rechecks that both players still own Limited items", worker.includes("Only Limited or Off Sale items can be traded. This offer is no longer valid") && worker.includes("WHERE v.user_id=? AND (i.is_limited=1)")],
   ["trade picker only displays Limited or Off Sale items", app.includes("items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1)") && app.includes("ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target)")],
-  ["Classic theme uses white panels throughout Home", classic.includes("#app .sakura-home-card") && classic.includes("#app .section-content") && classic.includes("background:#fff!important")],
+  ["Sakura Home panels retain the existing dark surfaces", components.includes("#app .sakura-home-card{") && components.includes("background:#15151c!important") && components.includes("background:#202027!important")],
   ["Sakura site branding is configured", index.includes("<title>Sakura — Community</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
-  ["Sakura app and classic stylesheet cache versions are refreshed", index.includes("app.js?v=20261115-openpekora-profile-2") && index.includes("style.css?v=sakura-no-avatar-20261115-3") && index.includes("openpekora-classic.css?v=20261115-classic-4")],
+  ["Sakura app and existing stylesheet cache versions are refreshed", index.includes("app.js?v=20261115-profile-layout-2") && index.includes("style.css?v=sakura-no-avatar-20261115-3") && index.includes("openpekora-components.css?v=20261115-profile-layout-2") && !index.includes("openpekora-classic.css")],
   ["Group avatars are uploaded as validated image files and stored in D1", worker.includes("CREATE TABLE IF NOT EXISTS group_image_files") && worker.includes("request.arrayBuffer()") && worker.includes("The selected file does not match its image format.") && worker.includes("/api/group-images/")],
   ["Group image BLOBs are converted to browser-readable bytes", worker.includes("Array.isArray(storedImage)") && worker.includes("Uint8Array.from(storedImage)") && worker.includes("new Response(imageBytes")],
   ["Group avatar upload is restricted to the group owner", worker.includes("Only the group owner can change its image.") && worker.includes('groupAvatarUploadMatch && request.method === "PUT"')],
@@ -90,10 +89,10 @@ const checks = [
   ["Membership API uses Sakura reward terminology rather than Robux terminology", worker.includes("dailyReward:Number(") && !worker.includes("dailyRobux")],
   ["Group creation payment errors do not reveal the Admin payout account", !worker.includes("The Admin account could not be found")],
   ["Player-facing group fee copy does not disclose the Admin payout destination", !app.includes("fee is transferred to the Sakura Admin account")],
-  ["Resale marketplace styles and current asset cache versions are refreshed", css.includes(".resale-market-card{") && css.includes(".resale-create-form") && index.includes("app.js?v=20261115-openpekora-profile-2") && index.includes("style.css?v=sakura-no-avatar-20261115-3")],
-  ["Ban, inventory and group status panels use classic light colors", classic.includes("#app .notice,") && classic.includes("#app .danger-button,") && classic.includes("#app .group-owner-tag")],
-  ["3D item previews use classic light placeholders", classic.includes("#app model-viewer.pekora-model") && classic.includes("--poster-color:#f3f3f3") && classic.includes("#app .pekora-model-missing")],
-  ["Sakura controls use the classic light color scheme", classic.includes("color-scheme:light;")],
+  ["Resale marketplace styles and current asset cache versions are refreshed", css.includes(".resale-market-card{") && css.includes(".resale-create-form") && index.includes("app.js?v=20261115-profile-layout-2") && index.includes("style.css?v=sakura-no-avatar-20261115-3")],
+  ["Ban, inventory and group status panels retain dark Sakura styling", components.includes("#app .ban-admin-summary{") && components.includes("background:#281820!important") && components.includes("#app .inventory-listing-status,") && components.includes("background:#21192c!important") && components.includes("#app .group-owner-tag")],
+  ["3D catalog item previews retain dark Sakura placeholders", components.includes("#app model-viewer.pekora-model") && components.includes("--poster-color:#202027") && components.includes("#app .pekora-model-missing") && components.includes("background:#202027!important")],
+  ["Sakura controls keep the existing dark color scheme", components.includes(":root{color-scheme:dark}")],
   ["Create stays in top navigation and is omitted from the sidebar", index.includes('href="/#create" data-page="create">Create</a>') && !app.includes('["create","icon-nav-create","Create"]')],
   ["Create form only accepts server-supported Shirts and Pants", app.includes('const CREATABLE_CATEGORIES=["Shirts","Pants"]') && app.includes('CREATABLE_CATEGORIES.map(category=>')],
   ["Creator submissions remain pending outside the public catalog", worker.includes("CREATE TABLE IF NOT EXISTS creator_submissions") && worker.includes('status TEXT NOT NULL DEFAULT \'PENDING\'') && worker.includes('path === "/api/creator/submissions" && request.method === "POST"')],
@@ -102,7 +101,7 @@ const checks = [
   ["Approved clothing retains its player creator identity", worker.includes("CREATE TABLE IF NOT EXISTS item_creators") && worker.includes("ic.creator_name") && app.includes("function itemCreatorMarkup(item)") && app.includes("Created by ")],
   ["Owner Panel shows the applicant and lets Owner preview an image URL", app.includes("ownerCreatorSubmissions") && app.includes("Submitted by") && app.includes("creator-review-image-preview") && app.includes("Approve and publish")],
   ["Player Create page shows submission status and waits for approval", app.includes("My submissions") && app.includes("Not visible in Catalog until approval.") && app.includes('api("/api/creator/submissions")')],
-  ["Clothing Create assets use current cache versions", index.includes("app.js?v=20261115-openpekora-profile-2") && index.includes("openpekora-components.css?v=20261105-dark-theme-1")],
+  ["Clothing Create assets use current cache versions", index.includes("app.js?v=20261115-profile-layout-2") && index.includes("openpekora-components.css?v=20261115-profile-layout-2")],
   ["Create navigation has no highlighted button style", components.includes('.op-navigation a[href="#create"]{\n background:transparent!important') && components.includes("user-select:none")],
   ["Sidebar uses original OpenPekora currency and membership icons", app.includes('["currency","icon-nav-robux","Currency"]') && app.includes('["membership","icon-bc","Membership"]') && icons.includes(".icon-nav-robux") && icons.includes("background-image:url(\'/bc.svg\')") && !app.includes("icon-nav-create")],
   ["Creator submission accepts long Roblox IDs and bare catalog URLs in browser and API", app.includes("if(/^[0-9]+$/.test(raw)){") && app.includes("Number.isSafeInteger(assetId)&&assetId>0?") && app.includes("raw.startsWith(\"//\")?\"https:\"") && worker.includes("if (/^[0-9]+$/.test(suppliedUrl)) {") && worker.includes("suppliedUrl.startsWith(\"//\") ? \"https:\"") && worker.includes("if (!Number.isSafeInteger(assetId) || assetId<1) throw new Error();")],
@@ -117,7 +116,7 @@ const checks = [
   ["Creator history explains when an approved item is deleted by Owner", app.includes("This item was removed by the Owner.") && app.includes("The player’s suggested price is prefilled")],
   ["Existing Owner Remove still only hides catalog items", worker.includes('UPDATE items SET is_for_sale=0 WHERE id=?') && worker.includes('deleted:false')],
   ["Create form omits the long Sakura warning copy", !app.includes("A Sakura page link or image URL is not an original Roblox clothing item.") && !app.includes("The Owner will add the catalog image before publishing.")],
-  ["Sakura theme primary accents use classic OpenPekora blue", classic.includes("--primary-color:#00a2ff;") && classic.includes("background:#00a2ff!important")],
+  ["Sakura theme keeps the existing violet accents", globals.includes("rgb(166, 77, 255)") && globals.includes("rgba(106,27,177,1)")],
   ["promo codes can grant currency and multiple catalog items", worker.includes("CREATE TABLE IF NOT EXISTS promo_code_items") && worker.includes("reward_currency") && app.includes("ownerPromoItems")],
   ["promo codes enforce use limits and expiry", worker.includes("max_uses IS NULL") && worker.includes("expires_at") && app.includes('name="max_uses"') && app.includes('type="datetime-local"')],
   ["promo codes can only be claimed once per user", worker.includes("PRIMARY KEY(code,user_id)") && worker.includes("ON CONFLICT(code,user_id) DO NOTHING")],
@@ -141,7 +140,7 @@ const checks = [
   ["Profile badges display assigned keys including Asset Moderator", app.includes("ASSET_MODERATOR") && app.includes("profileBadgesMarkup(p)") && app.includes("profile-badge-symbol")],
   ["Profile uses functional About and Creations tabs with real profile fields", app.includes('data-profile-tab="about"') && app.includes('data-profile-tab="creations"') && app.includes("Number(p.friendCount||0)") && app.includes("creator_public_id")],
   ["Public profile API returns accepted-friend count", worker.includes("friendCount:Number(friendCount?.n||0)") && worker.includes("COUNT(*) AS n FROM friends WHERE user_id=? AND status='ACCEPTED'")],
-  ["Classic theme loads after original OpenPekora component styles", index.indexOf("openpekora-classic.css") > index.indexOf("openpekora-components.css") && classic.includes("color-scheme:light;") && classic.includes("#app .op-profile-tabs")]
+  ["OpenPekora-style positioning is scoped to profiles only", components.includes("Profile-only layout inspired by classic OpenPekora.") && components.includes("#app .op-profile-tabs") && !index.includes("openpekora-classic.css")],
 ];
 
 for (const [name, ok] of checks) console.log(`${ok ? "PASS" : "FAIL"} ${name}`);
