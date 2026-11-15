@@ -13,16 +13,16 @@ $npxCmd = $npxCommand.Source
 
 Push-Location $repoRoot
 try {
-    Write-Host "[1/4] Removing saved avatar data from Sakura D1..."
-    & $npxCmd wrangler d1 migrations apply pekora-db --remote --config $wranglerConfig
-    if ($LASTEXITCODE -ne 0) {
-        throw "The D1 cleanup migration failed. The renderer has not been stopped."
-    }
-
-    Write-Host "[2/4] Deploying Sakura without Avatar or Renderer..."
+    Write-Host "[1/4] Deploying Sakura without Avatar or Renderer..."
     & $npxCmd wrangler deploy --config $wranglerConfig
     if ($LASTEXITCODE -ne 0) {
         throw "Sakura deployment failed. Local renderer processes were left running."
+    }
+
+    Write-Host "[2/4] Removing saved avatar data from Sakura D1..."
+    & $npxCmd wrangler d1 migrations apply pekora-db --remote --config $wranglerConfig
+    if ($LASTEXITCODE -ne 0) {
+        throw "The D1 cleanup migration failed. The renderer has not been stopped."
     }
 
     Write-Host "[3/4] Deleting the obsolete Worker renderer secret..."
