@@ -951,14 +951,11 @@ function createRccAvatarAppearance(profileData, baseUrl, renderCacheTag = "") {
       assetType:{
         id:Number(item.asset_type_id),
         name:AVATAR_ASSET_TYPE_NAMES[Number(item.asset_type_id)]||"Asset"
-      },
-      // Sakura stores the Roblox asset ID. Until version IDs are stored
-      // separately, this is also the compatible current-version fallback.
-      currentVersionId:Number(item.asset_id)
+      }
     }));
 
-  // Match OpenPekora's CharacterFetch contract: animations and emotes are
-  // separate from the ordinary asset/type pairs.
+  // AvatarFetch v1 uses asset IDs + type IDs. It does not use the legacy
+  // v1.1 accessoryVersionIds list (those are version IDs, not asset IDs).
   const animationTypeKeys = {
     48:"climb",49:"death",50:"fall",51:"idle",
     52:"jump",53:"run",54:"swim",55:"walk"
@@ -984,53 +981,41 @@ function createRccAvatarAppearance(profileData, baseUrl, renderCacheTag = "") {
     .filter(asset => Number(asset.assetType.id)!==61 && !animationTypeIds.has(Number(asset.assetType.id)))
     .map(asset => ({
       assetId:asset.id,
-      assetTypeId:asset.assetType.id
+      assetTypeId:Number(asset.assetType.id)
     }));
-  const equippedGearVersionIds = assets
-    .filter(asset => Number(asset.assetType.id)===19)
-    .map(asset => Number(asset.currentVersionId||asset.id));
 
-  // RCC's v1.1 CharacterAppearance parser consumes accessoryVersionIds
-  // separately from assetAndAssetTypeIds. Supplying only the latter makes
-  // Sakura show an item as equipped while the rendered character omits it.
-  const accessoryVersionIds = assets
-    .filter(asset => Number(asset.assetType.id)!==19)
-    .map(asset => Number(asset.currentVersionId||asset.id));
-
+  // This is the documented AvatarFetch v1 shape: BrickColor IDs use the
+  // lower-camel fields and avatar scale values use lower-camel names.
   const c = settings.bodyColors;
   const bodyColors = {
-    ...c,
-    HeadColor:c.headColorId,
-    LeftArmColor:c.leftArmColorId,
-    LeftLegColor:c.leftLegColorId,
-    RightArmColor:c.rightArmColorId,
-    RightLegColor:c.rightLegColorId,
-    TorsoColor:c.torsoColorId
+    headColorId:Number(c.headColorId),
+    leftArmColorId:Number(c.leftArmColorId),
+    leftLegColorId:Number(c.leftLegColorId),
+    rightArmColorId:Number(c.rightArmColorId),
+    rightLegColorId:Number(c.rightLegColorId),
+    torsoColorId:Number(c.torsoColorId)
   };
   const s = settings.scales;
   const scales = {
-    ...s,
-    Height:s.height,
-    Width:s.width,
-    Head:s.head,
-    Depth:s.depth,
-    Proportion:s.proportion,
-    BodyType:s.bodyType
+    height:Number(s.height),
+    width:Number(s.width),
+    head:Number(s.head),
+    depth:Number(s.depth),
+    proportion:Number(s.proportion),
+    bodyType:Number(s.bodyType)
   };
+
   return {
-    resolvedAvatarType:settings.rigType,
-    accessoryVersionIds,
-    equippedGearVersionIds,
+    resolvedAvatarType:settings.rigType === "R15" ? "R15" : "R6",
+    equippedGearVersionIds:[],
+    backpackGearVersionIds:[],
     assetAndAssetTypeIds,
-    backpackGearVersionIds:equippedGearVersionIds,
     animationAssetIds,
-    playerAvatarType:settings.rigType,
+    bodyColors,
     scales,
     bodyColorsUrl:baseUrl+"Asset/BodyColors.ashx?userId="+encodeURIComponent(profileData.profile.public_id)+
       (renderCacheTag ? "&sakuraRender="+encodeURIComponent(renderCacheTag) : ""),
-    bodyColors,
-    emotes,
-    assets
+    emotes
   };
 }
 
