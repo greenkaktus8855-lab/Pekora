@@ -661,7 +661,7 @@ function inventoryItemCard(item){
   '<a class="item-image" href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+itemPreview(item)+itemBadgeMarkup(item)+'</a>'+
   '<h3><a href="/item/'+encodeURIComponent(item.id)+'" data-item-view="'+esc(item.id)+'">'+esc(item.name)+'</a></h3>'+
   '<div class="muted">'+esc(item.category)+'</div>'+(Number(item.quantity)>1?'<div class="muted">Quantity: '+Number(item.quantity)+'</div>':"")+status+giftStatus+giftButton+
-  '<div class="inventory-item-actions">'+avatarButton+'<button class="button danger-button inventory-remove-button" type="button" data-remove-inventory-item="'+esc(item.id)+'">Remove from inventory</button></div>'+
+  '<div class="inventory-item-actions"><button class="button danger-button inventory-remove-button" type="button" data-remove-inventory-item="'+esc(item.id)+'">Remove from inventory</button></div>'+
   '</article>';
 }
 async function inventory(){
@@ -674,7 +674,7 @@ async function inventory(){
   const d=await api("/api/inventory");
   if(!isActiveView(view)||!grid?.isConnected)return;
   const ownedItems=Array.isArray(d.items)?d.items:[];
-  grid.innerHTML=ownedItems.length?ownedItems.map(item=>inventoryItemCard(item,equippedIds)).join(""):'<div class="empty">Your inventory is empty. <a href="/#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
+  grid.innerHTML=ownedItems.length?ownedItems.map(item=>inventoryItemCard(item)).join(""):'<div class="empty">Your inventory is empty. <a href="/#catalog" data-page="catalog">Browse the Catalog</a>.</div>';
   const clearInventoryButton=document.getElementById("clearInventoryButton");
   if(clearInventoryButton){
    clearInventoryButton.disabled=ownedItems.length===0;
