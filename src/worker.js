@@ -940,7 +940,7 @@ async function getAvatarRenderProfile(env, publicId) {
   return {profile,items:rows.results||[],settings};
 }
 
-function createRccAvatarAppearance(profileData, baseUrl) {
+function createRccAvatarAppearance(profileData, baseUrl, renderCacheTag = "") {
   const settings = profileData.settings;
   const items = profileData.items;
   const assets = items
@@ -952,6 +952,8 @@ function createRccAvatarAppearance(profileData, baseUrl) {
         id:Number(item.asset_type_id),
         name:AVATAR_ASSET_TYPE_NAMES[Number(item.asset_type_id)]||"Asset"
       },
+      // Sakura stores the Roblox asset ID. Until version IDs are stored
+      // separately, this is also the compatible current-version fallback.
       currentVersionId:Number(item.asset_id)
     }));
 
@@ -986,7 +988,14 @@ function createRccAvatarAppearance(profileData, baseUrl) {
     }));
   const equippedGearVersionIds = assets
     .filter(asset => Number(asset.assetType.id)===19)
-    .map(asset => asset.id);
+    .map(asset => Number(asset.currentVersionId||asset.id));
+
+  // RCC's v1.1 CharacterAppearance parser consumes accessoryVersionIds
+  // separately from assetAndAssetTypeIds. Supplying only the latter makes
+  // Sakura show an item as equipped while the rendered character omits it.
+  const accessoryVersionIds = assets
+    .filter(asset => Number(asset.assetType.id)!==19)
+    .map(asset => Number(asset.currentVersionId||asset.id));
 
   const c = settings.bodyColors;
   const bodyColors = {
@@ -1010,14 +1019,15 @@ function createRccAvatarAppearance(profileData, baseUrl) {
   };
   return {
     resolvedAvatarType:settings.rigType,
-    accessoryVersionIds:[],
+    accessoryVersionIds,
     equippedGearVersionIds,
     assetAndAssetTypeIds,
     backpackGearVersionIds:equippedGearVersionIds,
     animationAssetIds,
     playerAvatarType:settings.rigType,
     scales,
-    bodyColorsUrl:baseUrl+"Asset/BodyColors.ashx?userId="+encodeURIComponent(profileData.profile.public_id),
+    bodyColorsUrl:baseUrl+"Asset/BodyColors.ashx?userId="+encodeURIComponent(profileData.profile.public_id)+
+      (renderCacheTag ? "&sakuraRender="+encodeURIComponent(renderCacheTag) : ""),
     bodyColors,
     emotes,
     assets
@@ -1056,7 +1066,10 @@ async function route(request, env) {
       const profileData = await getAvatarRenderProfile(env,publicId);
       if (!profileData) return fail("Sakura user not found.",404);
       const baseUrl = url.origin + rccBridgePrefix + encodeURIComponent(configuredSecret) + "/";
-      return json(createRccAvatarAppearance(profileData,baseUrl));
+      // Keep BodyColors.ashx in sync with this exact CharacterAppearance
+      // request so the RCC cannot reuse an earlier user's body-color XML.
+      const renderCacheTag = url.searchParams.get("sakuraRender") || String(Date.now());
+      return json(createRccAvatarAppearance(profileData,baseUrl,renderCacheTag));
     }
 
     if (bridgePath === "asset/bodycolors.ashx") {
