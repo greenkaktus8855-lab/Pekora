@@ -25,7 +25,6 @@ This repository currently deploys a lightweight Cloudflare Worker website with a
 - 16 KB API JSON request-body limit
 - HTTPS-only preview image URLs for new catalog entries
 - API health endpoint that checks the database schema
-- Avatar editor with saved R6/R15 rig, body colors, skin tones, body scales and equipped inventory items
 
 New accounts start with 100 P$. The initial OWNER account starts with 1,000 P$.
 
@@ -41,7 +40,7 @@ Failed sign-in, registration and OWNER setup/recovery attempts are rate-limited 
 - The original Roblox asset catalog
 - The public Games page and game runtime are temporarily disabled while technical issues are resolved
 
-Catalog entries created in this build are Pekora inventory items with image or optional GLB previews. They are not Roblox assets. Trades exchange existing inventory items only; they do not transfer Pekora currency or real money. The Avatar page continues to store rig type, body colors, body scales and equipped items, but its 3D preview is temporarily disabled. The public Games page is also temporarily hidden while technical issues are resolved. Existing game-card records and avatar settings are preserved so these features can be revisited later; no game launcher is connected.
+Catalog entries created in this build are Pekora inventory items with image or optional GLB previews. They are not Roblox assets. Trades exchange existing inventory items only; they do not transfer Pekora currency or real money. Avatar customization and 3D avatar rendering have been removed from this deployment. The public Games page is also temporarily hidden while technical issues are resolved. Existing account inventory, profile initials and group images remain available; no game launcher is connected.
 
 Pekora currency is an in-site balance only. It has no real-world monetary value.
 
