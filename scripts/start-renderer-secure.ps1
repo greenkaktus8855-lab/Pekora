@@ -31,12 +31,15 @@ if (-not (Test-Path -LiteralPath $configPath)) { throw "game-renderer\config.jso
 try { $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json }
 catch { throw "game-renderer\config.json is invalid JSON: $($_.Exception.Message)" }
 
-$secret = [string]$env:PEKORA_RENDERER_SECRET
+# Use the private bridge URL as the source of truth so the Worker,
+# RCC bridge and local Renderer all receive exactly the same secret.
+$secret = ""
+$bridgeBaseUrl = [string]$config.BaseUrl
+if ($bridgeBaseUrl -match '/_sakura-rcc/([^/]+)/') {
+    $secret = [Uri]::UnescapeDataString($Matches[1])
+}
 if ([string]::IsNullOrWhiteSpace($secret)) {
-    $bridgeBaseUrl = [string]$config.BaseUrl
-    if ($bridgeBaseUrl -match '/_sakura-rcc/([^/]+)/') {
-        $secret = [Uri]::UnescapeDataString($Matches[1])
-    }
+    $secret = [string]$env:PEKORA_RENDERER_SECRET
 }
 if ([string]::IsNullOrWhiteSpace($secret)) {
     $secureSecret = Read-Host "Enter the SAME value as Cloudflare Worker secret AVATAR_RENDERER_SECRET" -AsSecureString
