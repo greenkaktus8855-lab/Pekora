@@ -635,3 +635,13 @@ body{font-size:14px}
 }
 #app .account-warning-panel strong,
 #app .account-warning-panel p{color:#654b12!important}
+
+
+#app model-viewer.pekora-model,
+#app .pekora-model,
+#app .pekora-model-missing{
+  background:#f3f3f3!important;
+  color:#666!important;
+  --poster-color:#f3f3f3;
+  border-color:#ddd!important;
+}
