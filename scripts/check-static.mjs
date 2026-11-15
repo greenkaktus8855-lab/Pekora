@@ -139,8 +139,6 @@ const checks = [
   ["3D model queue approves or rejects Accessories", worker.includes("/api/asset-moderation/models") && worker.includes("'Accessories'") && worker.includes("ASSET_APPROVE") && worker.includes("ASSET_REJECT")],
   ["Approved 3D models grant a free copy to the creator", worker.includes("INSERT OR IGNORE INTO inventory (id,user_id,item_id) SELECT ?,user_id,? FROM model_submissions") && worker.includes("created_item_id")],
   ["Profile badges display assigned keys including Asset Moderator", app.includes("ASSET_MODERATOR") && app.includes("profileBadgesMarkup(p)") && app.includes("profile-badge-symbol")],
-,
-
   ["Profile uses functional About and Creations tabs with real profile fields", app.includes('data-profile-tab="about"') && app.includes('data-profile-tab="creations"') && app.includes("Number(p.friendCount||0)") && app.includes("creator_public_id")],
   ["Public profile API returns accepted-friend count", worker.includes("friendCount:Number(friendCount?.n||0)") && worker.includes("COUNT(*) AS n FROM friends WHERE user_id=? AND status='ACCEPTED'")],
   ["Classic theme loads after original OpenPekora component styles", index.indexOf("openpekora-classic.css") > index.indexOf("openpekora-components.css") && classic.includes("color-scheme:light;") && classic.includes("#app .op-profile-tabs")]
