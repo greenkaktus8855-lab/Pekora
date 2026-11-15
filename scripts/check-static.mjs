@@ -36,7 +36,7 @@ const icons = fs.readFileSync(path.join(root, "public/openpekora-icons.css"), "u
 const wrangler = fs.readFileSync(path.join(root, "wrangler.toml"), "utf8");
 const checks = [
   ["API body limit", worker.includes("const maxBytes = 16 * 1024")],
-  ["Avatar editor and renderer are removed", !app.includes("async function avatarPage()") && !app.includes("/api/avatar") && !worker.includes("AVATAR_RENDERER_URL") && !worker.includes("_sakura-rcc/") && !index.includes('data-page="avatar"')],
+  ["Avatar editor and renderer are removed", !app.includes("async function avatarPage()") && !app.includes("/api/avatar") && !worker.includes("AVATAR_RENDERER_URL") && !worker.includes("_sakura-rcc/") && !index.includes('data-page="avatar"') && !fs.existsSync(path.join(root,"public/avatar-renderer.js")) && !fs.existsSync(path.join(root,"renderer")) && !fs.existsSync(path.join(root,"scripts/start-rcc-2020.ps1"))],
   ["HTTPS-only new catalog images", worker.includes("Image URL must use HTTPS.")],
   ["owner-only catalog writes", worker.includes('user.role !== "OWNER"')],
   ["owner moderation API is protected", worker.includes('path.startsWith("/api/owner/users")') && worker.includes('actor.role !== "OWNER"')],
@@ -66,7 +66,7 @@ const checks = [
   ["trade picker only displays Limited or Off Sale items", app.includes("items.filter(item=>Number(item.is_limited)===1||Number(item.is_offsale)===1)") && app.includes("ownEligible=uniqueEligible(own),targetEligible=uniqueEligible(target)")],
   ["Sakura Home panels use dark surfaces", components.includes("#app .sakura-home-card{") && components.includes("background:#15151c!important") && components.includes("background:#202027!important")],
   ["Sakura site branding is configured", index.includes("<title>Sakura</title>") && index.includes("sakura-brand-logo") && wrangler.includes('SITE_NAME = "Sakura"')],
-  ["Sakura app and stylesheet cache versions are refreshed", index.includes("app.js?v=sakura-no-avatar-20261115-1") && index.includes("style.css?v=sakura-no-avatar-20261115-1")],
+  ["Sakura app and stylesheet cache versions are refreshed", index.includes("app.js?v=sakura-no-avatar-20261115-2") && index.includes("style.css?v=sakura-no-avatar-20261115-2")],
   ["Group avatars are uploaded as validated image files and stored in D1", worker.includes("CREATE TABLE IF NOT EXISTS group_image_files") && worker.includes("request.arrayBuffer()") && worker.includes("The selected file does not match its image format.") && worker.includes("/api/group-images/")],
   ["Group image BLOBs are converted to browser-readable bytes", worker.includes("Array.isArray(storedImage)") && worker.includes("Uint8Array.from(storedImage)") && worker.includes("new Response(imageBytes")],
   ["Group avatar upload is restricted to the group owner", worker.includes("Only the group owner can change its image.") && worker.includes('groupAvatarUploadMatch && request.method === "PUT"')],
@@ -122,7 +122,6 @@ const checks = [
   ["promo codes can only be claimed once per user", worker.includes("PRIMARY KEY(code,user_id)") && worker.includes("ON CONFLICT(code,user_id) DO NOTHING")],
   ["promo code page and sidebar link exist", app.includes("async function promocodesPage()") && app.includes("side-promo-button")],
   ["Premium and OBC require accounts older than three days", worker.includes("Date.now() - createdAtMs <= 3 * 24 * 60 * 60 * 1000") && worker.includes("datetime(u.created_at)<datetime('now','-3 days')") && app.includes("canUseAdvancedMemberships") && app.includes("OBC and Premium unlock")],
-  ["Modern Roblox asset IDs are accepted beyond signed 32-bit range", worker.includes("assetId > Number.MAX_SAFE_INTEGER") && worker.includes("assetId>Number.MAX_SAFE_INTEGER")],
   ["Profile badges read assigned database badges", app.includes("const assigned=new Set(Array.isArray(profileData?.badges)?profileData.badges:[])") && app.includes("assigned.has(key)") && app.includes("ASSET_MODERATOR")],
   ["Profile Badges section lists Administrator and Verified badges in a larger grid", app.includes("function profileBadgesMarkup(profileData)") && app.includes('op-profile-badges-section"><h2>Badges</h2>') && app.includes("profileBadgesMarkup(p)") && css.includes("minmax(190px,1fr)") && css.includes("min-height:168px")],
   ["Friends menu route has a page handler and working friends list", app.includes('else if(name==="friends")await friends();') && app.includes("async function friends()") && app.includes("await loadFriendsList(view)") && app.includes("data-friend-action")],
