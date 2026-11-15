@@ -204,7 +204,7 @@ if ($playerSource.Contains("v1.1/avatar-fetch?")) {
 # RCC may cache CharacterAppearance responses by URL. Give every render a
 # unique URL so rig, body colors, scales and worn items are always re-fetched.
 $avatarDiagnosticMarker = "[Sakura AvatarFetch diagnostic]"
-if (-not $playerSource.Contains($avatarDiagnosticMarker)) {
+if (-not $playerSource.Contains("assetFiles=")) {
     $diagnosticNeedle = 'Console.Debug(`Queueing 3D Player thumbnail request with UserId ${req.body.userId}`);'
     $diagnosticCode = @'
 try {
