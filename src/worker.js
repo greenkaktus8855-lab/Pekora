@@ -216,13 +216,11 @@ async function ensureSiteSettings(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_banned_ip_addresses_hash ON banned_ip_addresses(ip_hash)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS ip_ban_exemptions (user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, granted_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_files (id TEXT PRIMARY KEY, model_data BLOB NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))"),
-        env.DB.prepare("CREATE TABLE IF NOT EXISTS equipped_items (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, category TEXT NOT NULL, equipped_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,item_id))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS user_badges (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, badge_key TEXT NOT NULL CHECK(badge_key IN ('ADMINISTRATOR','ASSET_MODERATOR','EARLY_SUPPORTER','CONTRIBUTOR','CREATOR','COMMUNITY_HELPER')), granted_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(user_id,badge_key))"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_user_badges_key ON user_badges(badge_key,user_id)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS model_submissions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, username TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', model_url TEXT NOT NULL, image_url TEXT NOT NULL DEFAULT '', price INTEGER NOT NULL DEFAULT 50 CHECK(price>=0 AND price<=1000000), status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')), reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_item_id TEXT REFERENCES items(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), reviewed_at TEXT)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_model_submissions_status ON model_submissions(status,created_at)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_model_submissions_user ON model_submissions(user_id,created_at DESC)"),
-        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_equipped_items_user ON equipped_items(user_id,category)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS creator_submissions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, username TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', category TEXT NOT NULL CHECK(category IN ('Shirts','Pants')), roblox_url TEXT NOT NULL, asset_id INTEGER NOT NULL CHECK(asset_id>0), status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')), image_url TEXT NOT NULL DEFAULT '', reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_item_id TEXT REFERENCES items(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), reviewed_at TEXT)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS admin_item_submissions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', category TEXT NOT NULL CHECK(category IN ('Hats','Hair','Faces','Shirts','Pants')), price INTEGER NOT NULL CHECK(price>=0 AND price<=1000000), currency TEXT NOT NULL DEFAULT 'P$' CHECK(currency IN ('P$','Tix')), image_url TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','REJECTED')), reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL, created_item_id TEXT REFERENCES items(id) ON DELETE SET NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), reviewed_at TEXT)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_admin_item_submissions_status ON admin_item_submissions(status,created_at)"),
@@ -504,7 +502,6 @@ async function ensureSiteSettings(env) {
         await env.DB.batch([
           env.DB.prepare("UPDATE resale_listings SET status='CANCELLED' WHERE status='ACTIVE' AND EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id JOIN users u ON u.id=v.user_id WHERE v.user_id=resale_listings.seller_id AND v.item_id=resale_listings.item_id AND i.is_limited=1 AND v.quantity>=10 AND u.role<>'OWNER')"),
           env.DB.prepare("DELETE FROM trade_locks WHERE EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id JOIN users u ON u.id=v.user_id WHERE v.user_id=trade_locks.owner_id AND v.item_id=trade_locks.item_id AND i.is_limited=1 AND v.quantity>=10 AND u.role<>'OWNER')"),
-          env.DB.prepare("DELETE FROM equipped_items WHERE EXISTS (SELECT 1 FROM inventory v JOIN items i ON i.id=v.item_id JOIN users u ON u.id=v.user_id WHERE v.user_id=equipped_items.user_id AND v.item_id=equipped_items.item_id AND i.is_limited=1 AND v.quantity>=10 AND u.role<>'OWNER')"),
           env.DB.prepare("DELETE FROM inventory WHERE quantity>=10 AND item_id IN (SELECT id FROM items WHERE is_limited=1) AND user_id IN (SELECT id FROM users WHERE role<>'OWNER')"),
           env.DB.prepare("UPDATE inventory SET quantity=1 WHERE quantity>1 AND quantity<10 AND item_id IN (SELECT id FROM items WHERE is_limited=1) AND user_id IN (SELECT id FROM users WHERE role<>'OWNER')"),
           env.DB.prepare("UPDATE inventory SET quantity=1 WHERE quantity<>1 AND item_id IN (SELECT id FROM items WHERE is_limited=1) AND user_id IN (SELECT id FROM users WHERE role='OWNER')"),
@@ -1341,7 +1338,6 @@ async function route(request, env) {
         env.DB.prepare("UPDATE inventory SET quantity=quantity-1 WHERE user_id=? AND item_id=? AND quantity>0 AND changes()=1").bind(listing.seller_id,listing.item_id),
         env.DB.prepare("INSERT INTO inventory (id,user_id,item_id,quantity) SELECT ?,?,?,1 WHERE changes()=1 ON CONFLICT(user_id,item_id) DO UPDATE SET quantity=inventory.quantity+1").bind(newInventoryId,user.id,listing.item_id),
         env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=? AND quantity<=0").bind(listing.seller_id,listing.item_id),
-        env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=? AND EXISTS (SELECT 1 FROM resale_listings WHERE id=? AND status='SOLD' AND buyer_id=?)").bind(listing.seller_id,listing.item_id,listing.id,user.id)
       ]);
       if (!results?.[0]?.meta?.changes) return fail("This listing was already sold or is no longer available.",409);
       if (!results?.[1]?.meta?.changes||!results?.[2]?.meta?.changes||!results?.[3]?.meta?.changes||!results?.[4]?.meta?.changes) {
@@ -1507,7 +1503,6 @@ async function route(request, env) {
         )`).bind(user.id,user.id,user.id,user.id),
       env.DB.prepare("UPDATE resale_listings SET status='CANCELLED' WHERE seller_id=? AND status='ACTIVE' AND item_id IN (SELECT item_id FROM inventory WHERE user_id=?)").bind(user.id,user.id),
       env.DB.prepare("DELETE FROM trade_locks WHERE owner_id=? AND item_id IN (SELECT item_id FROM inventory WHERE user_id=?)").bind(user.id,user.id),
-      env.DB.prepare("DELETE FROM equipped_items WHERE user_id=?").bind(user.id),
       env.DB.prepare("DELETE FROM gift_openings WHERE user_id=? AND gift_item_id IN (SELECT item_id FROM inventory WHERE user_id=?)").bind(user.id,user.id),
       env.DB.prepare("DELETE FROM inventory WHERE user_id=?").bind(user.id)
     ]);
@@ -1539,7 +1534,6 @@ async function route(request, env) {
         )`).bind(user.id,user.id,itemId,itemId),
       env.DB.prepare("UPDATE resale_listings SET status='CANCELLED' WHERE seller_id=? AND item_id=? AND status='ACTIVE'").bind(user.id,itemId),
       env.DB.prepare("DELETE FROM trade_locks WHERE owner_id=? AND item_id=?").bind(user.id,itemId),
-      env.DB.prepare("DELETE FROM equipped_items WHERE user_id=? AND item_id=?").bind(user.id,itemId),
       env.DB.prepare("DELETE FROM gift_openings WHERE user_id=? AND gift_item_id=?").bind(user.id,itemId),
       env.DB.prepare("DELETE FROM inventory WHERE user_id=? AND item_id=?").bind(user.id,itemId)
     ]);
@@ -2665,7 +2659,6 @@ async function route(request, env) {
           env.DB.prepare("UPDATE trades SET status='CANCELLED',responded_at=datetime('now') WHERE status='PENDING' AND (EXISTS (SELECT 1 FROM json_each(trades.offered_items) WHERE value=?) OR EXISTS (SELECT 1 FROM json_each(trades.requested_items) WHERE value=?))").bind(itemId,itemId),
           env.DB.prepare("DELETE FROM trade_locks WHERE item_id=?").bind(itemId),
           env.DB.prepare("DELETE FROM resale_listings WHERE item_id=?").bind(itemId),
-          env.DB.prepare("DELETE FROM equipped_items WHERE item_id=?").bind(itemId),
           env.DB.prepare("DELETE FROM inventory WHERE item_id=?").bind(itemId),
           env.DB.prepare("DELETE FROM purchases WHERE item_id=?").bind(itemId),
           env.DB.prepare("DELETE FROM promo_code_items WHERE item_id=?").bind(itemId),
