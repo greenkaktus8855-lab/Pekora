@@ -765,7 +765,7 @@ async function profile(identifier=me?.username,byId=false){
   const p=d.profile,owned=inventoryData.items||[],isSelf=me&&me.username.toLowerCase()===p.username.toLowerCase();
   const publicId=p.publicId??p.id,profileUrl="/#profile?id="+encodeURIComponent(publicId);
   if(!byId&&publicId){history.replaceState({page:"profile",publicId},"",profileUrl)}
-  const profileAvatar='<div class="sakura-avatar-fallback">'+avatar(p.username)+'</div>';
+  const profileAvatar=avatar(p.username);
   app.innerHTML='<div class="op-profile">'+
    '<div class="op-profile-header"><div class="op-profile-avatar">'+profileAvatar+'</div><div class="op-profile-info">'+
     '<div class="op-profile-id">USER ID <strong>'+esc(publicId)+'</strong> · <a href="'+profileUrl+'" class="profile-share-link"> '+esc(location.host+'/#profile?id='+publicId)+'</a></div><h1>'+esc(p.username)+(p.isVerified?' <img class="verified-badge" src="/verified.svg" alt="Verified" title="Verified account">':'')+'</h1><div class="op-profile-meta">'+esc(p.role)+' · Joined '+new Date(p.createdAt).toLocaleDateString()+'</div>'+
