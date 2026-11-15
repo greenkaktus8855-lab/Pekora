@@ -1557,12 +1557,13 @@ async function route(request, env) {
     const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.public_id=? AND u.is_banned=0`).bind(Number(profileIdMatch[1])).first();
     if (!profile) return fail("User not found.",404);
-    const [count,badgeRows,totalRap] = await Promise.all([
+    const [count,badgeRows,totalRap,friendCount] = await Promise.all([
       env.DB.prepare("SELECT COALESCE(SUM(quantity),0) AS n FROM inventory WHERE user_id=? AND quantity>0").bind(profile.id).first(),
       env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all(),
-      getProfileTotalRap(env,profile.id)
+      getProfileTotalRap(env,profile.id),
+      env.DB.prepare("SELECT COUNT(*) AS n FROM friends WHERE user_id=? AND status='ACCEPTED'").bind(profile.id).first()
     ]);
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,friendCount:Number(friendCount?.n||0),totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
   }
 
   const profileInventoryMatch = path.match(/^\/api\/profile\/([A-Za-z0-9_]{1,20})\/inventory$/);
@@ -1595,12 +1596,13 @@ async function route(request, env) {
     const profile = await env.DB.prepare(`SELECT u.id,u.public_id,u.username,u.role,u.created_at,u.is_verified,p.description
       FROM users u LEFT JOIN profiles p ON p.user_id=u.id WHERE u.username=? COLLATE NOCASE AND u.is_banned=0`).bind(username).first();
     if (!profile) return fail("User not found.",404);
-    const [count,badgeRows,totalRap] = await Promise.all([
+    const [count,badgeRows,totalRap,friendCount] = await Promise.all([
       env.DB.prepare("SELECT COALESCE(SUM(quantity),0) AS n FROM inventory WHERE user_id=? AND quantity>0").bind(profile.id).first(),
       env.DB.prepare("SELECT badge_key FROM user_badges WHERE user_id=? ORDER BY created_at,badge_key").bind(profile.id).all(),
-      getProfileTotalRap(env,profile.id)
+      getProfileTotalRap(env,profile.id),
+      env.DB.prepare("SELECT COUNT(*) AS n FROM friends WHERE user_id=? AND status='ACCEPTED'").bind(profile.id).first()
     ]);
-    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
+    return json({ profile:{id:profile.public_id,publicId:profile.public_id,username:profile.username,role:profile.role,createdAt:profile.created_at,description:profile.description||"",itemCount:count.n,friendCount:Number(friendCount?.n||0),totalRap,isVerified:Boolean(profile.is_verified),badges:(badgeRows.results||[]).map(row=>row.badge_key)} });
   }
 
   if (request.method === "PUT" && path === "/api/profile") {
