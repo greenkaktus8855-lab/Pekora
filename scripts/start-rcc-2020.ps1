@@ -200,7 +200,7 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
         const headers = {
             "Content-Type": "application/xml",
         };
-        const xml = SOAP("http://roblox.com/", jobExpiration, JSON.stringify(data));
+        const xml = SOAP("http://silrev.biz/", jobExpiration, JSON.stringify(data));
         const response = await axios.request({
             method: HttpMethod.POST,
             url: Config.RCCUrl + ":" + port,
@@ -308,7 +308,7 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
     $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($rccExe)
     $probeXml = @'
 <?xml version="1.0" encoding="UTF-8"?>
-<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:ns1="http://roblox.com/" xmlns:ns2="http://roblox.com/RCCServiceSoap" xmlns:ns3="http://roblox.com/RCCServiceSoap12">
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:ns1="http://silrev.biz/" xmlns:ns2="http://roblox.com/RCCServiceSoap" xmlns:ns3="http://roblox.com/RCCServiceSoap12">
   <SOAP-ENV:Body>
     <ns1:HelloWorld></ns1:HelloWorld>
   </SOAP-ENV:Body>
@@ -321,7 +321,7 @@ export const RCCRequest = async <T>(port: number, data: BaseJson, jobExpiration:
         "Product version: $($versionInfo.ProductVersion)",
         "HTTP WSDL discovery: skipped",
         "SOAP method: HelloWorld",
-        "SOAP namespace: http://roblox.com/",
+        "SOAP namespace: http://silrev.biz/",
         "Content-Type: application/xml",
         "SOAPAction: not sent",
         "Request XML:",
