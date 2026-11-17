@@ -1532,8 +1532,8 @@ async function adminPanel(){
  if(!me||!me.isAdministrator){app.innerHTML='<div class="empty">Administrator badge required.</div>';return}
  const categories=["Hats","Hair","Faces","Shirts","Pants"];
  app.innerHTML='<div class="creator-create-page admin-panel-page">'+
-  '<div class="creator-create-heading"><div><h1 class="page-title">Панель администратора</h1><p class="page-subtitle">Отправка новых предметов в каталог Sakura</p></div></div>'+
-  '<section class="creator-create-card"><h2>Добавить предмет</h2><p class="muted">Заполни информацию о предмете и добавь его картинку. До проверки владельцем предмет не появится в общем каталоге.</p>'+
+  '<div class="creator-create-heading"><div><h1 class="page-title">Панель администратора</h1><p class="page-subtitle">Публикация предметов в каталог Sakura</p></div></div>'+
+  '<section class="creator-create-card"><h2>Добавить предмет</h2><p class="muted">Заполни информацию о предмете и добавь его картинку. После публикации предмет сразу появится в общем каталоге — проверка владельцем не требуется.</p>'+
   '<form id="adminItemSubmissionForm" class="creator-create-form">'+
    '<label>Цена предмета в Sakura<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label>'+
    '<label>Валюта<select name="currency"><option value="P$">P$</option><option value="Tix">Tix</option></select></label>'+
@@ -1544,7 +1544,7 @@ async function adminPanel(){
    '<label class="admin-limited-stock-field" style="display:none">Количество копий Limited<input name="stock_limit" type="number" min="1" max="1000000" step="1" value="100"></label>'+
    '<img id="adminItemImagePreview" class="creator-review-image-preview" alt="Предпросмотр предмета" hidden>'+
    '<label>Описание <span class="muted">(необязательно)</span><textarea name="description" maxlength="500" rows="3" placeholder="Опиши предмет"></textarea></label>'+
-   '<div class="creator-create-actions"><button class="primary" type="submit">Отправить владельцу на проверку</button><span id="adminItemSubmissionMessage" class="muted" role="status"></span></div>'+
+   '<div class="creator-create-actions"><button class="primary" type="submit">Опубликовать в каталог</button><span id="adminItemSubmissionMessage" class="muted" role="status"></span></div>'+
   '</form></section>'+
   '<section class="asset-tutorial admin-item-tutorial"><h2>КАК ДОБАВИТЬ ПРЕДМЕТ — ПОЛНЫЙ ГАЙД ДЛЯ НОВИЧКОВ</h2><p class="asset-tutorial-intro">Выполняй шаги по порядку. Скачивать картинку не нужно — понадобится только прямая ссылка на изображение.</p>'+
    '<article><h3>ШАГ 1 — ЗАПОЛНИ ИНФОРМАЦИЮ О ПРЕДМЕТЕ</h3><p>Сначала укажи цену предмета в Sakura. Выбери валюту (<strong>P$</strong> или <strong>Tix</strong>), затем категорию и точное название предмета. Проверь название, чтобы не было ошибок.</p></article>'+
@@ -1591,13 +1591,14 @@ async function adminPanel(){
    description:String(values.get("description")||"").trim()
   };
   const submit=form.querySelector('button[type="submit"]');
-  submit.disabled=true;message.textContent="Отправляем предмет владельцу...";
+  submit.disabled=true;message.textContent="Публикуем предмет...";
   try{
-   await api("/api/admin/item-submissions",{method:"POST",body:JSON.stringify(payload)});
+   const result=await api("/api/admin/item-submissions",{method:"POST",body:JSON.stringify(payload)});
+   if(!result?.id||result.status!=="PUBLISHED")throw new Error("Сервер не подтвердил публикацию предмета.");
    if(!isActiveView(view))return;
    form.reset();preview.removeAttribute("src");preview.hidden=true;
-   message.textContent="Предмет отправлен! Теперь он ожидает проверки владельцем и пока не виден в общем каталоге.";
-   toast("Предмет отправлен владельцу на проверку");
+   message.textContent="Предмет опубликован и уже доступен в каталоге.";
+   toast("Предмет опубликован в каталоге");
   }catch(error){message.textContent=error.message}
   finally{submit.disabled=false}
  });
@@ -1686,7 +1687,7 @@ async function owner(){
  '<button class="primary" type="submit">Publish item</button><span id="ownerFormMessage" class="muted"></span></form>'+
  '<div id="ownerItems" class="owner-items">Loading items...</div></section>'+
  '<section class="owner-section owner-creator-submissions"><h2>Clothing submissions</h2><p class="muted">Review player Shirts and Pants. The player’s suggested price is prefilled and can be changed before publishing.</p><div id="ownerCreatorSubmissions" class="owner-creator-submissions-list">Loading submissions...</div></section>'+
- '<section class="owner-section owner-creator-submissions"><h2>Administrator item submissions</h2><p class="muted">Administrators can submit items, but only the Owner can publish them into the public Catalog.</p><div id="ownerAdminItemSubmissions" class="owner-creator-submissions-list">Loading admin submissions...</div></section>'+
+ '<section class="owner-section owner-creator-submissions"><h2>Older administrator submissions</h2><p class="muted">Review legacy requests created before administrators were allowed to publish items directly.</p><div id="ownerAdminItemSubmissions" class="owner-creator-submissions-list">Loading admin submissions...</div></section>'+
  '<section class="owner-section"><h2>Game Management</h2><p class="muted">Create game cards with a title, description and thumbnail. All games remain locked and cannot be launched.</p><form id="newGameForm" class="owner-item-form"><label>Game title<input name="title" maxlength="80" required></label><label>Game thumbnail URL<input name="thumbnail_url" type="url" maxlength="500" placeholder="https://..."></label><label>Description<textarea name="description" maxlength="500" rows="3"></textarea></label><button class="primary" type="submit">Create game</button><span id="gameFormMessage" class="muted"></span></form><div id="ownerGames" class="owner-items">Loading games...</div></section><section class="owner-section owner-group-verification"><h2>Group Verification</h2><p class="muted">Give or remove the verified badge for Sakura groups. Only the site owner can change this.</p><div id="ownerGroups" class="owner-group-list">Loading groups...</div></section><section class="owner-section"><h2>User Management</h2><p class="muted">Search accounts to grant Sakura currency, issue warnings, or issue permanent account and IP bans. An IP ban can also affect other people sharing the same public internet connection. OWNER accounts are protected.</p><form id="ownerUserSearch" class="owner-item-form"><label>Username or User ID<input name="q" minlength="1" maxlength="32" required placeholder="Search user"></label><button class="primary" type="submit">Search</button></form><div id="ownerUserResults" class="owner-user-results"></div><div id="ownerUserDetails" class="owner-user-details"></div></section>';
  app.insertAdjacentHTML("beforeend",
   '<section class="owner-section owner-promocode-section"><h2>Promo Code Management</h2><p class="muted">Create codes that grant Sakura currency and one or more items from the catalog. Set a total claim limit and optional expiry date.</p>'+
