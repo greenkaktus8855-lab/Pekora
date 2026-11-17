@@ -122,16 +122,7 @@ function validItem(data, allowLegacyHttp = false) {
     }
     catch { return "Enter a valid image URL."; }
   }
-  const assetId = data.asset_id === undefined || data.asset_id === null || data.asset_id === "" ? 0 : Number(data.asset_id);
-  const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,"T-Shirts":2,Shirts:11,Pants:12};
-  const suppliedAssetTypeId = Number(data.asset_type_id || 0);
-  const assetTypeId = suppliedAssetTypeId > 0
-    ? suppliedAssetTypeId
-    : (assetId ? (defaultAssetTypes[data.category] || 0) : 0);
-  if (!Number.isSafeInteger(assetId) || assetId < 0 || assetId > Number.MAX_SAFE_INTEGER) return "Roblox asset ID must be a positive whole number.";
-  // Catalog asset IDs can exceed signed 32-bit limits; keep them as safe JS integers.
-  if (!Number.isSafeInteger(assetTypeId) || assetTypeId < 0 || assetTypeId > 2147483647) return "Roblox asset type ID must be a positive whole number.";
-  if ((assetId > 0) !== (assetTypeId > 0)) return "Enter both a Roblox asset ID and its asset type ID.";
+
   const model = String(data.model_url ?? "").trim();
   if (model.length > 1000) return "3D model URL is too long.";
   if (model) {
@@ -2557,10 +2548,8 @@ async function route(request, env) {
         if(!await areEligibleGiftRewards(env,giftRewards))return fail("Every gift reward must be an existing Offsale item. Gift items cannot be used as rewards.",404);
       }
       const itemId=id();
-      const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,"T-Shirts":2,Shirts:11,Pants:12};
-      const assetId = Number(data.asset_id || 0);
-      const assetTypeId = Number(data.asset_type_id || (assetId ? (defaultAssetTypes[data.category] || 0) : 0));
-      if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID (for example neck, back, front, shoulder or waist).");
+      // Roblox catalog IDs are no longer required for Sakura items.
+      const assetId = 0, assetTypeId = 0;
       const createStatements=[
         env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale,is_catalog_visible) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),data.currency||"P$",String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,isLimited?1:0,stockLimit,0,data.is_for_sale===false?0:1,data.is_offsale===true?1:0,data.is_catalog_visible===false?0:1)
       ];
@@ -2619,7 +2608,6 @@ async function route(request, env) {
       const defaultAssetTypes = {Hats:8,Hair:41,Faces:18,"T-Shirts":2,Shirts:11,Pants:12};
       const assetId = Number(merged.asset_id || 0);
       const assetTypeId = Number(merged.asset_type_id || (assetId ? (defaultAssetTypes[merged.category] || 0) : 0));
-      if (assetId > 0 && assetTypeId < 1) return fail("Accessories need a Roblox asset type ID.");
       const updateStatements=[
         env.DB.prepare("UPDATE items SET name=?,description=?,category=?,price=?,currency=?,image_url=?,model_url=?,asset_id=?,asset_type_id=?,is_limited=?,stock_limit=?,is_for_sale=?,is_offsale=?,is_catalog_visible=? WHERE id=?").bind(merged.name.trim(),merged.description,merged.category,Number(merged.price),merged.currency,String(merged.image_url||"").trim(),String(merged.model_url||"").trim(),assetId,assetTypeId,merged.is_limited?1:0,merged.stock_limit,merged.is_for_sale,merged.is_offsale?1:0,merged.is_catalog_visible?1:0,match[1])
       ];
