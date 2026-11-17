@@ -248,10 +248,8 @@ async function loadHomeDashboard(view=activeView){
 }
 
 function itemPreview(x,extraClass=""){
- if(x?.category==="Accessories"){
-  return x.model_url
-   ? '<model-viewer class="pekora-model '+extraClass+'" src="'+esc(x.model_url)+'" alt="'+esc(x.name||"3D accessory")+'" camera-controls auto-rotate rotation-per-second="20deg" shadow-intensity="1" exposure="1" loading="lazy" reveal="auto"></model-viewer>'
-   : '<div class="pekora-model-missing '+extraClass+'">3D model not uploaded</div>';
+ if(x?.category==="Accessories"&&x.model_url){
+  return '<model-viewer class="pekora-model '+extraClass+'" src="'+esc(x.model_url)+'" alt="'+esc(x.name||"3D accessory")+'" camera-controls auto-rotate rotation-per-second="20deg" shadow-intensity="1" exposure="1" loading="lazy" reveal="auto"></model-viewer>';
  }
  return x?.image_url?'<img src="'+esc(x.image_url)+'" alt="'+esc(x.name||"Item")+'" loading="lazy">':'◇';
 }
@@ -1415,7 +1413,6 @@ async function createPage(){
  }
  await loadMySubmissions();
  const creatorPageHost=app.querySelector(".creator-create-page");
- creatorPageHost?.insertAdjacentHTML("beforeend",'<section class="creator-create-card model-creator-card"><h2>New 3D model</h2><p class="muted">Submit a 3D accessory for review. Provide a direct HTTPS link to a .glb or .gltf file. Your model is not published until an Asset Moderator approves it.</p><form id="creatorModelSubmissionForm" class="creator-create-form"><label>Model name<input name="name" maxlength="80" required placeholder="Name your model"></label><label>Description <span class="muted">(optional)</span><textarea name="description" maxlength="500" rows="3" placeholder="Describe the accessory"></textarea></label><label>Price in P$<input name="price" type="number" min="0" max="1000000" step="1" value="50" required></label><label>Direct 3D model link (.glb or .gltf)<input name="model_url" type="url" maxlength="1000" required placeholder="https://example.com/model.glb"></label><label>Preview image link <span class="muted">(optional)</span><input name="image_url" type="url" maxlength="500" placeholder="https://example.com/preview.png"></label><div class="creator-create-actions"><button class="primary" type="submit">Submit model for review</button><span id="creatorModelSubmissionMessage" class="muted" role="status"></span></div></form></section><section class="creator-submissions-section"><div class="creator-submissions-heading"><h2>My 3D model submissions</h2><span class="muted">Review status</span></div><div id="myModelSubmissions" class="creator-submissions-list">Loading submissions...</div></section>');
  const modelHost=document.getElementById("myModelSubmissions");
  async function loadMyModelSubmissions(){
   if(!modelHost)return;
@@ -1666,7 +1663,7 @@ async function owner(){
  if(!me||me.role!=="OWNER"){app.innerHTML='<div class="empty">Owner access required.</div>';return}
  app.innerHTML='<h1 class="page-title">Owner Panel</h1><div id="ownerStats" class="item-grid">Loading...</div>'+
  '<section class="owner-section"><h2>Owner Account</h2><p class="muted">The current password cannot be displayed because Sakura stores only a password hash. While signed in as OWNER, set a new password here.</p><form id="ownerPasswordForm" class="owner-item-form"><label>New password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><label>Confirm password<input name="confirmPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label><button class="primary" type="submit">Set new owner password</button><span id="ownerPasswordMessage" class="muted"></span></form></section>'+
- '<section class="owner-section"><h2>Catalog Management</h2><p class="muted">Remove hides an item from the public catalog. Delete permanently removes it from player inventories, resale listings, trades, promo rewards and purchase history.</p><p class="muted">Accessories use real GLB/GLTF 3D models. Add a secure HTTPS model URL to enable the interactive preview. Accessories cannot be listed for sale without a model.</p><button class="button secondary" id="clearPublicCatalog" type="button">Remove all items from catalog</button><form id="newItemForm" class="owner-item-form">'+
+ '<section class="owner-section"><h2>Catalog Management</h2><p class="muted">Remove hides an item from the public catalog. Delete permanently removes it from player inventories, resale listings, trades, promo rewards and purchase history.</p><p class="muted">Create catalog items using a preview image. Roblox catalog IDs and 3D model files are not required.</p><button class="button secondary" id="clearPublicCatalog" type="button">Remove all items from catalog</button><form id="newItemForm" class="owner-item-form">'+
  '<label>Item name<input name="name" maxlength="80" required></label>'+
  '<label>Category<select name="category">'+ITEM_CATEGORIES.map(c=>'<option>'+c+'</option>').join("")+'</select></label>'+
  '<label>Item price<input name="price" type="number" min="0" max="1000000" value="50" required></label>'+
@@ -1682,8 +1679,6 @@ async function owner(){
   '<p class="muted">Players can open this gift from their Inventory after the selected date and time. One Offsale reward is selected when the gift is opened.</p>'+
  '</div>'+
  '<label>Preview image URL<input name="image_url" type="url" maxlength="500" placeholder="https://..."></label>'+
- '<label>3D model file (.glb, max 1 MB)<input name="model_file" type="file" accept=".glb,model/gltf-binary"></label>'+
- '<label>Or existing 3D model URL<input name="model_url" type="url" maxlength="1000" placeholder="https://...model.glb"></label>'+
  ''+
  ''+
  ''+
@@ -2332,7 +2327,7 @@ async function owner(){
   updateGiftOptions();
   if(restoredNewItemDraft){
    const draftMessage=document.getElementById("ownerFormMessage");
-   if(draftMessage)draftMessage.textContent="Restored an unfinished draft from this browser. Click Add Item to save it.";
+   if(draftMessage)draftMessage.textContent="Restored an unfinished draft from this browser. Click Publish item to save it.";
   }
   newItemForm.addEventListener("submit",async e=>{
    e.preventDefault();const f=new FormData(e.target),msg=document.getElementById("ownerFormMessage");msg.textContent="Saving...";
@@ -2348,27 +2343,19 @@ async function owner(){
      // The reward list is validated below; entries must be unique and total 100%.
     }
     const giftRewards=isGift?readGiftRewards(giftRewardHost):[];
-    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0),is_catalog_visible:f.get("is_catalog_visible")==="on",is_gift:isGift,gift_rewards:giftRewards,gift_opens_at:giftOpensAt};
-    const modelFile=f.get("model_file");
-    if(modelFile instanceof File && modelFile.size){
-     msg.textContent="Uploading 3D model...";
-     const upload=await fetch("/api/owner/models",{method:"POST",credentials:"same-origin",headers:{"content-type":"model/gltf-binary"},body:modelFile});
-     let uploaded={};try{uploaded=await upload.json()}catch{}
-     if(!upload.ok)throw new Error(uploaded.error||"3D model upload failed.");
-     data.model_url=uploaded.url;
-    }
-    if(data.category==="Accessories"&&!data.model_url)throw new Error("Upload a GLB model (max 1 MB) before listing an accessory.");
-    msg.textContent="Saving item...";
+    const data={name:String(f.get("name")||"").trim(),category:String(f.get("category")||""),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||"").trim(),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0),is_catalog_visible:f.get("is_catalog_visible")==="on",is_gift:isGift,gift_rewards:giftRewards,gift_opens_at:giftOpensAt};
+    msg.textContent="Publishing item...";
     const result=await api("/api/owner/items",{method:"POST",body:JSON.stringify(data)});
+    if(!result?.id)throw new Error("The server did not confirm item creation.");
     if(!isActiveView(view))return;
     try{localStorage.removeItem(ownerNewItemDraftKey)}catch{}
     e.target.reset();e.target.elements.price.value=50;e.target.elements.currency.value="P$";
     giftRewardHost.innerHTML="";addGiftRewardRow(giftRewardHost,"",100,giftRewardTotal,giftRewardAdd);
-    updateGiftOptions();msg.textContent="Item added.";
+    updateGiftOptions();msg.textContent="Item published successfully.";toast("Item published in Catalog");
     const savedRewards=data.gift_rewards.map(reward=>({...reward,name:ownerItems.find(item=>item.id===reward.item_id)?.name||"Reward"}));
-    ownerItems.unshift({id:result.id,...data,gift_rewards:savedRewards,is_limited:data.is_limited?1:0,is_offsale:data.is_offsale?1:0,is_gift:data.is_gift?1:0,is_catalog_visible:data.is_catalog_visible?1:0,gift_reward_name:savedRewards[0]?.name||"",stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:data.category==="Accessories"?"3D":"IMAGE_ONLY"});
+    ownerItems.unshift({id:result.id,...data,gift_rewards:savedRewards,is_limited:data.is_limited?1:0,is_offsale:data.is_offsale?1:0,is_gift:data.is_gift?1:0,is_catalog_visible:data.is_catalog_visible?1:0,gift_reward_name:savedRewards[0]?.name||"",stock_sold:0,is_for_sale:1,created_at:new Date().toISOString(),asset_kind:"IMAGE_ONLY"});
     drawOwnerItems();updateOwnerItemCount();
-   }catch(err){msg.textContent=err.message}
+   }catch(err){msg.textContent=err.message||"Could not publish this item.";toast(err.message||"Could not publish this item.");}
   });
  }catch(e){
   if(!isActiveView(view))return;
