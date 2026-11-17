@@ -2288,12 +2288,25 @@ async function route(request, env) {
     } catch {
       return fail("Preview image URL must be a valid HTTPS link.");
     }
-    const submissionId = id();
-    await env.DB.prepare("INSERT INTO admin_item_submissions (id,user_id,name,description,category,price,currency,image_url,is_limited,stock_limit) VALUES (?,?,?,?,?,?,?,?,?,?)")
-      .bind(submissionId,actor.id,name,description,category,price,currency,imageUrl,isLimited?1:0,stockLimit).run();
-    await env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)")
-      .bind(id(),actor.id,actor.id,"ADMIN_ITEM_SUBMITTED",name+" · "+category).run();
-    return json({ok:true,id:submissionId,status:"PENDING"},201);
+    const itemId = id();
+    const results = await env.DB.batch([
+      env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale,is_catalog_visible) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(itemId,name,description,category,price,currency,imageUrl,"",0,0,isLimited?1:0,stockLimit,0,1,0,1),
+      env.DB.prepare("INSERT INTO owner_audit_log (id,actor_id,target_user_id,action,details) VALUES (?,?,?,?,?)")
+        .bind(id(),actor.id,actor.id,"ADMIN_ITEM_PUBLISHED",name+" · "+category)
+    ]);
+    if (!results?.[0]?.meta?.changes) {
+      console.error("[Sakura admin items] Direct publication did not create the catalog item:",JSON.stringify(results));
+      return fail("The item could not be published. Please retry or inspect the Worker logs.",500);
+    }
+    if (isLimited) {
+      try {
+        await announceLimitedItem({id:itemId,name,category,price,currency,image_url:imageUrl,stock_limit:stockLimit},env,url.origin);
+      } catch (error) {
+        console.error("[Sakura Discord] Limited item announcement failed:",error);
+      }
+    }
+    return json({ok:true,id:itemId,status:"PUBLISHED"},201);
   }
 
   if (path.startsWith("/api/asset-moderation/models")) {
