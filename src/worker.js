@@ -123,17 +123,6 @@ function validItem(data, allowLegacyHttp = false) {
     catch { return "Enter a valid image URL."; }
   }
 
-  const model = String(data.model_url ?? "").trim();
-  if (model.length > 1000) return "3D model URL is too long.";
-  if (model) {
-    try {
-      const u = new URL(model);
-      if (u.protocol !== "https:") return "3D model URL must use HTTPS.";
-    } catch { return "Enter a valid 3D model URL."; }
-  }
-  if (data.category === "Accessories" && data.is_for_sale !== false && data.is_for_sale !== 0 && !model) {
-    return "Accessories need a real HTTPS 3D model URL before they can be listed for sale.";
-  }
   return null;
 }
 
@@ -2551,7 +2540,7 @@ async function route(request, env) {
       // Roblox catalog IDs are no longer required for Sakura items.
       const assetId = 0, assetTypeId = 0;
       const createStatements=[
-        env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale,is_catalog_visible) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),data.currency||"P$",String(data.image_url||"").trim(),String(data.model_url||"").trim(),assetId,assetTypeId,isLimited?1:0,stockLimit,0,data.is_for_sale===false?0:1,data.is_offsale===true?1:0,data.is_catalog_visible===false?0:1)
+        env.DB.prepare("INSERT INTO items (id,name,description,category,price,currency,image_url,model_url,asset_id,asset_type_id,is_limited,stock_limit,stock_sold,is_for_sale,is_offsale,is_catalog_visible) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(itemId,data.name.trim(),data.description||"",data.category,Number(data.price),data.currency||"P$",String(data.image_url||"").trim(),"",assetId,assetTypeId,isLimited?1:0,stockLimit,0,data.is_for_sale===false?0:1,data.is_offsale===true?1:0,data.is_catalog_visible===false?0:1)
       ];
       if (isGift) {
         createStatements.push(env.DB.prepare("INSERT INTO gift_items (gift_item_id,reward_item_id,opens_at) VALUES (?,?,?)").bind(itemId,giftRewards[0].item_id,giftOpensAt));
