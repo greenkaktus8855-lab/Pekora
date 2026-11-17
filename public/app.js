@@ -2348,7 +2348,7 @@ async function owner(){
      // The reward list is validated below; entries must be unique and total 100%.
     }
     const giftRewards=isGift?readGiftRewards(giftRewardHost):[];
-    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),asset_id:Number(f.get("asset_id")||0),asset_type_id:Number(f.get("asset_type_id")||0),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0),is_catalog_visible:f.get("is_catalog_visible")==="on",is_gift:isGift,gift_rewards:giftRewards,gift_opens_at:giftOpensAt};
+    const data={name:String(f.get("name")).trim(),category:String(f.get("category")),price:Number(f.get("price")),currency:String(f.get("currency")||"P$"),image_url:String(f.get("image_url")||""),model_url:String(f.get("model_url")||""),description:String(f.get("description")||""),is_limited:f.get("is_limited")==="on",is_offsale:f.get("is_offsale")==="on",stock_limit:Number(f.get("stock_limit")||0),is_catalog_visible:f.get("is_catalog_visible")==="on",is_gift:isGift,gift_rewards:giftRewards,gift_opens_at:giftOpensAt};
     const modelFile=f.get("model_file");
     if(modelFile instanceof File && modelFile.size){
      msg.textContent="Uploading 3D model...";
