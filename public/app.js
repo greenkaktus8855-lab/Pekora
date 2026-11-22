@@ -205,6 +205,119 @@ document.getElementById("globalSearchForm").addEventListener("submit",e=>{
 });
 
 document.getElementById("mobileMenu")?.addEventListener("click",()=>sidebar.classList.toggle("mobile-open"));
+
+let farewellMusicState=null;
+function stopFarewellMusic(){
+ if(!farewellMusicState)return;
+ const state=farewellMusicState;
+ farewellMusicState=null;
+ clearInterval(state.interval);
+ const now=state.context.currentTime;
+ state.master.gain.cancelScheduledValues(now);
+ state.master.gain.setTargetAtTime(0,now,.18);
+ setTimeout(()=>state.context.close().catch(()=>{}),900);
+}
+async function toggleFarewellMusic(button){
+ if(farewellMusicState){
+  stopFarewellMusic();
+  button.textContent="♫ Play the farewell music";
+  button.setAttribute("aria-pressed","false");
+  return;
+ }
+ const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+ if(!AudioContextClass){
+  button.textContent="Music is not supported in this browser";
+  return;
+ }
+ try{
+  const context=new AudioContextClass();
+  await context.resume();
+  const master=context.createGain();
+  master.gain.setValueAtTime(0,context.currentTime);
+  master.gain.linearRampToValueAtTime(.038,context.currentTime+2.2);
+  const filter=context.createBiquadFilter();
+  filter.type="lowpass";
+  filter.frequency.value=1250;
+  master.connect(filter);
+  filter.connect(context.destination);
+  const chords=[
+   [220,261.63,329.63],
+   [174.61,220,261.63],
+   [130.81,164.81,196],
+   [196,246.94,293.66]
+  ];
+  const melody=[440,392,329.63,392,293.66,329.63];
+  let measure=0;
+  const playTone=(frequency,start,duration,level,wave="sine")=>{
+   const oscillator=context.createOscillator();
+   const envelope=context.createGain();
+   oscillator.type=wave;
+   oscillator.frequency.setValueAtTime(frequency,start);
+   envelope.gain.setValueAtTime(.0001,start);
+   envelope.gain.linearRampToValueAtTime(level,start+.75);
+   envelope.gain.setValueAtTime(level*.62,start+duration*.42);
+   envelope.gain.exponentialRampToValueAtTime(.0001,start+duration);
+   oscillator.connect(envelope);
+   envelope.connect(master);
+   oscillator.start(start);
+   oscillator.stop(start+duration+.06);
+  };
+  const playMeasure=()=>{
+   const start=context.currentTime+.08;
+   chords[measure%chords.length].forEach((frequency,index)=>{
+    playTone(frequency,start,5.9,index===0?.012:.008,"sine");
+   });
+   melody.forEach((frequency,index)=>{
+    playTone(frequency,start+index*.94,1.65,.0045,"triangle");
+   });
+   measure++;
+  };
+  playMeasure();
+  const interval=setInterval(playMeasure,6100);
+  farewellMusicState={context,master,interval};
+  button.textContent="Pause the farewell music";
+  button.setAttribute("aria-pressed","true");
+ }catch(error){
+  button.textContent="Could not start music";
+ }
+}
+function farewellPage(){
+ document.body.classList.add("sakura-farewell-mode");
+ renderSidebar("home");
+ const petals=Array.from({length:18},(_,index)=>'<span class="farewell-petal" style="--i:'+index+'" aria-hidden="true"></span>').join("");
+ app.innerHTML=
+  '<section class="sakura-farewell-page" aria-labelledby="farewellTitle">'+
+   '<div class="farewell-petals" aria-hidden="true">'+petals+'</div>'+
+   '<article class="farewell-card">'+
+    '<p class="farewell-eyebrow">A FINAL MESSAGE FROM SAKURA</p>'+
+    '<h1 id="farewellTitle">Goodbye, Sakura.</h1>'+
+    '<div class="farewell-rule" aria-hidden="true"><span></span></div>'+
+    '<p class="farewell-lead">Today, we have to share some difficult news: Sakura is coming to an end.</p>'+
+    '<p>We never thought we would have to write these words. Sakura became more than just a website. It was hours of work, late nights, ideas, mistakes, fixes, and the hope that one day everything would turn out exactly as we imagined.</p>'+
+    '<p>Not everything went as planned. There were challenges, setbacks, and moments when giving up seemed easier. But we kept going because we believed in Sakura.</p>'+
+    '<p>Now, it is time to say goodbye. Maybe Sakura never became everything we dreamed it would be, but that does not erase everything we built along the way.</p>'+
+    '<p>To everyone who created an account, visited the site, supported the project, or simply followed its journey: thank you. Even if you spent only a few minutes here, it meant something to us.</p>'+
+    '<p class="farewell-emphasis">We are truly sorry to see this chapter come to an end.</p>'+
+    '<div class="farewell-signature"><strong>Thank you for being part of Sakura.</strong><span>With love and sadness,</span><span>The Sakura Team</span></div>'+
+    '<div class="farewell-actions">'+
+     '<button class="farewell-music-button" id="farewellMusicButton" type="button" aria-pressed="false">♫ Play the farewell music</button>'+
+     '<button class="farewell-enter-button" id="farewellContinue" type="button">Enter Sakura one last time <span aria-hidden="true">→</span></button>'+
+    '</div>'+
+    '<p class="farewell-footnote">Some stories stay with us, even after they end.</p>'+
+   '</article>'+
+   '<span class="farewell-bottom-glow" aria-hidden="true"></span>'+
+  '</section>';
+ const musicButton=document.getElementById("farewellMusicButton");
+ musicButton?.addEventListener("click",()=>toggleFarewellMusic(musicButton));
+ document.getElementById("farewellContinue")?.addEventListener("click",()=>{
+  stopFarewellMusic();
+  try{sessionStorage.setItem("sakura-farewell-dismissed","1")}catch{}
+  document.body.classList.remove("sakura-farewell-mode");
+  history.replaceState({page:"home"},"","/#home");
+  render("home");
+ });
+}
+
 function home(){
  const view=beginView();
  renderSidebar("home");
@@ -2383,6 +2496,10 @@ async function render(name){
  const parts=String(name).split("?",2);
  name=parts[0];
  const query=new URLSearchParams(parts[1]||"");
+ let dismissed=false;
+ try{dismissed=sessionStorage.getItem("sakura-farewell-dismissed")==="1"}catch{}
+ if(!dismissed&&name!=="banned"){farewellPage();return;}
+ document.body.classList.remove("sakura-farewell-mode");
  if(name==="home")home();
  else if(name==="catalog")await catalog();
  else if(name==="login"||name==="register")auth(name);
