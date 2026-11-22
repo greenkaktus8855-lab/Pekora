@@ -211,35 +211,34 @@ function stopFarewellMusic(){
  if(!farewellMusicState)return;
  const state=farewellMusicState;
  farewellMusicState=null;
- clearInterval(state.interval);
+ if(state.interval)clearInterval(state.interval);
  const now=state.context.currentTime;
  state.master.gain.cancelScheduledValues(now);
- state.master.gain.setTargetAtTime(0,now,.18);
- setTimeout(()=>state.context.close().catch(()=>{}),900);
+ state.master.gain.setTargetAtTime(0,now,.22);
+ setTimeout(()=>state.context.close().catch(()=>{}),1000);
 }
-async function toggleFarewellMusic(button){
- if(farewellMusicState){
-  stopFarewellMusic();
-  button.textContent="♫ Play the farewell music";
-  button.setAttribute("aria-pressed","false");
-  return;
- }
+async function startFarewellMusic(){
  const AudioContextClass=window.AudioContext||window.webkitAudioContext;
- if(!AudioContextClass){
-  button.textContent="Music is not supported in this browser";
-  return;
- }
+ if(!AudioContextClass)return false;
  try{
-  const context=new AudioContextClass();
-  await context.resume();
-  const master=context.createGain();
-  master.gain.setValueAtTime(0,context.currentTime);
-  master.gain.linearRampToValueAtTime(.038,context.currentTime+2.2);
-  const filter=context.createBiquadFilter();
-  filter.type="lowpass";
-  filter.frequency.value=1250;
-  master.connect(filter);
-  filter.connect(context.destination);
+  if(!farewellMusicState){
+   const context=new AudioContextClass();
+   const master=context.createGain();
+   master.gain.setValueAtTime(0,context.currentTime);
+   const filter=context.createBiquadFilter();
+   filter.type="lowpass";
+   filter.frequency.value=1450;
+   master.connect(filter);
+   filter.connect(context.destination);
+   farewellMusicState={context,master,interval:null,started:false};
+  }
+  const state=farewellMusicState;
+  if(state.started)return true;
+  await state.context.resume();
+  if(state.context.state!=="running")return false;
+  state.master.gain.cancelScheduledValues(state.context.currentTime);
+  state.master.gain.setValueAtTime(0,state.context.currentTime);
+  state.master.gain.linearRampToValueAtTime(.42,state.context.currentTime+2.5);
   const chords=[
    [220,261.63,329.63],
    [174.61,220,261.63],
@@ -249,36 +248,35 @@ async function toggleFarewellMusic(button){
   const melody=[440,392,329.63,392,293.66,329.63];
   let measure=0;
   const playTone=(frequency,start,duration,level,wave="sine")=>{
-   const oscillator=context.createOscillator();
-   const envelope=context.createGain();
+   const oscillator=state.context.createOscillator();
+   const envelope=state.context.createGain();
    oscillator.type=wave;
    oscillator.frequency.setValueAtTime(frequency,start);
    envelope.gain.setValueAtTime(.0001,start);
-   envelope.gain.linearRampToValueAtTime(level,start+.75);
+   envelope.gain.linearRampToValueAtTime(level,start+.8);
    envelope.gain.setValueAtTime(level*.62,start+duration*.42);
    envelope.gain.exponentialRampToValueAtTime(.0001,start+duration);
    oscillator.connect(envelope);
-   envelope.connect(master);
+   envelope.connect(state.master);
    oscillator.start(start);
    oscillator.stop(start+duration+.06);
   };
   const playMeasure=()=>{
-   const start=context.currentTime+.08;
+   const start=state.context.currentTime+.08;
    chords[measure%chords.length].forEach((frequency,index)=>{
-    playTone(frequency,start,5.9,index===0?.012:.008,"sine");
+    playTone(frequency,start,5.9,index===0?.075:.052,"sine");
    });
    melody.forEach((frequency,index)=>{
-    playTone(frequency,start+index*.94,1.65,.0045,"triangle");
+    playTone(frequency,start+index*.94,1.65,.035,"triangle");
    });
    measure++;
   };
+  state.started=true;
   playMeasure();
-  const interval=setInterval(playMeasure,6100);
-  farewellMusicState={context,master,interval};
-  button.textContent="Pause the farewell music";
-  button.setAttribute("aria-pressed","true");
+  state.interval=setInterval(playMeasure,6100);
+  return true;
  }catch(error){
-  button.textContent="Could not start music";
+  return false;
  }
 }
 function farewellPage(){
@@ -300,15 +298,20 @@ function farewellPage(){
     '<p class="farewell-emphasis">We are truly sorry to see this chapter come to an end.</p>'+
     '<div class="farewell-signature"><strong>Thank you for being part of Sakura.</strong><span>With love and sadness,</span><span>The Sakura Team</span></div>'+
     '<div class="farewell-actions">'+
-     '<button class="farewell-music-button" id="farewellMusicButton" type="button" aria-pressed="false">♫ Play the farewell music</button>'+
      '<button class="farewell-enter-button" id="farewellContinue" type="button">Enter Sakura one last time <span aria-hidden="true">→</span></button>'+
     '</div>'+
     '<p class="farewell-footnote">Some stories stay with us, even after they end.</p>'+
    '</article>'+
    '<span class="farewell-bottom-glow" aria-hidden="true"></span>'+
   '</section>';
- const musicButton=document.getElementById("farewellMusicButton");
- musicButton?.addEventListener("click",()=>toggleFarewellMusic(musicButton));
+ const farewellRoot=app.querySelector(".sakura-farewell-page");
+ const tryStartFarewellMusic=event=>{
+  if(event?.target?.closest?.("#farewellContinue"))return;
+  if(!farewellMusicState?.started)startFarewellMusic();
+ };
+ startFarewellMusic();
+ farewellRoot?.addEventListener("pointerdown",tryStartFarewellMusic,{passive:true});
+ farewellRoot?.addEventListener("keydown",tryStartFarewellMusic);
  document.getElementById("farewellContinue")?.addEventListener("click",()=>{
   stopFarewellMusic();
   try{sessionStorage.setItem("sakura-farewell-dismissed","1")}catch{}
