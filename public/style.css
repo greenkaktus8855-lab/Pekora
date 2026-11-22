@@ -1391,3 +1391,269 @@ body{color:#f0eaf8!important}
  .inventory-management-heading{align-items:stretch;flex-direction:column}
  .inventory-management-heading>#clearInventoryButton{width:100%}
 }
+
+
+/* Sakura farewell landing page */
+body.sakura-farewell-mode{
+ background:#08070d!important;
+ color:#eee8f5!important;
+ overflow-x:hidden;
+}
+body.sakura-farewell-mode .navbar-wrapper-main,
+body.sakura-farewell-mode .sidebar,
+body.sakura-farewell-mode .site-footer{
+ display:none!important;
+}
+body.sakura-farewell-mode .site-layout{
+ display:block!important;
+ width:100%!important;
+ max-width:none!important;
+ min-height:100vh;
+ margin:0!important;
+ padding:0!important;
+}
+body.sakura-farewell-mode .main-content,
+body.sakura-farewell-mode .sidebar.visible+.main-content{
+ display:block!important;
+ width:100%!important;
+ max-width:none!important;
+ min-width:0!important;
+ margin:0!important;
+ padding:0!important;
+}
+.sakura-farewell-page{
+ position:relative;
+ isolation:isolate;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ width:100%;
+ min-height:100vh;
+ min-height:100svh;
+ overflow:hidden;
+ padding:58px 22px;
+ background:
+  radial-gradient(ellipse at 50% 0%,rgba(112,62,139,.23),transparent 54%),
+  radial-gradient(ellipse at 12% 85%,rgba(91,39,77,.17),transparent 42%),
+  linear-gradient(145deg,#0b0910 0%,#100d17 52%,#08070d 100%);
+}
+.sakura-farewell-page::before{
+ content:"";
+ position:absolute;
+ inset:0;
+ z-index:-1;
+ opacity:.38;
+ background-image:
+  radial-gradient(1px 1px at 12% 22%,rgba(255,255,255,.6) 50%,transparent 100%),
+  radial-gradient(1px 1px at 76% 18%,rgba(226,198,255,.7) 50%,transparent 100%),
+  radial-gradient(1px 1px at 38% 72%,rgba(255,255,255,.45) 50%,transparent 100%),
+  radial-gradient(1px 1px at 88% 81%,rgba(255,220,240,.5) 50%,transparent 100%),
+  radial-gradient(1px 1px at 22% 89%,rgba(255,255,255,.45) 50%,transparent 100%);
+ background-size:310px 260px,390px 340px,270px 300px,420px 360px,350px 320px;
+ animation:farewell-stars 18s ease-in-out infinite alternate;
+ pointer-events:none;
+}
+.sakura-farewell-page::after{
+ content:"";
+ position:absolute;
+ inset:0;
+ z-index:0;
+ pointer-events:none;
+ opacity:.1;
+ background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.08) 4px,transparent 5px);
+}
+.farewell-petals{
+ position:absolute;
+ inset:0;
+ z-index:1;
+ overflow:hidden;
+ pointer-events:none;
+}
+.farewell-petal{
+ position:absolute;
+ top:-8%;
+ left:calc((var(--i)*5.55%) + 1%);
+ width:10px;
+ height:15px;
+ border-radius:80% 10% 80% 10%;
+ background:linear-gradient(145deg,rgba(255,205,226,.72),rgba(171,109,174,.18));
+ box-shadow:0 0 15px rgba(231,164,211,.12);
+ opacity:0;
+ transform:rotate(25deg);
+ animation:farewell-drift calc(15s + (var(--i)*.7s)) linear infinite;
+ animation-delay:calc(var(--i)*-1.45s);
+}
+.farewell-card{
+ position:relative;
+ z-index:2;
+ width:min(100%,760px);
+ padding:clamp(28px,5vw,58px) clamp(22px,6vw,68px);
+ border:1px solid rgba(208,174,224,.18);
+ border-radius:17px;
+ background:linear-gradient(145deg,rgba(28,22,37,.92),rgba(16,13,23,.94));
+ box-shadow:0 28px 100px rgba(0,0,0,.52),0 0 70px rgba(121,76,146,.08);
+ backdrop-filter:blur(14px);
+ animation:farewell-rise 1.15s cubic-bezier(.2,.7,.2,1) both;
+}
+.farewell-eyebrow{
+ margin:0 0 13px;
+ color:#b99bc7;
+ font-size:11px;
+ font-weight:700;
+ letter-spacing:.28em;
+ text-align:center;
+}
+.farewell-card h1{
+ margin:0;
+ color:#f5edf8;
+ font-size:clamp(34px,6vw,54px);
+ font-weight:600;
+ letter-spacing:-.035em;
+ line-height:1.12;
+ text-align:center;
+ text-shadow:0 0 32px rgba(212,167,231,.16);
+}
+.farewell-rule{
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ width:100%;
+ margin:22px 0 26px;
+}
+.farewell-rule::before,.farewell-rule::after{
+ content:"";
+ width:35%;
+ height:1px;
+ background:linear-gradient(90deg,transparent,rgba(194,147,211,.48));
+}
+.farewell-rule::after{transform:rotate(180deg)}
+.farewell-rule span{
+ width:6px;
+ height:6px;
+ margin:0 12px;
+ transform:rotate(45deg);
+ background:#c69dcf;
+ box-shadow:0 0 16px rgba(209,157,222,.65);
+}
+.farewell-card>p:not(.farewell-eyebrow):not(.farewell-footnote){
+ margin:0 0 15px;
+ color:#c4bacd;
+ font-size:15px;
+ font-weight:400;
+ line-height:1.75;
+ text-align:left;
+}
+.farewell-card .farewell-lead{
+ color:#f0e7f3!important;
+ font-size:18px!important;
+ font-weight:600!important;
+ line-height:1.55!important;
+ text-align:center!important;
+ margin-bottom:22px!important;
+}
+.farewell-card .farewell-emphasis{
+ color:#e2c8e8!important;
+ font-style:italic;
+ text-align:center!important;
+ margin-top:21px!important;
+}
+.farewell-signature{
+ display:flex;
+ flex-direction:column;
+ align-items:center;
+ gap:5px;
+ margin:28px 0 30px;
+ text-align:center;
+}
+.farewell-signature strong{
+ margin-bottom:8px;
+ color:#f3e7f5;
+ font-size:17px;
+ font-weight:700;
+}
+.farewell-signature span{
+ color:#ad9eb7;
+ font-size:13px;
+}
+.farewell-actions{
+ display:flex;
+ flex-wrap:wrap;
+ justify-content:center;
+ gap:10px;
+}
+.farewell-actions button{
+ min-height:43px;
+ padding:10px 17px;
+ border:1px solid rgba(211,182,222,.28);
+ border-radius:7px;
+ font:600 13px "Source Sans Pro",sans-serif;
+ cursor:pointer;
+ transition:transform .2s ease,background .2s ease,border-color .2s ease,box-shadow .2s ease;
+}
+.farewell-actions button:hover{
+ transform:translateY(-2px);
+ border-color:rgba(226,192,237,.6);
+}
+.farewell-music-button{
+ color:#d7c7df;
+ background:rgba(255,255,255,.035);
+}
+.farewell-music-button:hover{background:rgba(255,255,255,.075)}
+.farewell-enter-button{
+ color:#fff;
+ background:linear-gradient(135deg,#79548c,#563666);
+ border-color:rgba(218,184,234,.38)!important;
+ box-shadow:0 7px 24px rgba(80,48,98,.25);
+}
+.farewell-enter-button:hover{
+ background:linear-gradient(135deg,#89639e,#664277);
+ box-shadow:0 9px 28px rgba(100,63,121,.34);
+}
+.farewell-enter-button span{margin-left:8px;font-size:16px}
+.farewell-footnote{
+ margin:23px 0 0;
+ color:#786b82;
+ font-size:11px;
+ letter-spacing:.05em;
+ text-align:center;
+}
+.farewell-bottom-glow{
+ position:absolute;
+ z-index:0;
+ bottom:-210px;
+ left:50%;
+ width:min(900px,100vw);
+ height:330px;
+ transform:translateX(-50%);
+ border-radius:50%;
+ background:rgba(111,63,126,.12);
+ filter:blur(90px);
+ pointer-events:none;
+}
+@keyframes farewell-rise{
+ from{opacity:0;transform:translateY(22px) scale(.992)}
+ to{opacity:1;transform:translateY(0) scale(1)}
+}
+@keyframes farewell-drift{
+ 0%{opacity:0;transform:translate3d(0,-5vh,0) rotate(0deg)}
+ 12%{opacity:.65}
+ 75%{opacity:.5}
+ 100%{opacity:0;transform:translate3d(85px,115vh,0) rotate(420deg)}
+}
+@keyframes farewell-stars{
+ from{transform:translateY(0);opacity:.22}
+ to{transform:translateY(-12px);opacity:.48}
+}
+@media(max-width:600px){
+ .sakura-farewell-page{padding:24px 12px;align-items:flex-start}
+ .farewell-card{margin:auto 0;padding:31px 21px;border-radius:13px}
+ .farewell-card>p:not(.farewell-eyebrow):not(.farewell-footnote){font-size:14px;line-height:1.65}
+ .farewell-card .farewell-lead{font-size:16px!important}
+ .farewell-actions{flex-direction:column}
+ .farewell-actions button{width:100%}
+}
+@media(prefers-reduced-motion:reduce){
+ .farewell-card,.farewell-petal,.sakura-farewell-page::before{animation:none!important}
+ .farewell-petal{display:none}
+ .farewell-actions button{transition:none}
+}
