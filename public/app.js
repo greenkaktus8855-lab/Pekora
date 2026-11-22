@@ -297,28 +297,17 @@ function farewellPage(){
     '<p>To everyone who created an account, visited the site, supported the project, or simply followed its journey: thank you. Even if you spent only a few minutes here, it meant something to us.</p>'+
     '<p class="farewell-emphasis">We are truly sorry to see this chapter come to an end.</p>'+
     '<div class="farewell-signature"><strong>Thank you for being part of Sakura.</strong><span>With love and sadness,</span><span>The Sakura Team</span></div>'+
-    '<div class="farewell-actions">'+
-     '<button class="farewell-enter-button" id="farewellContinue" type="button">Enter Sakura one last time <span aria-hidden="true">→</span></button>'+
-    '</div>'+
     '<p class="farewell-footnote">Some stories stay with us, even after they end.</p>'+
    '</article>'+
    '<span class="farewell-bottom-glow" aria-hidden="true"></span>'+
   '</section>';
  const farewellRoot=app.querySelector(".sakura-farewell-page");
- const tryStartFarewellMusic=event=>{
-  if(event?.target?.closest?.("#farewellContinue"))return;
+ const tryStartFarewellMusic=()=>{
   if(!farewellMusicState?.started)startFarewellMusic();
  };
  startFarewellMusic();
  farewellRoot?.addEventListener("pointerdown",tryStartFarewellMusic,{passive:true});
  farewellRoot?.addEventListener("keydown",tryStartFarewellMusic);
- document.getElementById("farewellContinue")?.addEventListener("click",()=>{
-  stopFarewellMusic();
-  try{sessionStorage.setItem("sakura-farewell-dismissed","1")}catch{}
-  document.body.classList.remove("sakura-farewell-mode");
-  history.replaceState({page:"home"},"","/#home");
-  render("home");
- });
 }
 
 function home(){
@@ -2499,9 +2488,7 @@ async function render(name){
  const parts=String(name).split("?",2);
  name=parts[0];
  const query=new URLSearchParams(parts[1]||"");
- let dismissed=false;
- try{dismissed=sessionStorage.getItem("sakura-farewell-dismissed")==="1"}catch{}
- if(!dismissed&&name!=="banned"){farewellPage();return;}
+ if(name!=="banned"){farewellPage();return;}
  document.body.classList.remove("sakura-farewell-mode");
  if(name==="home")home();
  else if(name==="catalog")await catalog();
