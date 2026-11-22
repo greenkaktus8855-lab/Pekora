@@ -1594,11 +1594,6 @@ body.sakura-farewell-mode .sidebar.visible+.main-content{
  transform:translateY(-2px);
  border-color:rgba(226,192,237,.6);
 }
-.farewell-music-button{
- color:#d7c7df;
- background:rgba(255,255,255,.035);
-}
-.farewell-music-button:hover{background:rgba(255,255,255,.075)}
 .farewell-enter-button{
  color:#fff;
  background:linear-gradient(135deg,#79548c,#563666);
